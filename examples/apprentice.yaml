@@ -1,0 +1,60 @@
+# Example Apprentice configuration
+#
+# Copy this file and adjust for your use case.
+# Environment variables are referenced as env:VAR_NAME and resolved at startup.
+
+tasks:
+  - name: classify_ticket
+    description: "Classify support tickets by category and priority"
+    prompt_template: |
+      Classify the following support ticket.
+      Return JSON with "category" (billing, technical, account, general)
+      and "priority" (1=urgent, 2=high, 3=normal, 4=low).
+
+      Ticket: {text}
+    input_schema:
+      text: str
+      metadata: dict
+    output_schema:
+      category: str
+      priority: int
+      confidence: float
+    evaluator: structured_match
+    match_fields:
+      - category
+      - priority
+    confidence_thresholds:
+      phase2: 50          # examples needed before Phase 2
+      phase3: 0.85        # correlation score for Phase 3
+      coaching: 0.70      # trigger coaching below this
+      emergency: 0.50     # emergency fallback to remote
+
+remote:
+  provider: anthropic
+  model: claude-sonnet-4-5-20250929
+  api_key: env:ANTHROPIC_API_KEY
+
+local:
+  backend: ollama
+  base_model: llama3.1:8b
+  model_dir: ./models/
+
+finetuning:
+  backend: local_lora
+  batch_size: 100
+  learning_rate: 2.0e-4
+  epochs: 3
+
+sampling:
+  decay_function: exponential
+  min_floor: 0.02
+  window_size: 100
+
+budget:
+  monthly_limit_usd: 150.00
+  budget_reset_day: 1
+
+audit:
+  log_path: ./logs/audit.jsonl
+  max_file_size_mb: 100
+  rotation_backup_count: 5

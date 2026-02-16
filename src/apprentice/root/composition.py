@@ -799,7 +799,6 @@ async def orchestrate_request(
 
     # Step 6: Route request
     route_result = None
-    remote_failed = False
     try:
         route_result = await router.route(
             task_name=task_name,
@@ -821,7 +820,6 @@ async def orchestrate_request(
             pass
         raise
     except Exception as e:
-        remote_failed = True
         # Step 7: Release reservation on failure
         if needs_remote and budget_authorized:
             try:

@@ -409,14 +409,14 @@ class Apprentice:
         request_id = str(uuid.uuid4())
 
         # Look up task (may raise TaskNotFoundError)
-        task_config = self._task_registry.get_task(task_name)
+        self._task_registry.get_task(task_name)
 
         # Check budget
-        budget_available = self._budget_manager.can_spend(task_name)
+        self._budget_manager.can_spend(task_name)
 
         # Check local availability
         local_available_result = self._local_client.is_available()
-        local_available = await self._maybe_await(local_available_result)
+        await self._maybe_await(local_available_result)
 
         # Route
         route_result = self._router.route(task_name)
@@ -760,7 +760,7 @@ def main(argv=None) -> int:
 
 # Make cli sub-module patchable: tests do patch("src.unified_interface.cli.Apprentice", ...)
 # We need a "cli" attribute on this module that has "Apprentice", "load_config", etc.
-import types as _types
+import types as _types  # noqa: E402
 
 cli = _types.ModuleType("src.unified_interface.cli")
 cli.Apprentice = Apprentice

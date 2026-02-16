@@ -59,12 +59,6 @@ class AuditConfig:
         if not 0 <= rotation_backup_count <= 100:
             raise ValueError("rotation_backup_count must be between 0 and 100")
 
-        # Convert parent EventType enums to child EventType enums
-        if enabled_event_types:
-            child_event_types = [_to_child_event_type(et) for et in enabled_event_types]
-        else:
-            child_event_types = None
-
         # Child AuditConfig only has log_path, so we need to store the other fields ourselves
         self._config = _AuditConfig(log_path=log_path)
 

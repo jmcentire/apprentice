@@ -40,47 +40,36 @@ await app.close()
 
 ## Configuration
 
+See [`examples/apprentice.yaml`](examples/apprentice.yaml) for a complete example. Key sections:
+
 ```yaml
-# apprentice.yaml
 tasks:
   - name: classify_ticket
-    description: "Classify support tickets by category and priority"
-    input_schema: {text: str, metadata: dict}
-    output_schema: {category: str, priority: int, confidence: float}
+    prompt_template: "Classify: {text}"
     evaluator: structured_match
     match_fields: [category, priority]
     confidence_thresholds:
-      phase1_to_phase2: 50
-      phase2_to_phase3: 0.85
-      coaching_trigger: 0.70
-      emergency_threshold: 0.50
+      phase2: 50        # examples before Phase 2
+      phase3: 0.85      # correlation for Phase 3
 
 remote:
   provider: anthropic
   model: claude-sonnet-4-5-20250929
-  api_key_env: ANTHROPIC_API_KEY
+  api_key: env:ANTHROPIC_API_KEY
 
 local:
   backend: ollama
   base_model: llama3.1:8b
-  fine_tune_backend: unsloth
-  fine_tune_batch_size: 100
-  model_dir: ./models/
-
-sampling:
-  decay_function: exponential
-  min_floor: 0.02
-  window_size: 100
 
 budget:
-  daily: 10.00
-  weekly: 50.00
-  monthly: 150.00
+  monthly_limit_usd: 150.00
 ```
 
 ## Architecture
 
-18 independently testable components with zero cross-dependencies:
+25 components organized in two layers — 18 leaf implementations with zero cross-dependencies, wired together by 7 integration compositions:
+
+### Leaf Components
 
 | Component | Purpose |
 |-----------|---------|
@@ -98,10 +87,22 @@ budget:
 | `model_validator` | Pre-promotion model quality validation |
 | `budget_manager` | Multi-window spend tracking and enforcement |
 | `router` | Request routing (local, remote, dual) |
-| `apprentice_class` | Composition root — wires everything together |
+| `apprentice_class` | Core Apprentice class — run, status, report |
 | `cli` | Command-line interface |
-| `audit_log` | Structured event logging |
+| `audit_log` | Structured event logging (JSONL) |
 | `report_generator` | Reports, metrics, and observability |
+
+### Integration Compositions
+
+| Composition | Children | Purpose |
+|-------------|----------|---------|
+| `config_and_registry` | config_loader, task_registry, data_models | Configuration + type system |
+| `confidence_engine` | evaluators, phase_manager, rolling_window | Quality tracking pipeline |
+| `external_interfaces` | remote_api_client, local_model_server | External service adapters |
+| `training_pipeline` | training_data_store, fine_tuning_orchestrator, model_validator | Training lifecycle |
+| `unified_interface` | apprentice_class, cli | User-facing API + CLI |
+| `reporting` | audit_log, report_generator | Observability layer |
+| `root` | all 6 compositions above | Full system composition root |
 
 ## CLI
 
@@ -111,16 +112,20 @@ apprentice status config.yaml           # Show current phase, confidence, budget
 apprentice report config.yaml           # Generate summary report
 ```
 
-## Testing
+## Development
 
 ```bash
-make test        # Run all 1,372 tests
+make dev         # Install with dev + lint dependencies
+make test        # Run all 2,064 tests
 make test-quick  # Stop on first failure
+make lint        # Run ruff linter
+make lint-fix    # Auto-fix lint issues
+make clean       # Remove build artifacts
 ```
 
 ## Built With
 
-This project was built using [Pact](https://github.com/jmcentire/pact) — a contract-first multi-agent software engineering framework. Pact decomposed the task into 18 components, generated contracts and tests for each, then implemented them using iterative Claude Code sessions that write code, run tests, and fix failures autonomously.
+This project was built using [Pact](https://github.com/jmcentire/pact) — a contract-first multi-agent software engineering framework. Pact decomposed the task into 25 components, generated contracts and tests for each, then implemented them using iterative Claude Code sessions that write code, run tests, and fix failures autonomously.
 
 ## License
 
