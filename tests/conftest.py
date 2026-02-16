@@ -20,8 +20,16 @@ if "src" not in sys.modules:
     src_pkg.__package__ = "src"
     sys.modules["src"] = src_pkg
 
-# Add each component's src/ directory to the 'src' package path
-# Also add to sys.path so bare imports in composition glue modules work
+# Prefer src/apprentice/ (canonical shipped code) over .pact/ (build artifact).
+# This ensures tests always run against the code that will actually be installed.
+if _pkg.is_dir():
+    _pkg_str = str(_pkg)
+    if _pkg_str not in sys.modules["src"].__path__:
+        sys.modules["src"].__path__.insert(0, _pkg_str)
+    if _pkg_str not in sys.path:
+        sys.path.insert(0, _pkg_str)
+
+# Also add .pact/ directories as fallback for any components only present there
 for _base in (_impls, _comps):
     if _base.exists():
         for component_dir in sorted(_base.iterdir()):
@@ -32,14 +40,6 @@ for _base in (_impls, _comps):
                     sys.modules["src"].__path__.append(src_str)
                 if src_str not in sys.path:
                     sys.path.append(src_str)
-
-# Fallback: add src/apprentice/ so tests work on CI where .pact/ doesn't exist
-if _pkg.is_dir():
-    _pkg_str = str(_pkg)
-    if _pkg_str not in sys.modules["src"].__path__:
-        sys.modules["src"].__path__.append(_pkg_str)
-    if _pkg_str not in sys.path:
-        sys.path.append(_pkg_str)
 
 
 @pytest.fixture(autouse=True)

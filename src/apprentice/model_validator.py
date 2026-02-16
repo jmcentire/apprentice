@@ -297,8 +297,10 @@ class ModelValidator:
                     samples_evaluated=len(test_set.samples),
                 ))
 
-            # Compute aggregate score
-            aggregate_score = sum(per_metric_scores.values()) / len(per_metric_scores)
+            # Compute aggregate score (round to avoid float artifacts)
+            aggregate_score = self._round_score(
+                sum(per_metric_scores.values()) / len(per_metric_scores)
+            )
 
             # Check aggregate threshold
             threshold_passed = self._check_threshold(
@@ -539,13 +541,29 @@ class ModelValidator:
     # Helper Methods
     # ========================================================================
 
+    @staticmethod
+    def _round_score(value: float, precision: int = 10) -> float:
+        """Round a score to avoid floating-point comparison artifacts.
+
+        Using 10 decimal places preserves meaningful precision while
+        eliminating representation noise (e.g. 0.7999999999999999 → 0.8).
+        """
+        return round(value, precision)
+
     def _check_threshold(
         self,
         score: float,
         threshold: float,
         comparison: ThresholdComparison,
     ) -> bool:
-        """Check if score passes threshold with given comparison operator."""
+        """Check if score passes threshold with given comparison operator.
+
+        Both values are rounded to 10 decimal places before comparison
+        to prevent floating-point representation artifacts from causing
+        incorrect threshold decisions.
+        """
+        score = self._round_score(score)
+        threshold = self._round_score(threshold)
         if comparison == ThresholdComparison.gte:
             return score >= threshold
         else:  # gt

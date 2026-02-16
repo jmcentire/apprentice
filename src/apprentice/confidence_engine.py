@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Optional, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
-# Import child modules with src. prefix for robustness
-import src.evaluators as evaluators
-import src.phase_manager as phase_manager
-import src.rolling_window as rolling_window
+# Import child modules via relative imports (intra-package)
+from . import evaluators
+from . import phase_manager
+from . import rolling_window
 
 _PACT_KEY = "PACT:confidence_engine"
 logger = logging.getLogger(__name__)

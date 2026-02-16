@@ -9,10 +9,10 @@ This module wires together three child components:
 It re-exports all types and functions from children to satisfy the parent contract.
 """
 
-# Import all child modules with src. prefix for robustness
-import src.config_loader as config_loader
-import src.task_registry as task_registry
-import src.data_models as data_models
+# Import child modules via relative imports (intra-package)
+from . import config_loader
+from . import task_registry
+from . import data_models
 
 # ===========================================================================
 # Re-export Config Loader types and functions

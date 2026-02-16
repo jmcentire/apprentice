@@ -7,8 +7,8 @@ adapting the event type enum to match parent contract expectations.
 
 from enum import Enum
 
-# Import base modules from audit_log implementation
-from src.audit_log import (
+# Import base modules from audit_log implementation (intra-package)
+from .audit_log import (
     AuditConfig as _AuditConfig,
     AuditEntry as _AuditEntry,
     JsonLinesAuditLogger as _JsonLinesAuditLogger,

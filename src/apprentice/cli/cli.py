@@ -9,6 +9,7 @@ Thin shell with three responsibilities:
 
 import argparse
 import asyncio
+import inspect
 import json
 import logging
 import signal
@@ -24,6 +25,7 @@ try:
         ApprenticeConfig,
         BudgetInfo,
         GlobalFlags,
+        InitArgs,
         InputData,
         ParsedArgs,
         PhaseInfo,
@@ -31,6 +33,7 @@ try:
         ReportResult,
         RunArgs,
         RunResult,
+        ServeArgs,
         StatusArgs,
         StatusResult,
         SubcommandName,
@@ -42,6 +45,7 @@ except ImportError:
         ApprenticeConfig,
         BudgetInfo,
         GlobalFlags,
+        InitArgs,
         InputData,
         ParsedArgs,
         PhaseInfo,
@@ -49,6 +53,7 @@ except ImportError:
         ReportResult,
         RunArgs,
         RunResult,
+        ServeArgs,
         StatusArgs,
         StatusResult,
         SubcommandName,
@@ -147,6 +152,16 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     report_parser = subparsers.add_parser("report", help="Generate full report")
     report_parser.add_argument("--output", dest="output_path", default=None, help="Write to file")
 
+    # init subcommand
+    init_parser = subparsers.add_parser("init", help="Interactive setup wizard")
+    init_parser.add_argument("--output", dest="init_output", default="./apprentice.yaml", help="Output config path")
+
+    # serve subcommand
+    serve_parser = subparsers.add_parser("serve", help="Start HTTP daemon")
+    serve_parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    serve_parser.add_argument("--port", type=int, default=8710, help="Bind port (default: 8710)")
+    serve_parser.add_argument("--pipeline-interval", type=int, default=300, help="Pipeline interval seconds (default: 300)")
+
     # Parse
     args = parser.parse_args(argv)
 
@@ -166,6 +181,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     run_args = None
     status_args = None
     report_args = None
+    init_args = None
+    serve_args = None
 
     if command == SubcommandName.run:
         run_args = RunArgs(
@@ -176,6 +193,14 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         status_args = StatusArgs(task_filter=args.task_filter)
     elif command == SubcommandName.report:
         report_args = ReportArgs(output_path=args.output_path)
+    elif command == SubcommandName.init:
+        init_args = InitArgs(output_path=args.init_output)
+    elif command == SubcommandName.serve:
+        serve_args = ServeArgs(
+            host=args.host,
+            port=args.port,
+            pipeline_interval=args.pipeline_interval,
+        )
 
     return ParsedArgs(
         global_flags=global_flags,
@@ -183,6 +208,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         run_args=run_args,
         status_args=status_args,
         report_args=report_args,
+        init_args=init_args,
+        serve_args=serve_args,
     )
 
 
@@ -410,8 +437,10 @@ async def execute_report(
 
     Calls Apprentice.report() and optionally writes to file.
     """
-    # Get report data
-    raw_report = await apprentice.report()
+    # Get report data (report() may be sync or async depending on implementation)
+    raw_report = apprentice.report()
+    if inspect.isawaitable(raw_report):
+        raw_report = await raw_report
 
     # Convert tasks
     tasks = []
@@ -486,6 +515,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         # Configure logging before any other work
         configure_logging(args.global_flags.verbose)
 
+        # Handle init subcommand (no config needed)
+        if args.command == SubcommandName.init:
+            try:
+                from .init_wizard import run_wizard
+            except ImportError:
+                from init_wizard import run_wizard
+            output_path = args.init_args.output_path if args.init_args else "./apprentice.yaml"
+            run_wizard(output_path)
+            return 0
+
+        # Handle serve subcommand
+        if args.command == SubcommandName.serve:
+            try:
+                from .serve import serve_main
+            except ImportError:
+                from serve import serve_main
+            serve = args.serve_args
+            host = serve.host if serve else "0.0.0.0"
+            port = serve.port if serve else 8710
+            interval = serve.pipeline_interval if serve else 300
+            asyncio.run(serve_main(args.global_flags.config_path, host, port, interval))
+            return 0
+
         # Load config
         try:
             config = load_config(args.global_flags.config_path)
@@ -494,32 +546,35 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
-        # Create a mock Apprentice for now
-        # In a real implementation: apprentice = Apprentice(config)
-        # For now, we create a minimal mock that will satisfy the basic flow
-        class MockApprentice:
-            async def run(self, task_name, input_data):
-                raise NotImplementedError("Apprentice not available")
-            async def status(self):
-                raise NotImplementedError("Apprentice not available")
-            async def report(self):
-                raise NotImplementedError("Apprentice not available")
+        # Construct the real Apprentice from the config file
+        try:
+            from apprentice.apprentice_class import Apprentice
+        except ImportError:
+            logging.error("Apprentice package not properly installed")
+            print("Error: apprentice package not properly installed", file=sys.stderr)
+            return 1
 
-        apprentice = MockApprentice()
-
-        # Execute the appropriate subcommand
+        # Execute the appropriate subcommand within Apprentice async context
         async def async_main():
-            if args.command == SubcommandName.run:
-                return await execute_run(apprentice, args.run_args)
-            elif args.command == SubcommandName.status:
-                return await execute_status(apprentice, args.status_args)
-            elif args.command == SubcommandName.report:
-                return await execute_report(
-                    apprentice,
-                    args.report_args,
-                    args.global_flags.config_path,
-                    args.global_flags.json_mode
-                )
+            try:
+                apprentice = Apprentice(args.global_flags.config_path)
+            except (FileNotFoundError, ValueError, TypeError) as e:
+                logging.error(f"Failed to initialize Apprentice: {e}")
+                print(f"Error: {e}", file=sys.stderr)
+                raise
+
+            async with apprentice:
+                if args.command == SubcommandName.run:
+                    return await execute_run(apprentice, args.run_args)
+                elif args.command == SubcommandName.status:
+                    return await execute_status(apprentice, args.status_args)
+                elif args.command == SubcommandName.report:
+                    return await execute_report(
+                        apprentice,
+                        args.report_args,
+                        args.global_flags.config_path,
+                        args.global_flags.json_mode
+                    )
 
         result = asyncio.run(async_main())
 

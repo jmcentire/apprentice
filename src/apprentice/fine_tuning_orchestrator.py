@@ -286,6 +286,62 @@ class CommandRunner(ABC):
         pass
 
 
+class LocalNoOpBackend(FineTuneBackend):
+    """A no-op fine-tuning backend for local development and testing.
+
+    Simulates a successful fine-tuning run without doing any actual training.
+    Writes artifact metadata to an output directory so the pipeline can
+    execute end-to-end. Useful for integration testing, CI pipelines, and
+    local development where real GPU training is unavailable.
+    """
+
+    def __init__(self, output_dir: str = "./models/noop"):
+        self.output_dir = Path(output_dir)
+
+    def fine_tune(self, request: FineTuneRequest) -> FineTuneResult:
+        """Simulate a fine-tuning run and produce a ModelVersion artifact."""
+        started_at = datetime.now(timezone.utc).isoformat()
+
+        # Create output directory
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        artifact_dir = self.output_dir / request.run_id
+        artifact_dir.mkdir(exist_ok=True)
+
+        # Write training manifest
+        manifest = {
+            "run_id": request.run_id,
+            "base_model": request.base_model,
+            "backend_type": "noop",
+            "training_example_count": len(request.training_examples),
+            "training_example_ids": [e.example_id for e in request.training_examples],
+            "started_at": started_at,
+        }
+        manifest_path = artifact_dir / "manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        return ModelVersion(
+            status="success",
+            version_id=f"noop-{request.run_id}",
+            base_model=request.base_model,
+            backend_type="noop",
+            training_example_ids=[e.example_id for e in request.training_examples],
+            training_example_count=len(request.training_examples),
+            run_id=request.run_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            artifact_location=str(artifact_dir),
+            metrics=TrainingMetrics(
+                final_loss=0.0,
+                num_steps=0,
+                num_epochs_completed=0.0,
+                training_duration_seconds=0.0,
+            ),
+        )
+
+
 class ModelVersionStore:
     """Persistent storage for ModelVersion artifacts."""
 

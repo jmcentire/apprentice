@@ -3,9 +3,23 @@
 # Copy this file and adjust for your use case.
 # Environment variables are referenced as env:VAR_NAME and resolved at startup.
 
+provider:
+  api_base_url: https://api.anthropic.com
+  api_key: "env:ANTHROPIC_API_KEY"
+  model: "claude-sonnet-4-5-20250929"
+  timeout_seconds: 30
+  max_retries: 3
+  retry_base_delay_seconds: 1.0
+
+local_model:
+  endpoint: "http://localhost:11434"
+  model_name: "llama3.1:8b"
+  timeout_seconds: 60
+  max_retries: 1
+  health_check_path: /health
+
 tasks:
-  - name: classify_ticket
-    description: "Classify support tickets by category and priority"
+  - task_name: classify_ticket
     prompt_template: |
       Classify the following support ticket.
       Return JSON with "category" (billing, technical, account, general)
@@ -13,48 +27,58 @@ tasks:
 
       Ticket: {text}
     input_schema:
-      text: str
-      metadata: dict
+      - name: text
+        type: string
+        required: true
+      - name: metadata
+        type: string
+        required: false
     output_schema:
-      category: str
-      priority: int
-      confidence: float
-    evaluator: structured_match
-    match_fields:
-      - category
-      - priority
-    confidence_thresholds:
-      phase2: 50          # examples needed before Phase 2
-      phase3: 0.85        # correlation score for Phase 3
-      coaching: 0.70      # trigger coaching below this
-      emergency: 0.50     # emergency fallback to remote
+      - name: category
+        type: string
+        required: true
+      - name: priority
+        type: string
+        required: true
+    evaluators:
+      - type: exact_match
+        match_fields:
+          - name: category
+            weight: 1.0
+            case_sensitive: true
+          - name: priority
+            weight: 1.0
+            case_sensitive: true
+    thresholds:
+      local_ready: 0.7
+      local_only: 0.85
+      degraded_threshold: 0.3
+    sampling_rate_initial: 1.0
+    min_training_examples: 100
 
-remote:
-  provider: anthropic
-  model: claude-sonnet-4-5-20250929
-  api_key: env:ANTHROPIC_API_KEY
-
-local:
-  backend: ollama
-  base_model: llama3.1:8b
-  model_dir: ./models/
+budget:
+  max_daily_cost_usd: 10.00
+  max_monthly_cost_usd: 150.00
+  rolling_window_hours: 24
+  cost_per_input_token: 0.000003
+  cost_per_output_token: 0.000015
+  budget_state_path: .apprentice/budget_state.json
 
 finetuning:
   backend: local_lora
+  model_base: "llama3.1:8b"
   batch_size: 100
-  learning_rate: 2.0e-4
-  epochs: 3
-
-sampling:
-  decay_function: exponential
-  min_floor: 0.02
-  window_size: 100
-
-budget:
-  monthly_limit_usd: 150.00
-  budget_reset_day: 1
+  trigger_interval_hours: 24
+  output_dir: .apprentice/models/
+  max_concurrent_jobs: 1
 
 audit:
-  log_path: ./logs/audit.jsonl
+  log_path: .apprentice/audit.log
+  log_level: INFO
+  log_to_stdout: false
   max_file_size_mb: 100
-  rotation_backup_count: 5
+  backup_count: 5
+
+training_data:
+  storage_dir: .apprentice/training_data/
+  max_examples_per_task: 50000
