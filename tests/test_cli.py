@@ -741,11 +741,8 @@ class TestMain:
 
     def _get_cli_module_path(self):
         """Determine the module path for patching."""
-        try:
-            import src.cli
-            return "src.cli"
-        except ImportError:
-            return "cli"
+        # Use the actual module where main() is defined, not the re-export alias
+        return main.__module__
 
     def test_main_usage_error_no_args(self):
         """main() returns exit code 2 on missing arguments (no subcommand)."""
