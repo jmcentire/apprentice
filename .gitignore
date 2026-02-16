@@ -6,3 +6,4 @@ build/
 .pact/
 *.egg
 .pytest_cache/
+.apprentice/

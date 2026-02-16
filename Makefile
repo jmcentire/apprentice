@@ -1,4 +1,4 @@
-.PHONY: install dev test test-quick lint lint-fix clean
+.PHONY: install dev test test-quick lint lint-fix serve init clean
 
 install:
 	pip install -e .
@@ -17,6 +17,12 @@ lint:
 
 lint-fix:
 	python3 -m ruff check --fix src/ tests/
+
+serve:
+	apprentice serve
+
+init:
+	apprentice init
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

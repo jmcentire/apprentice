@@ -3,6 +3,7 @@ Apprentice Core Class implementation.
 
 The main Apprentice class — composition root and sole public API surface.
 """
+import inspect
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
@@ -337,6 +338,15 @@ class Apprentice:
         self._total_errors = 0
 
     @classmethod
+    async def from_config(cls, config_path: str) -> "Apprentice":
+        """
+        Async classmethod that builds a fully wired Apprentice from a config file.
+        Uses the factory to construct all real components.
+        """
+        from apprentice.factory import build_from_config
+        return await build_from_config(config_path)
+
+    @classmethod
     async def create(
         cls,
         config: Any,
@@ -429,6 +439,10 @@ class Apprentice:
 
         if not isinstance(input_data, dict):
             raise TypeError(f"input_data must be a dict, got {type(input_data).__name__}")
+
+        # If wired with real Router (from factory), delegate to it
+        if type(self._router).__name__ == 'RequestRouter':
+            return await self._run_via_router(task_name, input_data)
 
         # Generate request ID
         request_id = str(uuid.uuid4())
@@ -618,6 +632,66 @@ class Apprentice:
             self._total_errors += 1
             raise
 
+    async def _run_via_router(self, task_name: str, input_data: Dict[str, Any]) -> TaskResponse:
+        """Delegate to the real Router when factory-wired components are present."""
+        from apprentice.router import TaskRequest as RouterTaskRequest
+
+        request_id = str(uuid.uuid4())
+        start_time = time.time()
+
+        # Render prompt template from task registry if available
+        prompt = str(input_data)
+        try:
+            task_cfg = self._task_registry.get_task(task_name)
+            prompt = task_cfg.prompt_template.format(**input_data)
+        except (AttributeError, KeyError):
+            pass
+
+        router_request = RouterTaskRequest(
+            request_id=request_id,
+            task_type=task_name,
+            prompt=prompt,
+            metadata=input_data,
+            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+        )
+
+        try:
+            result = await self._router.route(router_request)
+
+            self._total_runs += 1
+            duration_ms = (time.time() - start_time) * 1000
+            is_local = result.actual_action.value in ("LOCAL_ONLY", "BOTH_RETURN_LOCAL")
+            source = ModelSource.local if is_local else ModelSource.remote
+
+            if is_local:
+                self._total_local_runs += 1
+            else:
+                self._total_remote_runs += 1
+
+            if result.is_fallback:
+                self._total_fallbacks += 1
+
+            status = RunStatus.degraded if result.is_degraded else RunStatus.success
+
+            return TaskResponse(
+                task_name=task_name,
+                output={"content": result.response.content},
+                source=source,
+                status=status,
+                request_id=request_id,
+                duration_ms=duration_ms,
+                metadata=ResponseMetadata(
+                    model_id=result.response.model_id,
+                    cost_usd=result.total_cost_usd,
+                    retries=0,
+                    fallback_used=result.is_fallback,
+                    timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        except Exception as e:
+            self._total_errors += 1
+            raise
+
     async def status(self, task_name: str) -> ConfidenceSnapshot:
         """
         Returns a frozen ConfidenceSnapshot for a specific task.
@@ -627,6 +701,10 @@ class Apprentice:
 
         if not task_name or not task_name.strip():
             raise ValueError("task_name must be a non-empty string")
+
+        # If wired with real components (from factory), use real APIs
+        if type(self._task_registry).__name__ == 'TaskRegistry':
+            return await self._status_via_real(task_name)
 
         # Look up task config
         task_config = self._task_registry.get(task_name)
@@ -659,10 +737,86 @@ class Apprentice:
             timestamp_utc=datetime.now(timezone.utc).isoformat(),
         )
 
+    async def _status_via_real(self, task_name: str) -> ConfidenceSnapshot:
+        """Status using real component APIs (factory-wired)."""
+        from decimal import Decimal
+
+        # Verify task exists
+        self._task_registry.get_task(task_name)
+
+        # Get training example count
+        example_count = 0
+        try:
+            counts = self._training_data_store.get_example_count(task_name)
+            example_count = counts.total
+        except Exception:
+            pass
+
+        # Check local model availability
+        local_available = False
+        try:
+            health = await self._local_client.health()
+            local_available = health.is_ready
+        except Exception:
+            pass
+
+        # Get confidence snapshot from engine
+        ce_snapshot = self._confidence_engine.get_snapshot(
+            task_id=task_name,
+            example_count=example_count,
+            local_model_available=local_available,
+        )
+        confidence = ce_snapshot.correlation_score if ce_snapshot.correlation_score is not None else 0.0
+
+        # Map CE phase string to PhaseLabel
+        phase_map = {
+            "REMOTE_ONLY": PhaseLabel.bootstrapping,
+            "COACHING": PhaseLabel.active_learning,
+            "COACHING_FULL": PhaseLabel.active_learning,
+            "LOCAL_PRIMARY": PhaseLabel.supervised,
+            "LOCAL_ONLY": PhaseLabel.autonomous,
+        }
+        phase = phase_map.get(ce_snapshot.phase, PhaseLabel.bootstrapping)
+
+        # Get sampling rate
+        from apprentice.sampling_scheduler import ConfidenceSnapshot as SSSnapshot
+        ss_snapshot = SSSnapshot(
+            correlation_score=confidence,
+            is_stale=ce_snapshot.is_stale,
+            sample_count=ce_snapshot.sample_count,
+            budget_exhausted=False,
+        )
+        sampling_decision = self._sampling_scheduler.should_sample(ss_snapshot)
+        sampling_rate = sampling_decision.sampling_rate
+
+        # Get budget info
+        remaining = self._budget_manager.remaining_budget()
+        report = self._budget_manager.get_report()
+        budget_remaining = float(remaining)
+        budget_used = float(report.total_all_time_spend)
+        budget_exhausted = remaining <= Decimal("0")
+
+        return ConfidenceSnapshot(
+            task_name=task_name,
+            confidence_score=confidence,
+            phase=phase,
+            sampling_rate=sampling_rate,
+            budget_remaining_usd=budget_remaining,
+            budget_used_usd=budget_used,
+            budget_exhausted=budget_exhausted,
+            local_model_available=local_available,
+            total_runs=self._total_runs,
+            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+        )
+
     def report(self) -> SystemReport:
         """
         Returns a frozen SystemReport with comprehensive system-wide statistics.
         """
+        # If wired with real components (from factory), use real APIs
+        if type(self._task_registry).__name__ == 'TaskRegistry':
+            return self._report_via_real()
+
         # Get all task names
         task_names = self._task_registry.list_tasks()
 
@@ -680,13 +834,14 @@ class Apprentice:
             budget_used = self._budget_manager.get_used(task_name)
             budget_exhausted = budget_remaining <= 0.0
 
-            # Handle local_client.is_available() which might be sync or async
+            # Handle local_client.is_available() which might be sync or async.
+            # report() is intentionally sync — if is_available() returns a
+            # coroutine (e.g. from an AsyncMock in tests), close it cleanly
+            # and default to True (local model assumed available for reporting).
             local_available_result = self._local_client.is_available()
-            # For sync report(), we can't await, so check if it's already a value
-            if hasattr(local_available_result, '__await__'):
-                # If it's a coroutine in a sync context, we need to handle this
-                # In tests with AsyncMock, we need to extract the return_value
-                local_available = getattr(self._local_client.is_available, 'return_value', True)
+            if inspect.isawaitable(local_available_result):
+                local_available_result.close()
+                local_available = True
             else:
                 local_available = local_available_result
 
@@ -706,6 +861,90 @@ class Apprentice:
 
             global_budget_used += budget_used
             global_budget_remaining += budget_remaining
+
+        # Calculate uptime
+        if self._start_time_utc is not None:
+            uptime_seconds = (datetime.now(timezone.utc) - self._start_time_utc).total_seconds()
+        else:
+            uptime_seconds = 0.0
+
+        return SystemReport(
+            task_snapshots=task_snapshots,
+            global_budget_used_usd=global_budget_used,
+            global_budget_remaining_usd=global_budget_remaining,
+            total_runs=self._total_runs,
+            total_local_runs=self._total_local_runs,
+            total_remote_runs=self._total_remote_runs,
+            total_fallbacks=self._total_fallbacks,
+            total_errors=self._total_errors,
+            uptime_seconds=uptime_seconds,
+            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def _report_via_real(self) -> SystemReport:
+        """Report using real component APIs (factory-wired)."""
+        from decimal import Decimal
+
+        # Get all task names from real TaskRegistry
+        task_names = sorted(self._task_registry.task_names)
+
+        task_snapshots = []
+
+        # Budget is global, not per-task
+        remaining = self._budget_manager.remaining_budget()
+        budget_report = self._budget_manager.get_report()
+        global_budget_used = float(budget_report.total_all_time_spend)
+        global_budget_remaining = float(remaining)
+
+        phase_map = {
+            "REMOTE_ONLY": PhaseLabel.bootstrapping,
+            "COACHING": PhaseLabel.active_learning,
+            "COACHING_FULL": PhaseLabel.active_learning,
+            "LOCAL_PRIMARY": PhaseLabel.supervised,
+            "LOCAL_ONLY": PhaseLabel.autonomous,
+        }
+
+        for task_name in task_names:
+            # Get example count
+            example_count = 0
+            try:
+                counts = self._training_data_store.get_example_count(task_name)
+                example_count = counts.total
+            except Exception:
+                pass
+
+            # Get confidence snapshot (sync call, local_available defaults to True for report)
+            ce_snapshot = self._confidence_engine.get_snapshot(
+                task_id=task_name,
+                example_count=example_count,
+                local_model_available=True,
+            )
+            confidence = ce_snapshot.correlation_score if ce_snapshot.correlation_score is not None else 0.0
+            phase = phase_map.get(ce_snapshot.phase, PhaseLabel.bootstrapping)
+
+            # Get sampling rate
+            from apprentice.sampling_scheduler import ConfidenceSnapshot as SSSnapshot
+            ss_snapshot = SSSnapshot(
+                correlation_score=confidence,
+                is_stale=ce_snapshot.is_stale,
+                sample_count=ce_snapshot.sample_count,
+                budget_exhausted=remaining <= Decimal("0"),
+            )
+            sampling_decision = self._sampling_scheduler.should_sample(ss_snapshot)
+
+            snapshot = ConfidenceSnapshot(
+                task_name=task_name,
+                confidence_score=confidence,
+                phase=phase,
+                sampling_rate=sampling_decision.sampling_rate,
+                budget_remaining_usd=global_budget_remaining,
+                budget_used_usd=global_budget_used,
+                budget_exhausted=remaining <= Decimal("0"),
+                local_model_available=True,
+                total_runs=self._total_runs,
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+            )
+            task_snapshots.append(snapshot)
 
         # Calculate uptime
         if self._start_time_utc is not None:

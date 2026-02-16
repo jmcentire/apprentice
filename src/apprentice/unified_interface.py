@@ -22,12 +22,10 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 import yaml
 
-# Import from apprentice_class with src. prefix for robustness
-import src.apprentice_class as apprentice_class
-
-# Import from cli module with src. prefix for robustness
-import src.cli as _cli_mod
-from src.cli_models import (
+# Import from child modules via relative imports (intra-package)
+from . import apprentice_class
+from . import cli as _cli_mod
+from .cli_models import (
     BudgetInfo,
     GlobalFlags,
     InputData,

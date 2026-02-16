@@ -31,10 +31,12 @@ class LogLevel(Enum):
 
 
 class SubcommandName(Enum):
-    """The three CLI subcommands recognized by the argument parser."""
+    """CLI subcommands recognized by the argument parser."""
     run = "run"
     status = "status"
     report = "report"
+    init = "init"
+    serve = "serve"
 
 
 class GlobalFlags(BaseModel):
@@ -68,6 +70,22 @@ class ReportArgs(BaseModel):
     model_config = ConfigDict(strict=True)
 
 
+class InitArgs(BaseModel):
+    """Parsed arguments specific to the 'init' subcommand."""
+    output_path: str = "./apprentice.yaml"
+
+    model_config = ConfigDict(strict=True)
+
+
+class ServeArgs(BaseModel):
+    """Parsed arguments specific to the 'serve' subcommand."""
+    host: str = "0.0.0.0"
+    port: int = Field(default=8710, ge=1, le=65535)
+    pipeline_interval: int = Field(default=300, ge=10)
+
+    model_config = ConfigDict(strict=True)
+
+
 class ParsedArgs(BaseModel):
     """Complete parsed CLI arguments combining global flags and subcommand-specific args."""
     global_flags: GlobalFlags
@@ -75,6 +93,8 @@ class ParsedArgs(BaseModel):
     run_args: Optional[RunArgs] = None
     status_args: Optional[StatusArgs] = None
     report_args: Optional[ReportArgs] = None
+    init_args: Optional[InitArgs] = None
+    serve_args: Optional[ServeArgs] = None
 
     model_config = ConfigDict(strict=True)
 

@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Import child components with src. prefix for robustness
-import src.training_data_store as training_data_store
-import src.fine_tuning_orchestrator as fine_tuning_orchestrator
-import src.model_validator as model_validator
+# Import child modules via relative imports (intra-package)
+from . import training_data_store
+from . import fine_tuning_orchestrator
+from . import model_validator
 
 
 # ============================================================================

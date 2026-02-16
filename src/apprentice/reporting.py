@@ -5,25 +5,25 @@ This module wires together the audit_log and report_generator child components
 into the parent reporting interface.
 """
 
-# Import from child modules via virtual src package
-import src.audit_log_adapter as audit_log_adapter
-import src.report_generator as report_generator
+# Import child modules via relative imports (intra-package)
+from . import audit_log_adapter
+from . import report_generator
 
 # Re-export all EventType enum members from audit_log adapter
-from src.audit_log_adapter import EventType
+from .audit_log_adapter import EventType
 
 # Re-export EventTypeList and AuditEntryList type aliases
-from src.audit_log_adapter import AuditEntryList, EventType as EventTypeEnum
+from .audit_log_adapter import AuditEntryList, EventType as EventTypeEnum
 
 # Re-export audit log types and classes
-from src.audit_log_adapter import (
+from .audit_log_adapter import (
     AuditConfig,
     AuditEntry,
     JsonLinesAuditLogger,
 )
 
 # Re-export report generator enums
-from src.report_generator import (
+from .report_generator import (
     TrendDirection,
     AlertSeverity,
     AlertType,
@@ -32,7 +32,7 @@ from src.report_generator import (
 )
 
 # Re-export report generator models
-from src.report_generator import (
+from .report_generator import (
     TaskConfidenceReport,
     CostBreakdown,
     CorrelationWindow,
@@ -45,7 +45,7 @@ from src.report_generator import (
 )
 
 # Re-export report generator exceptions
-from src.report_generator import (
+from .report_generator import (
     ConfigValidationError,
     DataSourceError,
     EmptyReportError,
@@ -53,7 +53,7 @@ from src.report_generator import (
 )
 
 # Re-export core classes
-from src.report_generator import (
+from .report_generator import (
     ReportGenerator,
     ReportFormatter,
     WebhookDelivery,

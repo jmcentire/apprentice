@@ -13,9 +13,9 @@ from typing import Optional, Union, Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-# Import child modules with src. prefix for robustness
-import src.remote_api_client as remote_api_client
-import src.local_model_server as local_model_server
+# Import child modules via relative imports (intra-package)
+from . import remote_api_client
+from . import local_model_server
 
 
 # ═══════════════════════════════════════════════════════════════════════════
