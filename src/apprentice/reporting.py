@@ -75,7 +75,7 @@ AlertList = list[Alert]
 # Protocol Types (for data sources)
 # ══════════════════════════════════════════════════════════════════════════════
 
-from typing import Protocol
+from typing import Protocol  # noqa: E402
 
 
 class ConfidenceDataSource(Protocol):

@@ -23,6 +23,9 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
 ]
+lint = [
+    "ruff>=0.4.0",
+]
 
 [project.scripts]
 apprentice = "apprentice.cli:main"
@@ -33,3 +36,41 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "F401",   # unused imports — many re-exports
+    "F403",   # star imports — used in __init__.py
+    "E741",   # ambiguous variable names
+    "F811",   # redefinition of unused name — adapter patterns
+    "W605",   # invalid escape sequence — some regex patterns
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E", "F", "W"]
+"src/apprentice/__init__.py" = ["F401", "F403"]
+# Pact-generated leaf implementations — lint incrementally
+"src/apprentice/audit_log.py" = ["E", "F", "W"]
+"src/apprentice/apprentice_class.py" = ["E", "F", "W"]
+"src/apprentice/budget_manager.py" = ["E", "F", "W"]
+"src/apprentice/config_loader.py" = ["E", "F", "W"]
+"src/apprentice/data_models.py" = ["E", "F", "W"]
+"src/apprentice/evaluators.py" = ["E", "F", "W"]
+"src/apprentice/fine_tuning_orchestrator.py" = ["E", "F", "W"]
+"src/apprentice/local_model_server.py" = ["E", "F", "W"]
+"src/apprentice/model_validator.py" = ["E", "F", "W"]
+"src/apprentice/phase_manager.py" = ["E", "F", "W"]
+"src/apprentice/remote_api_client.py" = ["E", "F", "W"]
+"src/apprentice/rolling_window.py" = ["E", "F", "W"]
+"src/apprentice/router.py" = ["E", "F", "W"]
+"src/apprentice/sampling_scheduler.py" = ["E", "F", "W"]
+"src/apprentice/task_registry.py" = ["E", "F", "W"]
+"src/apprentice/training_data_store.py" = ["E", "F", "W"]
+"src/apprentice/report_generator/*" = ["E", "F", "W"]
+"src/apprentice/cli/*" = ["E", "F", "W"]
