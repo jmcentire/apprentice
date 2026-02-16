@@ -1,0 +1,23 @@
+budget: 50.00
+
+backend: anthropic
+model: claude-opus-4-6
+
+role_models:
+  decomposer: claude-opus-4-6
+  contract_author: claude-opus-4-6
+  test_author: claude-sonnet-4-5-20250929
+  code_author: claude-sonnet-4-5-20250929
+
+role_backends:
+  decomposer: anthropic
+  contract_author: anthropic
+  test_author: anthropic
+  code_author: claude_code
+
+parallel_components: true
+max_concurrent_agents: 3
+max_implementation_attempts: 3
+
+shaping: true
+shaping_depth: standard
