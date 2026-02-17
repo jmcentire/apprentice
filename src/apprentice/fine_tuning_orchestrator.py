@@ -211,7 +211,21 @@ class HuggingFaceBackendConfig(BaseModel):
     max_seq_length: int = Field(2048, ge=128, le=32768)
 
 
-BackendConfig = Union[UnslothBackendConfig, OpenAIBackendConfig, HuggingFaceBackendConfig]
+class KubernetesLoRAOrchestratorConfig(BaseModel):
+    """Minimal orchestrator config stub for the Kubernetes LoRA backend.
+
+    The full configuration lives in kubernetes_lora_backend.KubernetesLoRABackendConfig.
+    This stub provides just the backend_type discriminator needed by OrchestratorConfig.
+    """
+    backend_type: Literal["kubernetes_lora"] = "kubernetes_lora"
+
+
+class LocalNoOpOrchestratorConfig(BaseModel):
+    """Orchestrator config for the LocalNoOpBackend (dev/testing)."""
+    backend_type: Literal["noop"] = "noop"
+
+
+BackendConfig = Union[UnslothBackendConfig, OpenAIBackendConfig, HuggingFaceBackendConfig, KubernetesLoRAOrchestratorConfig, LocalNoOpOrchestratorConfig]
 
 
 class OrchestratorConfig(BaseModel):
