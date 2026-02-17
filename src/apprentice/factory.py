@@ -499,9 +499,20 @@ async def build_from_config(config_path: str) -> Any:
         audit_log=audit_logger,
     )
 
+    # (14) Model Validator
+    from apprentice.model_validator import ModelValidator, ValidationConfig
+    model_validator = ModelValidator(
+        config=ValidationConfig(),
+        evaluators=list(evaluator_registry.values()),
+        training_data_store=tds,
+        model_server=ollama_client,
+        audit_logger=audit_logger,
+    )
+
     # Attach extra components for serve daemon access
     apprentice._ft_orchestrator = ft_backend
     apprentice._ft_version_store = ft_version_store
+    apprentice._model_validator = model_validator
     apprentice._real_config = cfg
 
     return apprentice
