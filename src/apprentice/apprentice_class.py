@@ -392,6 +392,10 @@ class Apprentice:
             if hasattr(self._audit_log, 'open'):
                 await self._audit_log.open()
 
+            # Enter OllamaClient async context (creates httpx.AsyncClient)
+            if hasattr(self._local_client, '__aenter__'):
+                await self._local_client.__aenter__()
+
             # Record start time
             self._start_time_utc = datetime.now(timezone.utc)
 
@@ -402,6 +406,13 @@ class Apprentice:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit. Flushes audit log and releases resources."""
+        try:
+            # Close OllamaClient async context
+            if hasattr(self._local_client, '__aexit__'):
+                await self._local_client.__aexit__(None, None, None)
+        except Exception:
+            pass
+
         try:
             # Flush and close audit log
             if hasattr(self._audit_log, 'flush'):

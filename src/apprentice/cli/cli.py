@@ -158,9 +158,22 @@ def parse_args(argv: list[str]) -> ParsedArgs:
 
     # serve subcommand
     serve_parser = subparsers.add_parser("serve", help="Start HTTP daemon")
-    serve_parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    serve_parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     serve_parser.add_argument("--port", type=int, default=8710, help="Bind port (default: 8710)")
     serve_parser.add_argument("--pipeline-interval", type=int, default=300, help="Pipeline interval seconds (default: 300)")
+    serve_parser.add_argument("--auth", dest="auth_mode", default="none",
+                              choices=["none", "api-key", "jwt", "hmac"],
+                              help="Auth mode (default: none)")
+    serve_parser.add_argument("--api-key", dest="serve_api_key", default="",
+                              help="API key or env:VAR_NAME for api-key auth")
+    serve_parser.add_argument("--jwt-secret", default="",
+                              help="JWT secret or env:VAR_NAME for jwt auth")
+    serve_parser.add_argument("--hmac-secret", default="",
+                              help="HMAC secret or env:VAR_NAME for hmac auth")
+    serve_parser.add_argument("--tls-cert", default="", help="Path to TLS certificate")
+    serve_parser.add_argument("--tls-key", default="", help="Path to TLS private key")
+    serve_parser.add_argument("--allowed-ips", default="",
+                              help="Comma-separated IP allowlist (CIDRs or addresses)")
 
     # Parse
     args = parser.parse_args(argv)
@@ -200,6 +213,13 @@ def parse_args(argv: list[str]) -> ParsedArgs:
             host=args.host,
             port=args.port,
             pipeline_interval=args.pipeline_interval,
+            auth_mode=args.auth_mode,
+            api_key=args.serve_api_key,
+            jwt_secret=args.jwt_secret,
+            hmac_secret=args.hmac_secret,
+            tls_cert=args.tls_cert,
+            tls_key=args.tls_key,
+            allowed_ips=args.allowed_ips,
         )
 
     return ParsedArgs(
@@ -532,10 +552,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             except ImportError:
                 from serve import serve_main
             serve = args.serve_args
-            host = serve.host if serve else "0.0.0.0"
+            host = serve.host if serve else "127.0.0.1"
             port = serve.port if serve else 8710
             interval = serve.pipeline_interval if serve else 300
-            asyncio.run(serve_main(args.global_flags.config_path, host, port, interval))
+            allowed_ips = [ip.strip() for ip in serve.allowed_ips.split(",") if ip.strip()] if serve and serve.allowed_ips else []
+            asyncio.run(serve_main(
+                config_path=args.global_flags.config_path,
+                host=host, port=port, pipeline_interval=interval,
+                auth_mode=serve.auth_mode if serve else "none",
+                api_key=serve.api_key if serve else "",
+                jwt_secret=serve.jwt_secret if serve else "",
+                hmac_secret=serve.hmac_secret if serve else "",
+                tls_cert=serve.tls_cert if serve else "",
+                tls_key=serve.tls_key if serve else "",
+                allowed_ips=allowed_ips,
+            ))
             return 0
 
         # Load config

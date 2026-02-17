@@ -79,9 +79,16 @@ class InitArgs(BaseModel):
 
 class ServeArgs(BaseModel):
     """Parsed arguments specific to the 'serve' subcommand."""
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = Field(default=8710, ge=1, le=65535)
     pipeline_interval: int = Field(default=300, ge=10)
+    auth_mode: str = "none"
+    api_key: str = ""
+    jwt_secret: str = ""
+    hmac_secret: str = ""
+    tls_cert: str = ""
+    tls_key: str = ""
+    allowed_ips: str = ""
 
     model_config = ConfigDict(strict=True)
 
