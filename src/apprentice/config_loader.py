@@ -45,6 +45,7 @@ class FinetuningBackendName(Enum):
     local_lora = "local_lora"
     axolotl = "axolotl"
     custom = "custom"
+    kubernetes_lora = "kubernetes_lora"
 
 
 class LogLevel(Enum):
@@ -277,6 +278,13 @@ class FinetuningConfig(BaseModel):
     output_dir: str = ".apprentice/models/"
     max_concurrent_jobs: int = Field(default=1, ge=1, le=10)
 
+    # Kubernetes LoRA backend fields
+    gcs_bucket: Optional[str] = None
+    training_image: Optional[str] = None
+    gpu_type: Optional[str] = "nvidia-tesla-t4"
+    k8s_namespace: Optional[str] = "default"
+    service_account: Optional[str] = None
+
     @field_validator("backend", mode="before")
     @classmethod
     def validate_backend(cls, v: Any) -> FinetuningBackendName:
@@ -408,6 +416,17 @@ class ApprenticeConfig(BaseModel):
             if not self.finetuning.api_base_url:
                 errors.append(
                     f"Config validation failed: backend '{self.finetuning.backend.value}' requires 'api_base_url'"
+                )
+
+        # Validate kubernetes_lora backend requirements
+        if self.finetuning.backend == FinetuningBackendName.kubernetes_lora:
+            if not self.finetuning.gcs_bucket or not self.finetuning.gcs_bucket.strip():
+                errors.append(
+                    "Config validation failed: backend 'kubernetes_lora' requires 'gcs_bucket'"
+                )
+            if not self.finetuning.training_image or not self.finetuning.training_image.strip():
+                errors.append(
+                    "Config validation failed: backend 'kubernetes_lora' requires 'training_image'"
                 )
 
         if errors:

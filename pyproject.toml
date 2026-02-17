@@ -24,6 +24,10 @@ dev = [
     "pytest-asyncio>=0.21",
     "python-dateutil>=2.8",
 ]
+gke = [
+    "kubernetes>=28.0",
+    "google-cloud-storage>=2.10",
+]
 lint = [
     "ruff>=0.4.0",
 ]
@@ -64,6 +68,7 @@ ignore = [
 "src/apprentice/data_models.py" = ["E", "F", "W"]
 "src/apprentice/evaluators.py" = ["E", "F", "W"]
 "src/apprentice/fine_tuning_orchestrator.py" = ["E", "F", "W"]
+"src/apprentice/kubernetes_lora_backend.py" = ["E", "F", "W"]
 "src/apprentice/local_model_server.py" = ["E", "F", "W"]
 "src/apprentice/model_validator.py" = ["E", "F", "W"]
 "src/apprentice/phase_manager.py" = ["E", "F", "W"]

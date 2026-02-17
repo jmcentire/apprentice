@@ -180,6 +180,7 @@ class ApprenticeServer:
         self._server: Optional[asyncio.AbstractServer] = None
         self._pipeline_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
+        self._training_in_flight = False
 
     async def start(self) -> None:
         """Start the HTTP server and background pipeline."""
@@ -402,9 +403,14 @@ class ApprenticeServer:
         if not hasattr(apprentice, '_real_config'):
             return
 
+        # Guard: skip if a training job is already in flight
+        if self._training_in_flight:
+            print("[pipeline] Skipping: training job already in flight", file=sys.stderr)
+            return
+
         cfg = apprentice._real_config
         tds = apprentice._training_data_store
-        ft_backend = apprentice._ft_orchestrator
+        orchestrator = apprentice._ft_orchestrator
 
         for task_cfg in cfg.tasks:
             task_name = task_cfg.task_name
@@ -416,7 +422,7 @@ class ApprenticeServer:
                     print(f"[pipeline] {task_name}: {count.training} examples >= {batch_size}, triggering fine-tune")
 
                     # Gather training examples
-                    from apprentice.fine_tuning_orchestrator import FineTuneRequest, TrainingExample as FTExample
+                    from apprentice.fine_tuning_orchestrator import TrainingExample as FTExample
                     import uuid
 
                     examples = tds.iter_training_examples(task_name)
@@ -433,26 +439,23 @@ class ApprenticeServer:
                     if not ft_examples:
                         continue
 
-                    request = FineTuneRequest(
-                        run_id=str(uuid.uuid4()),
-                        base_model=cfg.finetuning.model_base,
-                        training_examples=ft_examples,
-                    )
-
-                    result = ft_backend.fine_tune(request)
+                    # Orchestrator handles: run_id generation, batch validation,
+                    # backend dispatch, failure tracking, and version persistence.
+                    self._training_in_flight = True
+                    try:
+                        result = await asyncio.to_thread(
+                            orchestrator.trigger_fine_tuning,
+                            ft_examples,
+                            cfg.finetuning.model_base,
+                        )
+                    finally:
+                        self._training_in_flight = False
 
                     if not hasattr(result, 'status') or result.status != "success":
                         print(f"[pipeline] {task_name}: Fine-tune failed: {result}")
                         continue
 
                     print(f"[pipeline] {task_name}: Fine-tune succeeded: {result.version_id}")
-
-                    # Save model version
-                    if hasattr(apprentice, '_ft_version_store'):
-                        try:
-                            apprentice._ft_version_store.save_model_version(result)
-                        except Exception as e:
-                            print(f"[pipeline] {task_name}: Version store error: {e}", file=sys.stderr)
 
                     # Validate and promote
                     if hasattr(apprentice, '_model_validator'):
@@ -467,6 +470,7 @@ class ApprenticeServer:
                             print(f"[pipeline] {task_name}: Validation error: {e}", file=sys.stderr)
 
             except Exception as e:
+                self._training_in_flight = False
                 print(f"[pipeline] {task_name}: Error: {e}", file=sys.stderr)
 
 

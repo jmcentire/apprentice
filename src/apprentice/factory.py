@@ -282,7 +282,15 @@ async def build_from_config(config_path: str) -> Any:
     from apprentice.budget_manager import BudgetConfig, BudgetManager, PeriodLimit, PeriodType
     from apprentice.confidence_engine import ConfidenceEngine, ConfidenceEngineConfig
     from apprentice.evaluators import ExactMatchEvaluator, StructuredMatchEvaluator
-    from apprentice.fine_tuning_orchestrator import LocalNoOpBackend, ModelVersionStore
+    from apprentice.config_loader import FinetuningBackendName
+    from apprentice.fine_tuning_orchestrator import (
+        FineTuningOrchestrator,
+        KubernetesLoRAOrchestratorConfig,
+        LocalNoOpBackend,
+        LocalNoOpOrchestratorConfig,
+        ModelVersionStore,
+        OrchestratorConfig,
+    )
     from apprentice.local_model_server import OllamaClient, OllamaClientConfig
     from apprentice.remote_api_client import RemoteClientConfig, ProviderName, create_remote_client
     from apprentice.router import RequestRouter, RouterConfig
@@ -431,9 +439,38 @@ async def build_from_config(config_path: str) -> Any:
     # (9) Sampling Scheduler
     sampling_scheduler = AdaptiveSamplingScheduler(SamplingSchedulerConfig())
 
-    # (10) Fine-Tuning Backend + Version Store
-    ft_backend = LocalNoOpBackend(output_dir=cfg.finetuning.output_dir)
+    # (10) Fine-Tuning Backend + Orchestrator + Version Store
     ft_version_store = ModelVersionStore(store_path=str(base_dir / "model_versions.json"))
+
+    if cfg.finetuning.backend == FinetuningBackendName.kubernetes_lora:
+        from apprentice.kubernetes_lora_backend import (
+            KubernetesLoRABackend,
+            KubernetesLoRABackendConfig,
+        )
+        ft_backend = KubernetesLoRABackend(KubernetesLoRABackendConfig(
+            gcs_bucket=cfg.finetuning.gcs_bucket,
+            training_image=cfg.finetuning.training_image,
+            namespace=cfg.finetuning.k8s_namespace or "default",
+            gpu_type=cfg.finetuning.gpu_type or "nvidia-tesla-t4",
+            service_account_name=cfg.finetuning.service_account or "",
+            base_model=cfg.finetuning.model_base,
+            ollama_base_url=cfg.local_model.endpoint,
+            local_gguf_dir=cfg.finetuning.output_dir,
+        ))
+        orch_backend_cfg = KubernetesLoRAOrchestratorConfig()
+    else:
+        ft_backend = LocalNoOpBackend(output_dir=cfg.finetuning.output_dir)
+        orch_backend_cfg = LocalNoOpOrchestratorConfig()
+
+    ft_orchestrator = FineTuningOrchestrator(
+        backend=ft_backend,
+        model_version_store=ft_version_store,
+        config=OrchestratorConfig(
+            backend=orch_backend_cfg,
+            min_training_examples=cfg.finetuning.batch_size,
+            model_version_store_path=str(base_dir / "model_versions.json"),
+        ),
+    )
 
     # (12) Build Router with adapters
     cost_per_request = (
@@ -510,7 +547,7 @@ async def build_from_config(config_path: str) -> Any:
     )
 
     # Attach extra components for serve daemon access
-    apprentice._ft_orchestrator = ft_backend
+    apprentice._ft_orchestrator = ft_orchestrator
     apprentice._ft_version_store = ft_version_store
     apprentice._model_validator = model_validator
     apprentice._real_config = cfg

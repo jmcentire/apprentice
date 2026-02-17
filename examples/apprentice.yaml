@@ -72,6 +72,14 @@ finetuning:
   output_dir: .apprentice/models/
   max_concurrent_jobs: 1
 
+  # ── Kubernetes LoRA backend (uncomment to enable) ──
+  # backend: kubernetes_lora
+  # gcs_bucket: "my-project-apprentice-training"
+  # training_image: "gcr.io/my-project/apprentice-trainer:latest"
+  # gpu_type: "nvidia-tesla-t4"          # or nvidia-l4
+  # k8s_namespace: "default"
+  # service_account: "apprentice-trainer" # K8s SA with GCS access
+
 audit:
   log_path: .apprentice/audit.log
   log_level: INFO
