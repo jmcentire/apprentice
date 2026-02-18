@@ -470,9 +470,15 @@ class TestDownloadGGUF:
             "min_disk_free_bytes": 0,
         })
 
-        # Mock the stat() call on the downloaded file
-        expected_path = tmp_path / "test-run-123.gguf"
-        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=1024)):
+        # Mock stat() only on the downloaded file, not on all Path objects
+        # (global Path.stat patch breaks mkdir's internal is_dir() check on Python 3.13+)
+        _original_stat = Path.stat
+        def _selective_stat(self, *args, **kwargs):
+            if self.name.endswith(".gguf"):
+                return SimpleNamespace(st_size=1024)
+            return _original_stat(self, *args, **kwargs)
+
+        with patch.object(Path, 'stat', _selective_stat):
             result = backend._download_gguf("test-run-123")
 
         assert "test-run-123.gguf" in result
