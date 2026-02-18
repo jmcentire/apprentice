@@ -278,6 +278,7 @@ async def build_from_config(config_path: str) -> Any:
         TaskConfig as ACTaskConfig,
         ConfidenceThresholds as ACThresholds,
     )
+    from apprentice.plugin_registry import PluginRegistrySet
     from apprentice.audit_log import AuditConfig, JsonLinesAuditLogger
     from apprentice.budget_manager import BudgetConfig, BudgetManager, PeriodLimit, PeriodType
     from apprentice.confidence_engine import ConfidenceEngine, ConfidenceEngineConfig
@@ -305,6 +306,14 @@ async def build_from_config(config_path: str) -> Any:
 
     # 1. Load validated config
     cfg = config_loader.load_config(Path(config_path))
+
+    # 1.5. Construct Plugin Registry
+    plugin_registry_set = PluginRegistrySet.with_defaults()
+    if cfg.plugins:
+        plugin_registry_set.register_from_config(
+            {domain: {name: {"factory": entry.factory} for name, entry in plugins.items()}
+             for domain, plugins in cfg.plugins.items()}
+        )
 
     # 2. Create directories
     base_dir = Path(".apprentice")
@@ -551,5 +560,41 @@ async def build_from_config(config_path: str) -> Any:
     apprentice._ft_version_store = ft_version_store
     apprentice._model_validator = model_validator
     apprentice._real_config = cfg
+    apprentice._plugin_registry_set = plugin_registry_set
+
+    # Construct middleware pipeline if configured
+    if cfg.middleware:
+        from apprentice.middleware import MiddlewarePipeline
+        middleware_registry = plugin_registry_set.get_registry("middleware")
+        apprentice._middleware_pipeline = MiddlewarePipeline.from_config(
+            cfg.middleware, middleware_registry,
+        )
+    else:
+        apprentice._middleware_pipeline = None
+
+    # Construct feedback collector if configured
+    if cfg.feedback and cfg.feedback.enabled:
+        from apprentice.feedback_collector import FeedbackCollector
+        apprentice._feedback_collector = FeedbackCollector(
+            storage_dir=cfg.feedback.storage_dir,
+            enabled=True,
+        )
+    else:
+        apprentice._feedback_collector = None
+
+    # Construct observer if configured
+    if cfg.observer and cfg.observer.enabled:
+        from apprentice.observer import Observer, ObserverConfig as ObsCfg
+        apprentice._observer = Observer(ObsCfg(
+            enabled=True,
+            context_window_size=cfg.observer.context_window_size,
+            shadow_recommendation_rate=cfg.observer.shadow_recommendation_rate,
+            min_context_before_recommending=cfg.observer.min_context_before_recommending,
+        ))
+    else:
+        apprentice._observer = None
+
+    # Store mode
+    apprentice._mode = cfg.mode
 
     return apprentice

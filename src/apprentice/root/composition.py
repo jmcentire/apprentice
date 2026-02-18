@@ -25,6 +25,7 @@ logger = logging.getLogger("apprentice.root")
 
 class InitializationPhase(str, Enum):
     CONFIG_PARSE = "CONFIG_PARSE"
+    PLUGIN_REGISTRY_INIT = "PLUGIN_REGISTRY_INIT"
     REGISTRY_BUILD = "REGISTRY_BUILD"
     BUDGET_MANAGER_INIT = "BUDGET_MANAGER_INIT"
     CONFIDENCE_ENGINE_INIT = "CONFIDENCE_ENGINE_INIT"
@@ -47,6 +48,7 @@ class ComponentStatus(str, Enum):
 
 class ComponentId(str, Enum):
     CONFIG_AND_REGISTRY = "CONFIG_AND_REGISTRY"
+    PLUGIN_REGISTRY = "PLUGIN_REGISTRY"
     BUDGET_MANAGER = "BUDGET_MANAGER"
     CONFIDENCE_ENGINE = "CONFIDENCE_ENGINE"
     EXTERNAL_INTERFACES = "EXTERNAL_INTERFACES"
@@ -203,6 +205,7 @@ class ShutdownError(Exception):
 
 _COMPONENT_IDS = [
     "config_and_registry",
+    "plugin_registry",
     "budget_manager",
     "confidence_engine",
     "external_interfaces",
@@ -215,6 +218,7 @@ _COMPONENT_IDS = [
 
 _COMPONENT_ID_TO_ENUM = {
     "config_and_registry": ComponentId.CONFIG_AND_REGISTRY,
+    "plugin_registry": ComponentId.PLUGIN_REGISTRY,
     "budget_manager": ComponentId.BUDGET_MANAGER,
     "confidence_engine": ComponentId.CONFIDENCE_ENGINE,
     "external_interfaces": ComponentId.EXTERNAL_INTERFACES,
@@ -227,6 +231,7 @@ _COMPONENT_ID_TO_ENUM = {
 
 _COMPONENT_PHASE = {
     "config_and_registry": InitializationPhase.CONFIG_PARSE,
+    "plugin_registry": InitializationPhase.PLUGIN_REGISTRY_INIT,
     "budget_manager": InitializationPhase.BUDGET_MANAGER_INIT,
     "confidence_engine": InitializationPhase.CONFIDENCE_ENGINE_INIT,
     "external_interfaces": InitializationPhase.EXTERNAL_INTERFACES_INIT,
@@ -430,6 +435,7 @@ async def initialize_composition_root(
     # DAG order init phases
     _init_phases = [
         ("config_and_registry", InitializationPhase.CONFIG_PARSE),
+        ("plugin_registry", InitializationPhase.PLUGIN_REGISTRY_INIT),
         ("budget_manager", InitializationPhase.BUDGET_MANAGER_INIT),
         ("confidence_engine", InitializationPhase.CONFIDENCE_ENGINE_INIT),
         ("external_interfaces", InitializationPhase.EXTERNAL_INTERFACES_INIT),
@@ -492,6 +498,10 @@ def _construct_component(cid: str, raw_config: dict, initialized: dict, env: dic
         cr.task_registry.__contains__ = lambda name: False
         cr.task_registry.task_names = lambda: [t.get("name", "") for t in config.tasks] if isinstance(config.tasks, list) else []
         return cr
+
+    elif cid == "plugin_registry":
+        from apprentice.plugin_registry import PluginRegistrySet
+        return PluginRegistrySet.with_defaults()
 
     elif cid == "budget_manager":
         return BudgetManager()
