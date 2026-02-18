@@ -273,9 +273,11 @@ def _make_mock_unified_interface():
 
 @pytest.fixture
 def mock_component_overrides():
-    """Dict of mock component overrides for all 9 components."""
+    """Dict of mock component overrides for all 10 components."""
+    from types import SimpleNamespace
     return {
         "config_and_registry": _make_mock_config_and_registry(),
+        "plugin_registry": SimpleNamespace(),
         "budget_manager": _make_mock_budget_manager(),
         "confidence_engine": _make_mock_confidence_engine(),
         "external_interfaces": _make_mock_external_interfaces(),
@@ -319,7 +321,7 @@ class TestInitializationHappyPath:
     async def test_init_all_9_components_returned(
         self, config_file, mock_env, mock_component_overrides
     ):
-        """initialize_composition_root returns dict with all 9 component entries."""
+        """initialize_composition_root returns dict with all 10 component entries."""
         result = await initialize_composition_root(
             config_path=config_file,
             env=mock_env,
@@ -327,12 +329,12 @@ class TestInitializationHappyPath:
         )
 
         assert isinstance(result, dict), "Result should be a dict"
-        assert len(result) == 9, f"Expected 9 components, got {len(result)}"
+        assert len(result) == 10, f"Expected 10 components, got {len(result)}"
 
         expected_ids = {
-            "config_and_registry", "budget_manager", "confidence_engine",
-            "external_interfaces", "sampling_scheduler", "router",
-            "training_pipeline", "reporting", "unified_interface",
+            "config_and_registry", "plugin_registry", "budget_manager",
+            "confidence_engine", "external_interfaces", "sampling_scheduler",
+            "router", "training_pipeline", "reporting", "unified_interface",
         }
         assert set(result.keys()) == expected_ids, (
             f"Missing component IDs: {expected_ids - set(result.keys())}"
@@ -680,7 +682,7 @@ class TestShutdownHappyPath:
         assert result.component_errors == {} or len(result.component_errors) == 0, (
             f"Expected empty component_errors, got {result.component_errors}"
         )
-        assert len(result.components_shutdown_successfully) == 9, (
+        assert len(result.components_shutdown_successfully) == 10, (
             f"Expected 9 successful shutdowns, got {len(result.components_shutdown_successfully)}"
         )
 
@@ -854,7 +856,7 @@ class TestShutdownErrors:
         )
         # Remaining components should still be in successful list
         total = len(result.component_errors) + len(result.components_shutdown_successfully)
-        assert total == 9, (
+        assert total == 10, (
             f"Errors + successes should total 9, got {total}"
         )
 
@@ -1597,10 +1599,10 @@ class TestGetComponentStatuses:
     """Test get_component_statuses function."""
 
     def test_all_healthy(self, mock_component_overrides):
-        """Returns 9 READY entries when all components initialized."""
+        """Returns 10 READY entries when all components initialized."""
         result = get_component_statuses(components=mock_component_overrides)
 
-        assert len(result) == 9, f"Expected 9 entries, got {len(result)}"
+        assert len(result) == 10, f"Expected 10 entries, got {len(result)}"
 
         for entry in result:
             assert entry.status == ComponentStatus.READY or str(entry.status) == "READY", (
@@ -1609,7 +1611,7 @@ class TestGetComponentStatuses:
 
         # Each ComponentId appears exactly once
         component_ids = [str(entry.component_id) for entry in result]
-        assert len(set(component_ids)) == 9, (
+        assert len(set(component_ids)) == 10, (
             f"Expected 9 unique component IDs, got {len(set(component_ids))}"
         )
 
@@ -1618,12 +1620,12 @@ class TestGetComponentStatuses:
         partial_components = {
             "config_and_registry": _make_mock_config_and_registry(),
             "budget_manager": _make_mock_budget_manager(),
-            # Only 2 of 9 initialized
+            # Only 2 of 10 initialized
         }
 
         result = get_component_statuses(components=partial_components)
 
-        assert len(result) == 9, f"Expected 9 entries, got {len(result)}"
+        assert len(result) == 10, f"Expected 10 entries, got {len(result)}"
 
         ready_count = sum(
             1 for e in result
@@ -1635,7 +1637,7 @@ class TestGetComponentStatuses:
         )
 
         assert ready_count == 2, f"Expected 2 READY, got {ready_count}"
-        assert not_started_count == 7, f"Expected 7 NOT_STARTED, got {not_started_count}"
+        assert not_started_count == 8, f"Expected 8 NOT_STARTED, got {not_started_count}"
 
     def test_with_failed_component(self, mock_component_overrides):
         """FAILED status with error_message for failed components."""
@@ -1648,7 +1650,7 @@ class TestGetComponentStatuses:
 
         result = get_component_statuses(components=failed_components)
 
-        assert len(result) == 9
+        assert len(result) == 10
 
         # Find the budget_manager entry
         bm_entries = [
@@ -2052,7 +2054,7 @@ class TestInvariants:
 
         # All 9 components should have been attempted
         total = len(result.component_errors) + len(result.components_shutdown_successfully)
-        assert total == 9, (
+        assert total == 10, (
             f"All 9 components should be attempted, got {total} total"
         )
 
