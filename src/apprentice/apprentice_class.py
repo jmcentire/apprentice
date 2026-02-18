@@ -433,6 +433,36 @@ class Apprentice:
         if self._running:
             await self.__aexit__(None, None, None)
 
+    async def feedback(self, request_id: str, feedback_type: str, **kwargs) -> None:
+        """Record feedback for a previous request. No-op if feedback collector not configured."""
+        collector = getattr(self, '_feedback_collector', None)
+        if collector is None:
+            return
+        from apprentice.feedback_collector import FeedbackEntry, FeedbackType
+        entry = FeedbackEntry(
+            request_id=request_id,
+            task_name=kwargs.get('task_name', ''),
+            feedback_type=FeedbackType(feedback_type),
+            score=kwargs.get('score', 0.0),
+            edited_output=kwargs.get('edited_output'),
+            reason=kwargs.get('reason'),
+        )
+        collector.record_feedback(entry)
+
+    async def observe(self, event) -> None:
+        """Record an observation event. No-op if observer not configured."""
+        observer = getattr(self, '_observer', None)
+        if observer is None:
+            return
+        observer.observe(event)
+
+    async def record_action(self, event_id: str, action: dict) -> None:
+        """Record an actual action for a previously observed event."""
+        observer = getattr(self, '_observer', None)
+        if observer is None:
+            return
+        observer.record_action(event_id, action)
+
     async def run(self, task_name: str, input_data: Dict[str, Any]) -> TaskResponse:
         """
         Primary public method. Executes a task: routes to appropriate model backend,
