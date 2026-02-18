@@ -332,6 +332,39 @@ class TrainingDataStoreConfig(BaseModel):
     max_examples_per_task: int = Field(default=50000, ge=100, le=10000000)
 
 
+class PluginEntryConfig(BaseModel):
+    """Configuration for a single plugin entry."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    factory: str = Field(min_length=1)
+
+
+class MiddlewareEntryConfig(BaseModel):
+    """Configuration for a single middleware entry in the pipeline."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="allow")
+
+    name: str = Field(min_length=1)
+    config: Mapping[str, Any] = Field(default_factory=dict)
+
+
+class FeedbackConfig(BaseModel):
+    """Configuration for the feedback collector."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    enabled: bool = False
+    storage_dir: str = ".apprentice/feedback/"
+
+
+class ObserverConfig(BaseModel):
+    """Configuration for the observer."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    enabled: bool = False
+    context_window_size: int = Field(default=50, ge=1, le=1000)
+    shadow_recommendation_rate: float = Field(default=0.1, ge=0.0, le=1.0)
+    min_context_before_recommending: int = Field(default=10, ge=1)
+
+
 class ApprenticeConfig(BaseModel):
     """Root configuration model. Frozen and immutable after construction."""
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
@@ -343,6 +376,13 @@ class ApprenticeConfig(BaseModel):
     finetuning: FinetuningConfig
     audit: AuditConfig
     training_data: TrainingDataStoreConfig
+
+    # New extensibility fields (all optional, backward compatible)
+    mode: str = Field(default="distillation", pattern=r"^(distillation|copilot|observer)$")
+    plugins: Optional[Mapping[str, Mapping[str, PluginEntryConfig]]] = None
+    middleware: Optional[List[MiddlewareEntryConfig]] = None
+    feedback: Optional[FeedbackConfig] = None
+    observer: Optional[ObserverConfig] = None
 
     @model_validator(mode="after")
     def validate_cross_field_constraints(self) -> "ApprenticeConfig":
