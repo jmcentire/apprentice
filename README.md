@@ -1,32 +1,48 @@
 # Apprentice
 
-Adaptive model distillation with coaching. Start with frontier API models, progressively train a local model, then withdraw the expensive dependency — while maintaining quality guarantees.
+**Train cheap models on expensive ones. Automatically. With receipts.**
 
-## How It Works
+Apprentice is an adaptive model distillation framework. It starts by routing every request to a frontier API (Claude, GPT, etc.), collects the outputs as training data, fine-tunes a local model, then progressively shifts traffic to it — while continuously verifying quality. The goal: replace a $15/M-token API with a $0 local model that produces equivalent results for your specific tasks.
 
-Apprentice manages the full lifecycle of distilling knowledge from remote frontier models (Claude, GPT, etc.) into specialized local models:
+The caller sends a request and gets a response. They don't know whether it came from Claude, a LoRA on Llama, or both. That's the point.
 
-1. **Phase 1 — Cold Start**: Every request goes to the remote API. Responses are collected as training data.
-2. **Phase 2 — Reinforcement**: The local model begins attempting responses alongside the remote. Outputs are compared via the confidence engine.
-3. **Phase 3 — Steady State**: The local model handles most requests. Adaptive sampling periodically checks quality against the remote, adjusting frequency based on correlation.
+## When to Use Apprentice
 
-The caller submits a request and gets a response. They don't know whether it came from a local model, a remote API, or a blend of both.
+Apprentice is for **recurring, domain-specific tasks** where a general-purpose frontier model is overkill once you have enough examples. If you're making 10 API calls a day, the cost savings don't justify the infrastructure. If you're making 10,000, they do.
 
-## Installation
+Use Apprentice when:
+- You have **repetitive tasks** with consistent structure (classification, extraction, routing, summarization)
+- You're spending **real money on API calls** that a fine-tuned 8B model could handle
+- You need **quality guarantees** — not "hope the local model is good enough" but measurable correlation scores
+- You want **phased rollout** — not a hard cutover, but a gradual, data-driven transition
+- The task has a **clear evaluation criteria** (exact match, structured field comparison, semantic similarity)
 
-```bash
-pip install -e .
-```
+Don't use Apprentice when:
+- Every request is unique and creative (novel writing, open-ended brainstorming)
+- You need the frontier model's full reasoning capability, not a specialized subset
+- Your volume is low enough that API costs don't matter
+- You're already happy with prompt engineering alone
+
+## Philosophy: Models Are Commodities, Data Is the Asset
+
+The frontier model is a teacher, not a dependency. Apprentice treats API calls as training signals — every response is simultaneously a result and a labeled example. Over time, the local model absorbs the teacher's behavior for your specific domain. The API bill goes down. The local model gets better. The quality metrics prove it.
+
+This is the opposite of prompt engineering. Prompt engineering optimizes the question you ask a smart model. Apprentice optimizes which model you ask, based on evidence that a cheaper one gives the same answer.
+
+The confidence engine doesn't trust the local model by default. It earns trust through a sliding window of comparison scores. Phase transitions happen mechanically: 50 examples collected → start comparing; 0.85 correlation sustained → start routing locally. If correlation drops, traffic shifts back. No manual intervention required.
 
 ## Quick Start
+
+```bash
+pip install apprentice-ai
+```
 
 ```python
 from apprentice import Apprentice
 
-# Initialize from config
 app = await Apprentice.create("apprentice.yaml")
 
-# Send a request — routing is automatic
+# Routing is automatic — you don't choose the model
 response = await app.run("classify_ticket", {
     "text": "My payment didn't go through",
     "metadata": {"source": "email"}
@@ -38,9 +54,66 @@ print(response.source)   # "local" or "remote" or "dual"
 await app.close()
 ```
 
+## How It Works
+
+```
+Request
+  |
+  v
+Router ──────────────────────────────────────────────────────┐
+  |                                                          |
+  |  Phase 1: COLD START         Phase 2: REINFORCEMENT     |  Phase 3: STEADY STATE
+  |  ┌─────────────────┐        ┌──────────────────────┐    |  ┌───────────────────┐
+  |  │ Remote API only  │        │ Dual: local + remote │    |  │ Local model + spot │
+  |  │ Collect examples │        │ Compare via evaluator│    |  │ checks via sampler │
+  |  └────────┬────────┘        └──────────┬───────────┘    |  └────────┬──────────┘
+  |           │                             │                |           │
+  |           v                             v                |           v
+  |     Training Data              Confidence Engine         |    Sampling Scheduler
+  |           │                     (rolling window)         |    (adaptive frequency)
+  |           v                             │                |           │
+  |     Fine-Tuning                         v                |           v
+  |     Orchestrator              Phase transition?  ────────┘   Correlation check
+  |           │                   (0.85 correlation)               │
+  |           v                                                    v
+  |     Model Validator                                     Regress? → back to Phase 2
+  └──────────────────────────────────────────────────────────────────┘
+```
+
+**Three phases, all data-driven:**
+
+1. **Cold Start** — Every request goes to the remote API. Responses are stored as training examples. After enough examples accumulate (configurable threshold), fine-tuning begins.
+2. **Reinforcement** — Both models process each request. The evaluator scores local vs. remote output. A rolling window tracks correlation. When sustained correlation exceeds the threshold, the system promotes to Phase 3.
+3. **Steady State** — The local model handles most traffic. An adaptive sampler periodically sends requests to both models to verify quality hasn't degraded. If it has, the system automatically regresses to Phase 2.
+
+## CLI
+
+| Command | Purpose |
+|---------|---------|
+| `apprentice run <config>` | Start the system (interactive or as HTTP server) |
+| `apprentice serve <config>` | Start HTTP server with REST API |
+| `apprentice status <config>` | Show phase, confidence, budget for each task |
+| `apprentice report <config>` | Generate summary report with metrics |
+
+### HTTP Server Endpoints
+
+When running `apprentice serve`, the following endpoints are available:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Health check |
+| `/v1/run` | POST | Submit a task request (core routing) |
+| `/v1/status` | GET | System status |
+| `/v1/status/{skill}` | GET | Per-skill phase and confidence |
+| `/v1/report` | GET | Generate metrics report |
+| `/v1/events` | POST | Ingest external events (fire-and-forget) |
+| `/v1/feedback` | POST | Submit feedback on recommendations |
+| `/v1/recommendations` | POST | Request a recommendation for a skill |
+| `/v1/skills` | GET | List configured skills with phase info |
+
 ## Configuration
 
-See [`examples/apprentice.yaml`](examples/apprentice.yaml) for a complete example. Key sections:
+See [`examples/apprentice.yaml`](examples/apprentice.yaml) for a complete example.
 
 ```yaml
 tasks:
@@ -49,8 +122,15 @@ tasks:
     evaluator: structured_match
     match_fields: [category, priority]
     confidence_thresholds:
-      phase2: 50        # examples before Phase 2
-      phase3: 0.85      # correlation for Phase 3
+      phase2: 50        # examples before Phase 2 begins
+      phase3: 0.85      # sustained correlation to enter Phase 3
+
+  - name: extract_entities
+    prompt_template: "Extract entities from: {text}"
+    evaluator: semantic_similarity
+    confidence_thresholds:
+      phase2: 100
+      phase3: 0.90
 
 remote:
   provider: anthropic
@@ -63,7 +143,16 @@ local:
 
 budget:
   monthly_limit_usd: 150.00
+  alert_threshold_pct: 80
+
+server:
+  host: 0.0.0.0
+  port: 8787
 ```
+
+### Multi-Task Configuration
+
+Each task gets its own phase progression, confidence window, and evaluator. A single Apprentice instance can manage dozens of tasks simultaneously — one might be in Phase 3 (local model proven) while another is still collecting examples in Phase 1.
 
 ## Architecture
 
@@ -88,7 +177,7 @@ budget:
 | `budget_manager` | Multi-window spend tracking and enforcement |
 | `router` | Request routing (local, remote, dual) |
 | `apprentice_class` | Core Apprentice class — run, status, report |
-| `cli` | Command-line interface |
+| `cli` | Command-line interface and HTTP server |
 | `audit_log` | Structured event logging (JSONL) |
 | `report_generator` | Reports, metrics, and observability |
 
@@ -104,28 +193,28 @@ budget:
 | `reporting` | audit_log, report_generator | Observability layer |
 | `root` | all 6 compositions above | Full system composition root |
 
-## CLI
-
-```bash
-apprentice run config.yaml              # Start the system
-apprentice status config.yaml           # Show current phase, confidence, budget
-apprentice report config.yaml           # Generate summary report
-```
-
 ## Development
 
 ```bash
-make dev         # Install with dev + lint dependencies
-make test        # Run all 2,064 tests
-make test-quick  # Stop on first failure
-make lint        # Run ruff linter
-make lint-fix    # Auto-fix lint issues
-make clean       # Remove build artifacts
+git clone https://github.com/jmcentire/apprentice.git
+cd apprentice
+make dev          # Install with dev + lint dependencies
+make test         # Run all 2,390 tests
+make test-quick   # Stop on first failure
+make lint         # Run ruff linter
+make lint-fix     # Auto-fix lint issues
+make clean        # Remove build artifacts
 ```
+
+Requires Python 3.12+. Core dependencies: `pydantic`, `pyyaml`, `httpx`.
 
 ## Built With
 
 This project was built using [Pact](https://github.com/jmcentire/pact) — a contract-first multi-agent software engineering framework. Pact decomposed the task into 25 components, generated contracts and tests for each, then implemented them using iterative Claude Code sessions that write code, run tests, and fix failures autonomously.
+
+## Background
+
+Apprentice is one of three systems (alongside [Pact](https://github.com/jmcentire/pact) and Emergence) built to test the ideas in [Beyond Code: Context, Constraints, and the New Craft of Software](https://www.amazon.com/dp/B0GNLTXVC7). The book covers the coordination, verification, and specification problems that motivated these designs.
 
 ## License
 
