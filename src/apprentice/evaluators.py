@@ -40,6 +40,7 @@ class EvaluatorType(Enum):
     structured_match = "structured_match"
     exact_match = "exact_match"
     semantic_similarity = "semantic_similarity"
+    llm_judge = "llm_judge"
     custom = "custom"
 
 
@@ -478,6 +479,105 @@ class SemanticSimilarityEvaluator:
             )
 
 
+class LLMJudgeEvaluator:
+    """Evaluates local vs remote output using an LLM as judge.
+
+    Sends both outputs to a judge LLM with a scoring rubric and parses
+    the numeric score from the response. The judge_fn is a sync callable
+    that takes a prompt string and returns the judge's text response.
+    This keeps the evaluator backend-agnostic.
+    """
+
+    DEFAULT_RUBRIC = (
+        "You are an expert evaluator. Compare the candidate output to the reference output.\n"
+        "Score from 0.0 (completely wrong) to 1.0 (perfect match) based on:\n"
+        "- Factual accuracy\n"
+        "- Completeness\n"
+        "- Tone and style consistency\n\n"
+        "Respond with ONLY a JSON object: {\"score\": <float>, \"reasoning\": \"<brief explanation>\"}"
+    )
+
+    def __init__(self, judge_fn: Callable[[str], str], rubric: Optional[str] = None):
+        if not callable(judge_fn):
+            raise TypeError(f"judge_fn must be callable, got {type(judge_fn).__name__}")
+        self._judge_fn = judge_fn
+        self._rubric = rubric or self.DEFAULT_RUBRIC
+
+    def evaluate(
+        self,
+        local: TaskResponse,
+        remote: TaskResponse,
+        task_config: TaskEvaluatorConfig,
+    ) -> EvaluationResult:
+        """Send both outputs to the judge LLM and parse the score."""
+        import json as _json
+        import re as _re
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        if not local.output or not remote.output:
+            return EvaluationResult(
+                score=0.0,
+                evaluator_type="llm_judge",
+                field_breakdown={},
+                error="Empty output cannot be judged",
+                metadata={},
+                timestamp=timestamp,
+            )
+
+        prompt = (
+            f"{self._rubric}\n\n"
+            f"--- Reference Output ---\n{remote.output}\n\n"
+            f"--- Candidate Output ---\n{local.output}\n"
+        )
+
+        try:
+            response_text = self._judge_fn(prompt)
+
+            # Parse score from JSON response
+            score = None
+            reasoning = ""
+
+            # Try JSON parse first
+            json_match = _re.search(r'\{[^}]*"score"\s*:\s*([\d.]+)[^}]*\}', response_text)
+            if json_match:
+                try:
+                    parsed = _json.loads(json_match.group(0))
+                    score = float(parsed.get("score", 0.0))
+                    reasoning = parsed.get("reasoning", "")
+                except (ValueError, _json.JSONDecodeError):
+                    pass
+
+            # Fallback: extract any float from the response
+            if score is None:
+                float_match = _re.search(r'(\d+\.?\d*)', response_text)
+                if float_match:
+                    score = float(float_match.group(1))
+                else:
+                    score = 0.0
+                    reasoning = f"Could not parse score from: {response_text[:200]}"
+
+            return EvaluationResult(
+                score=clamp_score(score),
+                evaluator_type="llm_judge",
+                field_breakdown={},
+                error=None,
+                metadata={"reasoning": reasoning, "raw_response": response_text[:500]},
+                timestamp=timestamp,
+            )
+
+        except Exception as e:
+            _log("error", f"LLM judge evaluation failed: {e}")
+            return EvaluationResult(
+                score=0.0,
+                evaluator_type="llm_judge",
+                field_breakdown={},
+                error=f"LLM judge error: {str(e)}",
+                metadata={},
+                timestamp=timestamp,
+            )
+
+
 class FunctionEvaluatorAdapter:
     """Wraps a plain callable into an object satisfying the Evaluator protocol."""
     
@@ -590,6 +690,13 @@ def create_evaluator(
         return StructuredMatchEvaluator()
     elif evaluator_type == EvaluatorType.semantic_similarity:
         return SemanticSimilarityEvaluator(embed_fn=embed_fn)
+    elif evaluator_type == EvaluatorType.llm_judge:
+        judge_fn = task_config.custom_evaluator
+        if judge_fn is None or not callable(judge_fn):
+            raise ValueError(
+                "custom_evaluator must be a callable judge_fn when evaluator_type is 'llm_judge'"
+            )
+        return LLMJudgeEvaluator(judge_fn=judge_fn)
     elif evaluator_type == EvaluatorType.custom:
         custom_evaluator = task_config.custom_evaluator
         if custom_evaluator is None:
@@ -644,6 +751,7 @@ __all__ = [
     'ExactMatchEvaluator',
     'StructuredMatchEvaluator',
     'SemanticSimilarityEvaluator',
+    'LLMJudgeEvaluator',
     'FunctionEvaluatorAdapter',
     'EmbedFunction',
 ]

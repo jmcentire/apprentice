@@ -182,11 +182,15 @@ def mock_apprentice():
         output={"result": "ok"},
         success=True,
     ))
-    apprentice.status = AsyncMock(return_value=[
+    apprentice.status_all = AsyncMock(return_value=[
         MagicMock(
             task_name="test_task",
-            phase=MagicMock(phase_name="running", confidence_score=0.85, is_local_primary=True),
-            budget=MagicMock(budget_limit=100.0, budget_spent=25.0, budget_remaining=75.0, is_exhausted=False),
+            phase=MagicMock(value="running"),
+            confidence_score=0.85,
+            local_model_available=True,
+            budget_used_usd=25.0,
+            budget_remaining_usd=75.0,
+            budget_exhausted=False,
         )
     ])
     apprentice.report = AsyncMock(return_value=MagicMock(
@@ -570,7 +574,7 @@ class TestExecuteStatus:
 
     def test_execute_status_retrieval_error(self, mock_apprentice):
         """execute_status handles status retrieval error."""
-        mock_apprentice.status = AsyncMock(side_effect=Exception("Status retrieval failed"))
+        mock_apprentice.status_all = AsyncMock(side_effect=Exception("Status retrieval failed"))
 
         status_args = MagicMock()
         status_args.task_filter = ""

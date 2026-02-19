@@ -733,6 +733,24 @@ class Apprentice:
             self._total_errors += 1
             raise
 
+    @property
+    def task_names(self) -> list[str]:
+        """Return sorted list of registered task names."""
+        if type(self._task_registry).__name__ == 'TaskRegistry':
+            return sorted(self._task_registry.task_names)
+        if hasattr(self._task_registry, 'list_tasks'):
+            return sorted(self._task_registry.list_tasks())
+        return []
+
+    async def status_all(self) -> list['ConfidenceSnapshot']:
+        """Return ConfidenceSnapshot for every registered task."""
+        if not self._running:
+            raise RuntimeError("Apprentice.status_all() must be called within an async context")
+        results = []
+        for name in self.task_names:
+            results.append(await self.status(name))
+        return results
+
     async def status(self, task_name: str) -> ConfidenceSnapshot:
         """
         Returns a frozen ConfidenceSnapshot for a specific task.

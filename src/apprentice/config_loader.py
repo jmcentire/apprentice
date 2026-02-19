@@ -144,12 +144,9 @@ def resolve_env_var(value: str, env: Mapping[str, str], field_path: Optional[str
         )
 
     if var_name not in env:
-        raise EnvVarNotFoundError(
-            message=f"Environment variable '{var_name}' not found",
-            path=_CONFIG_PATH_CONTEXT,
-            field_path=field_path or "",
-            env_var_name=var_name,
-        )
+        # Return a placeholder — the real value is only needed at request time.
+        # This allows loading config for status/report without requiring API keys.
+        return f"UNRESOLVED:env:{var_name}"
 
     return env[var_name]
 

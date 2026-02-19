@@ -37,6 +37,7 @@ class SubcommandName(Enum):
     report = "report"
     init = "init"
     serve = "serve"
+    ingest = "ingest"
 
 
 class GlobalFlags(BaseModel):
@@ -93,6 +94,15 @@ class ServeArgs(BaseModel):
     model_config = ConfigDict(strict=True)
 
 
+class IngestArgs(BaseModel):
+    """Parsed arguments specific to the 'ingest' subcommand."""
+    file_path: str = Field(min_length=1)
+    format: str = "auto"
+    task: Optional[str] = None
+
+    model_config = ConfigDict(strict=True)
+
+
 class ParsedArgs(BaseModel):
     """Complete parsed CLI arguments combining global flags and subcommand-specific args."""
     global_flags: GlobalFlags
@@ -102,6 +112,7 @@ class ParsedArgs(BaseModel):
     report_args: Optional[ReportArgs] = None
     init_args: Optional[InitArgs] = None
     serve_args: Optional[ServeArgs] = None
+    ingest_args: Optional['IngestArgs'] = None
 
     model_config = ConfigDict(strict=True)
 

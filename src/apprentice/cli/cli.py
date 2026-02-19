@@ -25,6 +25,7 @@ try:
         ApprenticeConfig,
         BudgetInfo,
         GlobalFlags,
+        IngestArgs,
         InitArgs,
         InputData,
         ParsedArgs,
@@ -45,6 +46,7 @@ except ImportError:
         ApprenticeConfig,
         BudgetInfo,
         GlobalFlags,
+        IngestArgs,
         InitArgs,
         InputData,
         ParsedArgs,
@@ -175,6 +177,15 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     serve_parser.add_argument("--allowed-ips", default="",
                               help="Comma-separated IP allowlist (CIDRs or addresses)")
 
+    # ingest subcommand
+    ingest_parser = subparsers.add_parser("ingest", help="Bulk-load training examples from file")
+    ingest_parser.add_argument("file", help="Path to JSONL or CSV file")
+    ingest_parser.add_argument("--format", dest="ingest_format", default="auto",
+                               choices=["auto", "jsonl", "csv"],
+                               help="File format (default: auto-detect from extension)")
+    ingest_parser.add_argument("--task", dest="ingest_task", default=None,
+                               help="Override task_type for all rows (required for CSV without task_type column)")
+
     # Parse
     args = parser.parse_args(argv)
 
@@ -196,6 +207,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     report_args = None
     init_args = None
     serve_args = None
+    ingest_args = None
 
     if command == SubcommandName.run:
         run_args = RunArgs(
@@ -221,6 +233,12 @@ def parse_args(argv: list[str]) -> ParsedArgs:
             tls_key=args.tls_key,
             allowed_ips=args.allowed_ips,
         )
+    elif command == SubcommandName.ingest:
+        ingest_args = IngestArgs(
+            file_path=args.file,
+            format=args.ingest_format,
+            task=args.ingest_task,
+        )
 
     return ParsedArgs(
         global_flags=global_flags,
@@ -230,6 +248,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         report_args=report_args,
         init_args=init_args,
         serve_args=serve_args,
+        ingest_args=ingest_args,
     )
 
 
@@ -410,33 +429,29 @@ async def execute_status(apprentice: Any, status_args: StatusArgs) -> StatusResu
     """
     Execute the 'status' subcommand.
 
-    Calls Apprentice.status() and optionally filters.
+    Calls Apprentice.status_all() and maps ConfidenceSnapshot to CLI models.
     """
-    # Get all status entries
-    raw_status = await apprentice.status()
+    snapshots = await apprentice.status_all()
 
-    # Convert to TaskStatusEntry models
     tasks = []
-    for entry in raw_status:
+    for snap in snapshots:
         phase = PhaseInfo(
-            phase_name=entry.phase.phase_name,
-            confidence_score=entry.phase.confidence_score,
-            is_local_primary=entry.phase.is_local_primary,
+            phase_name=snap.phase.value if hasattr(snap.phase, 'value') else str(snap.phase),
+            confidence_score=snap.confidence_score,
+            is_local_primary=snap.local_model_available,
         )
         budget = BudgetInfo(
-            budget_limit=entry.budget.budget_limit,
-            budget_spent=entry.budget.budget_spent,
-            budget_remaining=entry.budget.budget_remaining,
-            is_exhausted=entry.budget.is_exhausted,
+            budget_limit=snap.budget_used_usd + snap.budget_remaining_usd,
+            budget_spent=snap.budget_used_usd,
+            budget_remaining=snap.budget_remaining_usd,
+            is_exhausted=snap.budget_exhausted,
         )
-        task_entry = TaskStatusEntry(
-            task_name=entry.task_name,
+        tasks.append(TaskStatusEntry(
+            task_name=snap.task_name,
             phase=phase,
             budget=budget,
-        )
-        tasks.append(task_entry)
+        ))
 
-    # Filter if requested
     if status_args.task_filter:
         tasks = [t for t in tasks if t.task_name == status_args.task_filter]
 
@@ -506,6 +521,94 @@ async def execute_report(
     return result
 
 
+def execute_ingest(ingest_args: IngestArgs, config_path: str) -> dict:
+    """
+    Execute the 'ingest' subcommand.
+
+    Reads a JSONL or CSV file and bulk-loads training examples into the store.
+    Does not require a full Apprentice instance — only the training data store.
+    """
+    import csv as csv_mod
+    from apprentice.training_data_store import (
+        TrainingDataStore,
+        TrainingDataStoreConfig,
+        TrainingExample,
+    )
+    from apprentice import config_loader
+
+    file_path = Path(ingest_args.file_path)
+    if not file_path.exists():
+        raise FileNotFoundError(f"Ingest file not found: {file_path}")
+
+    # Detect format
+    fmt = ingest_args.format
+    if fmt == "auto":
+        suffix = file_path.suffix.lower()
+        if suffix in (".jsonl", ".ndjson"):
+            fmt = "jsonl"
+        elif suffix == ".csv":
+            fmt = "csv"
+        else:
+            raise ValueError(f"Cannot auto-detect format for '{suffix}'. Use --format jsonl|csv")
+
+    # Load config to get training data store path
+    cfg = config_loader.load_config(Path(config_path))
+    store = TrainingDataStore()
+    store.initialize(TrainingDataStoreConfig(
+        base_dir=cfg.training_data.storage_dir,
+    ))
+
+    # Parse file into TrainingExample objects
+    examples: list[TrainingExample] = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    if fmt == "jsonl":
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                task = ingest_args.task or row.get("task_type", "")
+                if not task:
+                    raise ValueError(f"Line {line_num}: missing task_type (use --task to set)")
+                examples.append(TrainingExample(
+                    input=row["input"],
+                    output=row["output"],
+                    task_type=task,
+                    timestamp=row.get("timestamp", now),
+                    metadata=row.get("metadata", {}),
+                ))
+    elif fmt == "csv":
+        with open(file_path, "r", encoding="utf-8") as f:
+            reader = csv_mod.DictReader(f)
+            for line_num, row in enumerate(reader, 2):
+                task = ingest_args.task or row.get("task_type", "")
+                if not task:
+                    raise ValueError(f"Row {line_num}: missing task_type (use --task to set)")
+                examples.append(TrainingExample(
+                    input=row["input"],
+                    output=row["output"],
+                    task_type=task,
+                    timestamp=row.get("timestamp", now),
+                    metadata=json.loads(row["metadata"]) if row.get("metadata") else {},
+                ))
+
+    if not examples:
+        return {"status": "empty", "count": 0, "message": "No examples found in file"}
+
+    results = store.add_examples(examples)
+    total = sum(r.example_count for r in results)
+    tasks_loaded = {r.task_type: r.example_count for r in results}
+
+    return {
+        "status": "ok",
+        "count": len(examples),
+        "tasks": tasks_loaded,
+        "message": f"Loaded {len(examples)} examples across {len(tasks_loaded)} task(s)",
+    }
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """
     Main CLI entry point.
@@ -569,6 +672,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             ))
             return 0
 
+        # Handle ingest subcommand (needs config but not full Apprentice)
+        if args.command == SubcommandName.ingest:
+            try:
+                result = execute_ingest(args.ingest_args, args.global_flags.config_path)
+                if args.global_flags.json_mode:
+                    output = json.dumps(result)
+                else:
+                    output = result.get("message", str(result))
+                print(output, file=sys.stdout)
+                return 0
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logging.error(f"Ingest error: {e}")
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
+
         # Load config
         try:
             config = load_config(args.global_flags.config_path)
@@ -588,7 +706,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         # Execute the appropriate subcommand within Apprentice async context
         async def async_main():
             try:
-                apprentice = Apprentice(args.global_flags.config_path)
+                apprentice = await Apprentice.from_config(args.global_flags.config_path)
             except (FileNotFoundError, ValueError, TypeError) as e:
                 logging.error(f"Failed to initialize Apprentice: {e}")
                 print(f"Error: {e}", file=sys.stderr)
