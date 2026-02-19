@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apprentice - Adaptive Model Distillation</title>
+  <meta name="description" content="Train cheap models on expensive ones. Automatically. With receipts. Progressively replace API calls with fine-tuned local models.">
+  <meta property="og:title" content="Apprentice - Adaptive Model Distillation">
+  <meta property="og:description" content="Start with frontier API models, progressively train a local model, then withdraw the expensive dependency — while maintaining quality guarantees.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jmcentire.github.io/apprentice/">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-card: #161b22;
+      --bg-code: #1c2128;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #f0883e;
+      --accent-hover: #f4a261;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --blue: #58a6ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      padding: 16px 0;
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav .logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    nav .logo span { color: var(--accent); }
+    nav .links { display: flex; gap: 24px; align-items: center; }
+    nav .links a { color: var(--text-muted); font-size: 0.9rem; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+    .btn {
+      display: inline-block;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all 0.15s ease;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg) !important;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      text-decoration: none;
+    }
+    .btn-outline {
+      border: 1px solid var(--border);
+      color: var(--text) !important;
+    }
+    .btn-outline:hover {
+      border-color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 24px;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero .subtitle {
+      font-size: 1.35rem;
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 40px;
+      line-height: 1.5;
+    }
+    .hero .cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .hero .btn { padding: 12px 28px; font-size: 1rem; }
+
+    /* Problem */
+    .problem {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .problem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .problem h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+    .problem p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 16px;
+    }
+    .problem .highlight {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .insight-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+    }
+    .insight-box .quote {
+      font-size: 1.2rem;
+      font-style: italic;
+      color: var(--text);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .insight-box .attribution {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+    .section-header h2 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      letter-spacing: -0.02em;
+    }
+    .section-header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .pipeline {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      padding: 0 8px;
+      margin-bottom: 48px;
+    }
+    .pipeline::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 80px;
+      right: 80px;
+      height: 2px;
+      background: var(--border);
+    }
+    .phase {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      flex: 1;
+    }
+    .phase-dot {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .phase:nth-child(1) .phase-dot { background: #2d2a1a; color: var(--orange); border: 2px solid var(--orange); }
+    .phase:nth-child(2) .phase-dot { background: #1f3a5f; color: var(--blue); border: 2px solid var(--blue); }
+    .phase:nth-child(3) .phase-dot { background: #1a3a2a; color: var(--green); border: 2px solid var(--green); }
+    .phase-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .phase-desc {
+      font-size: 0.75rem;
+      color: #484f58;
+      text-align: center;
+      max-width: 200px;
+      margin-top: 8px;
+    }
+
+    /* Phase detail cards */
+    .phase-details {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .phase-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.15s ease;
+    }
+    .phase-card:hover { border-color: var(--text-muted); }
+    .phase-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .phase-card .phase-num {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .phase-card:nth-child(1) .phase-num { color: var(--orange); }
+    .phase-card:nth-child(2) .phase-num { color: var(--blue); }
+    .phase-card:nth-child(3) .phase-num { color: var(--green); }
+    .phase-card p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    /* Features */
+    .features {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      transition: border-color 0.15s ease;
+    }
+    .feature-card:hover { border-color: var(--text-muted); }
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    /* Architecture */
+    .architecture {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .architecture h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+    .architecture p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 16px;
+    }
+    .arch-flow {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.8;
+      color: var(--text-muted);
+    }
+    .arch-flow .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .arch-flow .arrow { color: var(--accent); min-width: 16px; }
+    .arch-flow .label { color: var(--green); }
+    .arch-flow .dim { color: #484f58; }
+    .arch-flow .warn { color: var(--orange); }
+
+    /* Quick start */
+    .quickstart {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .quickstart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+    .quickstart h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .quickstart p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 16px;
+    }
+    pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+    code { font-family: inherit; }
+    .code-comment { color: #484f58; }
+    .code-cmd { color: var(--green); }
+    .code-flag { color: var(--purple); }
+    .code-string { color: #a5d6ff; }
+    .code-keyword { color: var(--purple); }
+    .code-func { color: var(--blue); }
+
+    /* API */
+    .api {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .api table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 32px;
+    }
+    .api th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .api td {
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .api td:first-child {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+    .api td .method {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .method-get { background: #1a3a2a; color: var(--green); }
+    .method-post { background: #2d2a1a; color: var(--orange); }
+
+    /* Book */
+    .book {
+      padding: 80px 0;
+      border-top: 1px solid var(--border);
+    }
+    .book-inner {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 48px;
+      text-align: center;
+    }
+    .book-inner h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .book-inner p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 600px;
+      margin: 0 auto 24px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--text-muted); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.25rem; }
+      .hero .subtitle { font-size: 1.1rem; }
+      .problem-grid,
+      .arch-grid,
+      .quickstart-grid { grid-template-columns: 1fr; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .phase-details { grid-template-columns: 1fr; }
+      .pipeline { flex-wrap: wrap; gap: 16px; justify-content: center; }
+      .pipeline::before { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <a href="#" class="logo"><span>apprentice</span></a>
+    <div class="links">
+      <a href="#how-it-works">How It Works</a>
+      <a href="#features">Features</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#quickstart">Quick Start</a>
+      <a href="https://github.com/jmcentire/apprentice" class="btn btn-outline">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <h1>Train cheap models<br>on <span class="accent">expensive ones.</span></h1>
+    <p class="subtitle">
+      Adaptive model distillation framework. Start with frontier API models,
+      progressively train a local model, then withdraw the expensive dependency &mdash;
+      while maintaining quality guarantees. Automatically. With receipts.
+    </p>
+    <pre style="display: inline-block; text-align: left; margin-bottom: 32px; padding: 16px 32px;"><code><span class="code-cmd">pip install</span> apprentice-ai</code></pre>
+    <div class="cta-group">
+      <a href="https://github.com/jmcentire/apprentice" class="btn btn-primary">Get Started</a>
+      <a href="https://pypi.org/project/apprentice-ai/" class="btn btn-outline">PyPI</a>
+      <a href="#how-it-works" class="btn btn-outline">See How It Works</a>
+    </div>
+  </div>
+</section>
+
+<section class="problem">
+  <div class="container">
+    <div class="problem-grid">
+      <div>
+        <h2>The frontier model is a teacher,<br>not a dependency.</h2>
+        <p>
+          You're paying $15 per million tokens for tasks a fine-tuned 8B model could handle.
+          Classification, extraction, routing, summarization &mdash; repetitive, domain-specific
+          work where the frontier model is overkill once you have enough examples.
+        </p>
+        <p>
+          Apprentice's answer: <span class="highlight">treat every API response as both a result and a
+          labeled training example.</span> Over time, the local model absorbs the teacher's behavior.
+          The API bill goes down. The local model gets better. The quality metrics prove it.
+        </p>
+        <p>
+          This is the opposite of prompt engineering. Prompt engineering optimizes the question.
+          Apprentice optimizes <em>which model you ask</em>, based on evidence.
+        </p>
+      </div>
+      <div class="insight-box">
+        <p class="quote">
+          "The confidence engine doesn't trust the local model by default. It earns trust
+          through a sliding window of comparison scores. Phase transitions happen mechanically:
+          50 examples &rarr; start comparing. 0.85 correlation sustained &rarr; start routing locally.
+          If correlation drops, traffic shifts back."
+        </p>
+        <p class="attribution">No manual intervention required. The data decides.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="section-header">
+      <h2>Three phases. All data-driven.</h2>
+      <p>No manual cutover. The system decides when the local model is ready based on sustained quality metrics.</p>
+    </div>
+    <div class="pipeline">
+      <div class="phase">
+        <div class="phase-dot">1</div>
+        <span class="phase-label">Cold Start</span>
+      </div>
+      <div class="phase">
+        <div class="phase-dot">2</div>
+        <span class="phase-label">Reinforcement</span>
+      </div>
+      <div class="phase">
+        <div class="phase-dot">3</div>
+        <span class="phase-label">Steady State</span>
+      </div>
+    </div>
+    <div class="phase-details">
+      <div class="phase-card">
+        <span class="phase-num">Phase 1 &mdash; Cold Start</span>
+        <h3>Learn from the teacher</h3>
+        <p>Every request goes to the remote API. Responses are stored as training examples. After enough accumulate, fine-tuning begins. The caller gets results immediately &mdash; data collection is invisible.</p>
+      </div>
+      <div class="phase-card">
+        <span class="phase-num">Phase 2 &mdash; Reinforcement</span>
+        <h3>Prove the student</h3>
+        <p>Both models process each request. The evaluator scores local vs. remote output. A rolling window tracks correlation. When it exceeds the threshold for long enough, the system promotes to Phase 3.</p>
+      </div>
+      <div class="phase-card">
+        <span class="phase-num">Phase 3 &mdash; Steady State</span>
+        <h3>Trust but verify</h3>
+        <p>The local model handles most traffic. An adaptive sampler periodically sends requests to both models to verify quality. If correlation drops, the system automatically regresses to Phase 2.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-header">
+      <h2>Replace API costs with local inference</h2>
+      <p>Everything you need to go from $15/M tokens to $0, with proof that quality holds.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f4ca;</span>
+        <h3>Confidence Engine</h3>
+        <p>Sliding window correlation tracking with configurable thresholds. Phase transitions are mechanical, not manual. The data decides when the local model is ready.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f500;</span>
+        <h3>Transparent Routing</h3>
+        <p>The caller sends a request, gets a response. They don't know if it came from Claude, a LoRA on Llama, or both. Routing is automatic and invisible.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f9ea;</span>
+        <h3>Multi-Evaluator</h3>
+        <p>Exact match, structured field comparison, semantic similarity. Choose the evaluator that fits your task. Each task gets independent quality tracking.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f4b0;</span>
+        <h3>Budget-Aware</h3>
+        <p>Multi-window spend tracking with alerts. Set monthly limits, let the system optimize. As local routing increases, your API bill drops automatically.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f504;</span>
+        <h3>Adaptive Sampling</h3>
+        <p>In Phase 3, sampling frequency adjusts based on correlation stability. High correlation &rarr; fewer checks. Drift detected &rarr; more checks. Self-tuning.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f527;</span>
+        <h3>Multi-Provider</h3>
+        <p>Anthropic, OpenAI, or any API as the remote teacher. Ollama, vLLM, or llama.cpp as the local student. Mix and match per task.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="architecture" id="architecture">
+  <div class="container">
+    <div class="arch-grid">
+      <div>
+        <h2>25 components.<br>Zero cross-dependencies.</h2>
+        <p>
+          18 leaf implementations wired together by 7 integration compositions.
+          Each component was contract-tested independently before integration.
+          2,390 tests verify the system end-to-end.
+        </p>
+        <p>
+          Built with <a href="https://jmcentire.github.io/pact/">Pact</a> &mdash;
+          contracts and tests were generated before any implementation began.
+          Agents implemented each component in parallel, verified by mechanical test gates.
+        </p>
+        <p>
+          The architecture handles multiple tasks simultaneously. One task might be
+          in Phase 3 (local model proven) while another is still collecting examples
+          in Phase 1. Each gets its own confidence window, evaluator, and phase progression.
+        </p>
+      </div>
+      <div class="arch-flow">
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">config_loader</span> <span class="dim">// YAML &rarr; validated config</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">task_registry</span> <span class="dim">// task definitions + schemas</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">router</span> <span class="dim">// local / remote / dual</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">evaluators</span> <span class="dim">// exact, structured, semantic</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">rolling_window</span> <span class="dim">// correlation tracking</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">phase_manager</span> <span class="dim">// 1 &rarr; 2 &rarr; 3 transitions</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">sampling_scheduler</span> <span class="dim">// adaptive frequency</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">training_data_store</span> <span class="dim">// collect examples</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">fine_tuning_orchestrator</span> <span class="dim">// LoRA, OpenAI, HF</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">budget_manager</span> <span class="dim">// spend tracking</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="warn">2,390 tests pass</span> <span class="dim">// verified</span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="api" id="api">
+  <div class="container">
+    <div class="section-header">
+      <h2>HTTP API &amp; CLI</h2>
+      <p>Use it as a library, a CLI tool, or a standalone HTTP service with a REST API.</p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>Method</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>/health</td>
+          <td><span class="method method-get">GET</span></td>
+          <td>Health check</td>
+        </tr>
+        <tr>
+          <td>/v1/run</td>
+          <td><span class="method method-post">POST</span></td>
+          <td>Submit a task request &mdash; routing is automatic</td>
+        </tr>
+        <tr>
+          <td>/v1/status/{skill}</td>
+          <td><span class="method method-get">GET</span></td>
+          <td>Phase, confidence, and budget for a specific skill</td>
+        </tr>
+        <tr>
+          <td>/v1/recommendations</td>
+          <td><span class="method method-post">POST</span></td>
+          <td>Request a recommendation for a skill</td>
+        </tr>
+        <tr>
+          <td>/v1/feedback</td>
+          <td><span class="method method-post">POST</span></td>
+          <td>Submit feedback on a recommendation</td>
+        </tr>
+        <tr>
+          <td>/v1/events</td>
+          <td><span class="method method-post">POST</span></td>
+          <td>Ingest external events (fire-and-forget)</td>
+        </tr>
+        <tr>
+          <td>/v1/skills</td>
+          <td><span class="method method-get">GET</span></td>
+          <td>List configured skills with phase info</td>
+        </tr>
+        <tr>
+          <td>/v1/report</td>
+          <td><span class="method method-get">GET</span></td>
+          <td>Generate metrics report</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="quickstart" id="quickstart">
+  <div class="container">
+    <div class="quickstart-grid">
+      <div>
+        <h2>Up and running in 60 seconds</h2>
+        <p>
+          Python 3.12+, three dependencies. <code>pip install apprentice-ai</code> and go.
+        </p>
+        <p>
+          Define your tasks in YAML &mdash; prompt templates, evaluators, confidence thresholds.
+          Point at a remote API and a local model. Apprentice handles the rest: data collection,
+          fine-tuning, phase transitions, quality monitoring.
+        </p>
+        <p style="margin-top: 24px;">
+          <a href="https://github.com/jmcentire/apprentice" class="btn btn-primary">View on GitHub</a>
+        </p>
+      </div>
+      <div>
+        <pre><code><span class="code-comment"># Install from PyPI</span>
+<span class="code-cmd">pip install</span> apprentice-ai
+
+<span class="code-comment"># As a library</span>
+<span class="code-keyword">from</span> apprentice <span class="code-keyword">import</span> Apprentice
+
+app = <span class="code-keyword">await</span> Apprentice.<span class="code-func">create</span>(<span class="code-string">"apprentice.yaml"</span>)
+response = <span class="code-keyword">await</span> app.<span class="code-func">run</span>(<span class="code-string">"classify_ticket"</span>, {
+    <span class="code-string">"text"</span>: <span class="code-string">"Payment didn't go through"</span>
+})
+<span class="code-comment"># response.source → "local" or "remote"</span>
+
+<span class="code-comment"># As a CLI</span>
+<span class="code-cmd">apprentice serve</span> config.yaml
+<span class="code-cmd">apprentice status</span> config.yaml
+<span class="code-cmd">apprentice report</span> config.yaml</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="book">
+  <div class="container">
+    <div class="book-inner">
+      <h2>Built on the ideas in <em>Beyond Code</em></h2>
+      <p>
+        Apprentice is one of three systems (alongside
+        <a href="https://jmcentire.github.io/pact/">Pact</a> and Emergence) built to test the ideas in
+        <strong>Beyond Code: Context, Constraints, and the New Craft of Software</strong>.
+        The book covers the coordination, verification, and specification problems
+        that motivated these designs.
+      </p>
+      <a href="https://www.amazon.com/dp/B0GNLTXVC7" class="btn btn-outline">Read the Book</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>MIT License &middot; <a href="https://pypi.org/project/apprentice-ai/">PyPI</a> &middot; <a href="https://github.com/jmcentire/apprentice">GitHub</a> &middot; Built with <a href="https://jmcentire.github.io/pact/">Pact</a> &middot; By <a href="https://github.com/jmcentire">Jeremy McEntire</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
