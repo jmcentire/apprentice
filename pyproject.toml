@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "apprentice"
-version = "0.1.0"
+name = "apprentice-ai"
+version = "0.2.0"
 description = "Adaptive model distillation with coaching — progressively replace expensive API calls with a fine-tuned local model"
 readme = "README.md"
 license = {text = "MIT"}
