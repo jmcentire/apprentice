@@ -36,6 +36,8 @@ class FeedbackType(str, Enum):
     edit = "edit"
     ignore = "ignore"
     ai_score = "ai_score"
+    pii_false_positive = "pii_false_positive"
+    pii_false_negative = "pii_false_negative"
 
 
 # ============================================================================

@@ -659,6 +659,20 @@ def create_remote_client(
             status_code=0,
         )
 
+    # Reject UNRESOLVED placeholder keys from config_loader
+    if api_key_value.startswith("UNRESOLVED:env:"):
+        missing_var = api_key_value.split("UNRESOLVED:env:", 1)[1]
+        raise AuthError(
+            provider=config.provider,
+            message=(
+                f"API key is unresolved: environment variable {missing_var} is not set. "
+                f"Set {missing_var} in your shell profile or environment."
+            ),
+            request_id="",
+            retries_attempted=0,
+            status_code=0,
+        )
+
     api_key = SecretStr(api_key_value)
 
     if config.provider == ProviderName.anthropic:

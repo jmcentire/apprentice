@@ -490,6 +490,19 @@ class Apprentice:
         start_time = time.time()
         start_time_utc = datetime.now(timezone.utc).isoformat()
 
+        # Apply middleware pre-processing (PII tokenization)
+        middleware_ctx = None
+        pipeline = getattr(self, '_middleware_pipeline', None)
+        if pipeline:
+            from apprentice.middleware import MiddlewareContext as MwCtx
+            middleware_ctx = MwCtx(
+                request_id=request_id,
+                task_name=task_name,
+                input_data=input_data,
+            )
+            middleware_ctx = pipeline.execute_pre(middleware_ctx)
+            input_data = middleware_ctx.input_data  # Now tokenized
+
         # Initialize RunContext
         run_ctx = RunContext(
             request_id=request_id,
@@ -635,6 +648,16 @@ class Apprentice:
             # Log to audit
             await self._audit_log.log(run_ctx)
 
+            # Apply middleware post-processing (PII detokenization)
+            if pipeline and middleware_ctx:
+                from apprentice.middleware import MiddlewareResponse as MwResp
+                mw_response = MwResp(
+                    output_data=output,
+                    middleware_state=middleware_ctx.middleware_state,
+                )
+                mw_response = pipeline.execute_post(middleware_ctx, mw_response)
+                output = mw_response.output_data  # Detokenized for user
+
             # Build and return TaskResponse
             return TaskResponse(
                 task_name=task_name,
@@ -680,6 +703,19 @@ class Apprentice:
         request_id = str(uuid.uuid4())
         start_time = time.time()
 
+        # Apply middleware pre-processing (PII tokenization)
+        middleware_ctx = None
+        pipeline = getattr(self, '_middleware_pipeline', None)
+        if pipeline:
+            from apprentice.middleware import MiddlewareContext as MwCtx
+            middleware_ctx = MwCtx(
+                request_id=request_id,
+                task_name=task_name,
+                input_data=input_data,
+            )
+            middleware_ctx = pipeline.execute_pre(middleware_ctx)
+            input_data = middleware_ctx.input_data  # Now tokenized
+
         # Render prompt template from task registry if available
         prompt = str(input_data)
         try:
@@ -714,9 +750,21 @@ class Apprentice:
 
             status = RunStatus.degraded if result.is_degraded else RunStatus.success
 
+            output = {"content": result.response.content}
+
+            # Apply middleware post-processing (PII detokenization)
+            if pipeline and middleware_ctx:
+                from apprentice.middleware import MiddlewareResponse as MwResp
+                mw_response = MwResp(
+                    output_data=output,
+                    middleware_state=middleware_ctx.middleware_state,
+                )
+                mw_response = pipeline.execute_post(middleware_ctx, mw_response)
+                output = mw_response.output_data  # Detokenized for user
+
             return TaskResponse(
                 task_name=task_name,
-                output={"content": result.response.content},
+                output=output,
                 source=source,
                 status=status,
                 request_id=request_id,

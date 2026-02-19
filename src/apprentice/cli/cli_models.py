@@ -38,6 +38,8 @@ class SubcommandName(Enum):
     init = "init"
     serve = "serve"
     ingest = "ingest"
+    pii_ingest = "pii-ingest"
+    pii_evaluate = "pii-evaluate"
 
 
 class GlobalFlags(BaseModel):
@@ -103,6 +105,23 @@ class IngestArgs(BaseModel):
     model_config = ConfigDict(strict=True)
 
 
+class PIIIngestArgs(BaseModel):
+    """Parsed arguments specific to the 'pii-ingest' subcommand."""
+    dataset: str = "ai4privacy/pii-masking-200k"
+    split: str = "train"
+    limit: int = Field(default=10000, ge=1)
+
+    model_config = ConfigDict(strict=True)
+
+
+class PIIEvaluateArgs(BaseModel):
+    """Parsed arguments specific to the 'pii-evaluate' subcommand."""
+    mode: str = "regex_only"
+    limit: int = Field(default=1000, ge=1)
+
+    model_config = ConfigDict(strict=True)
+
+
 class ParsedArgs(BaseModel):
     """Complete parsed CLI arguments combining global flags and subcommand-specific args."""
     global_flags: GlobalFlags
@@ -113,6 +132,8 @@ class ParsedArgs(BaseModel):
     init_args: Optional[InitArgs] = None
     serve_args: Optional[ServeArgs] = None
     ingest_args: Optional['IngestArgs'] = None
+    pii_ingest_args: Optional[PIIIngestArgs] = None
+    pii_evaluate_args: Optional[PIIEvaluateArgs] = None
 
     model_config = ConfigDict(strict=True)
 

@@ -623,6 +623,21 @@
         <h3>Multi-Provider</h3>
         <p>Anthropic, OpenAI, or any API as the remote teacher. Ollama, vLLM, or llama.cpp as the local student. Mix and match per task.</p>
       </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f512;</span>
+        <h3>PII Protection</h3>
+        <p>Hybrid multi-modal PII detection: fast regex, field heuristics, and optional NER model inference. Scrubs sensitive data before it reaches models or logs. Learns over time.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f9e0;</span>
+        <h3>NER Integration</h3>
+        <p>Optional transformer-based named entity recognition catches person names, addresses, and organizations that regex can't. Lazy-loaded &mdash; zero overhead when disabled.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">&#x1f4dd;</span>
+        <h3>Feedback Loop</h3>
+        <p>Human and AI feedback drives continuous improvement. False positive/negative reports adjust detection confidence. The system gets smarter with every correction.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -631,11 +646,11 @@
   <div class="container">
     <div class="arch-grid">
       <div>
-        <h2>25 components.<br>Zero cross-dependencies.</h2>
+        <h2>28 components.<br>Zero cross-dependencies.</h2>
         <p>
-          18 leaf implementations wired together by 7 integration compositions.
+          21 leaf implementations wired together by 7 integration compositions.
           Each component was contract-tested independently before integration.
-          2,390 tests verify the system end-to-end.
+          2,486 tests verify the system end-to-end.
         </p>
         <p>
           Built with <a href="https://jmcentire.github.io/pact/">Pact</a> &mdash;
@@ -659,7 +674,9 @@
         <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">training_data_store</span> <span class="dim">// collect examples</span></span></div>
         <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">fine_tuning_orchestrator</span> <span class="dim">// LoRA, OpenAI, HF</span></span></div>
         <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">budget_manager</span> <span class="dim">// spend tracking</span></span></div>
-        <div class="step"><span class="arrow">&#9656;</span> <span><span class="warn">2,390 tests pass</span> <span class="dim">// verified</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">pii_detection</span> <span class="dim">// regex + NER + heuristics</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="label">pii_tokenizer</span> <span class="dim">// detect → replace → restore</span></span></div>
+        <div class="step"><span class="arrow">&#9656;</span> <span><span class="warn">2,486 tests pass</span> <span class="dim">// verified</span></span></div>
       </div>
     </div>
   </div>
@@ -732,6 +749,7 @@
         <h2>Up and running in 60 seconds</h2>
         <p>
           Python 3.12+, three dependencies. <code>pip install apprentice-ai</code> and go.
+          For NER-based PII detection: <code>pip install apprentice-ai[ml]</code>.
         </p>
         <p>
           Define your tasks in YAML &mdash; prompt templates, evaluators, confidence thresholds.
@@ -758,7 +776,11 @@ response = <span class="code-keyword">await</span> app.<span class="code-func">r
 <span class="code-comment"># As a CLI</span>
 <span class="code-cmd">apprentice serve</span> config.yaml
 <span class="code-cmd">apprentice status</span> config.yaml
-<span class="code-cmd">apprentice report</span> config.yaml</code></pre>
+<span class="code-cmd">apprentice report</span> config.yaml
+
+<span class="code-comment"># PII evaluation (optional: pip install apprentice-ai[ml])</span>
+<span class="code-cmd">apprentice pii-ingest</span> <span class="code-flag">--limit</span> 1000
+<span class="code-cmd">apprentice pii-evaluate</span> <span class="code-flag">--mode</span> hybrid</code></pre>
       </div>
     </div>
   </div>

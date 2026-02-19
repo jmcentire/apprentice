@@ -330,8 +330,39 @@ async def build_from_config(config_path: str) -> Any:
 
     # 3. Construct components in DAG order
 
-    # (1) Audit Logger
-    audit_logger = JsonLinesAuditLogger(AuditConfig(log_path=str(audit_log_path)))
+    # (1) Audit Logger — build EventDispatcher if handlers are configured
+    event_dispatcher = None
+    if cfg.audit.handlers:
+        from apprentice.event_handler import EventDispatcher
+        # Convert frozen Pydantic models to dicts for EventDispatcher
+        handler_dicts = []
+        for h in cfg.audit.handlers:
+            d = {
+                "type": h.type,
+                "level": h.level,
+                "path": h.path,
+                "host": h.host,
+                "port": h.port,
+                "url": h.url,
+                "method": h.method,
+                "handler": h.handler,
+                "format": h.format,
+            }
+            # Inject rotation settings for file handlers from top-level config
+            if h.type == "file":
+                d["max_bytes"] = cfg.audit.max_file_size_mb * 1024 * 1024
+                d["backup_count"] = cfg.audit.backup_count
+            handler_dicts.append(d)
+        event_dispatcher = EventDispatcher(handler_dicts)
+
+    audit_config = AuditConfig(
+        log_path=str(audit_log_path),
+        log_level=cfg.audit.log_level.value if hasattr(cfg.audit.log_level, "value") else str(cfg.audit.log_level),
+        log_to_stdout=cfg.audit.log_to_stdout,
+        max_file_size_mb=cfg.audit.max_file_size_mb,
+        backup_count=cfg.audit.backup_count,
+    )
+    audit_logger = JsonLinesAuditLogger(audit_config, event_dispatcher=event_dispatcher)
 
     # (2) Task Registry
     eval_type_map = {
@@ -562,13 +593,108 @@ async def build_from_config(config_path: str) -> Any:
     apprentice._real_config = cfg
     apprentice._plugin_registry_set = plugin_registry_set
 
-    # Construct middleware pipeline if configured
+    # Construct PII tokenizer (secure by default — enabled even without explicit config)
+    from apprentice.pii_tokenizer import PIITokenizer, PIITokenizerConfig, LearnedPatternStore
+    from apprentice.middleware import MiddlewarePipeline
+
+    pii_middleware = None
+    pii_learned_store = None
+    pii_detection_pipeline = None
+    if cfg.pii is not None and not cfg.pii.enabled:
+        # Explicitly disabled
+        pass
+    else:
+        # Build PIITokenizerConfig from cfg.pii (or use defaults)
+        if cfg.pii is not None:
+            pii_cfg = PIITokenizerConfig(
+                enabled_entity_types=list(cfg.pii.entity_types),
+                custom_patterns=dict(cfg.pii.custom_patterns),
+                token_format=cfg.pii.token_format,
+                sensitive_fields=list(cfg.pii.sensitive_fields),
+                learned_patterns_path=cfg.pii.learned_patterns_path,
+                detection_mode=cfg.pii.detection_mode,
+                ner_model_path=cfg.pii.ner_model,
+                ner_device=cfg.pii.ner_device,
+                ner_confidence_threshold=cfg.pii.ner_confidence_threshold,
+                ner_max_text_length=cfg.pii.ner_max_text_length,
+            )
+            learned_path = cfg.pii.learned_patterns_path
+            detection_mode = cfg.pii.detection_mode
+        else:
+            pii_cfg = PIITokenizerConfig()
+            learned_path = ".apprentice/pii_learned_patterns.yaml"
+            detection_mode = "regex_only"
+
+        pii_learned_store = LearnedPatternStore(path=learned_path)
+
+        # Build detection pipeline when mode is not regex_only
+        if detection_mode != "regex_only":
+            from apprentice.pii_detection import (
+                CompositeDetectionPipeline,
+                FieldHeuristicStrategy,
+                NERDetectionStrategy,
+                RegexDetectionStrategy,
+            )
+            pii_detection_pipeline = CompositeDetectionPipeline()
+
+            # Collect learned fields for the heuristic strategy
+            learned_fields: set[str] = set()
+            for fp, et in pii_learned_store.get_high_confidence_fields():
+                leaf = fp.rsplit(".", 1)[-1].lower() if "." in fp else fp.lower()
+                learned_fields.add(leaf)
+
+            if detection_mode in ("regex_only", "hybrid"):
+                pii_detection_pipeline.add_strategy(RegexDetectionStrategy(
+                    enabled_entity_types=list(pii_cfg.enabled_entity_types),
+                    custom_patterns=dict(pii_cfg.custom_patterns),
+                ))
+                pii_detection_pipeline.add_strategy(
+                    FieldHeuristicStrategy(
+                        sensitive_fields=set(pii_cfg.sensitive_fields),
+                        learned_fields=learned_fields,
+                    )
+                )
+
+            if detection_mode in ("hybrid", "ner_only"):
+                ner_model = pii_cfg.ner_model_path
+                if ner_model:
+                    pii_detection_pipeline.add_strategy(NERDetectionStrategy(
+                        model_name=ner_model,
+                        device=pii_cfg.ner_device,
+                        confidence_threshold=pii_cfg.ner_confidence_threshold,
+                        max_text_length=pii_cfg.ner_max_text_length,
+                    ))
+
+                if detection_mode == "ner_only":
+                    # Also add field heuristics for coverage
+                    pii_detection_pipeline.add_strategy(
+                        FieldHeuristicStrategy(
+                            sensitive_fields=set(pii_cfg.sensitive_fields),
+                            learned_fields=learned_fields,
+                        )
+                    )
+
+        pii_middleware = PIITokenizer(
+            config=pii_cfg,
+            learned_store=pii_learned_store,
+            detection_pipeline=pii_detection_pipeline,
+        )
+
+    # Construct middleware pipeline — PII tokenizer is always first (onion model)
+    extra_middlewares = []
     if cfg.middleware:
-        from apprentice.middleware import MiddlewarePipeline
         middleware_registry = plugin_registry_set.get_registry("middleware")
-        apprentice._middleware_pipeline = MiddlewarePipeline.from_config(
+        config_pipeline = MiddlewarePipeline.from_config(
             cfg.middleware, middleware_registry,
         )
+        extra_middlewares = config_pipeline.middlewares
+
+    if pii_middleware is not None or extra_middlewares:
+        all_middlewares = []
+        if pii_middleware is not None:
+            all_middlewares.append(pii_middleware)
+        all_middlewares.extend(extra_middlewares)
+        apprentice._middleware_pipeline = MiddlewarePipeline(all_middlewares)
     else:
         apprentice._middleware_pipeline = None
 
