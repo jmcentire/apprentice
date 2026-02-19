@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "apprentice"
@@ -28,6 +28,7 @@ gke = [
     "kubernetes>=28.0",
     "google-cloud-storage>=2.10",
 ]
+wos = []
 lint = [
     "ruff>=0.4.0",
 ]
@@ -35,8 +36,8 @@ lint = [
 [project.scripts]
 apprentice = "apprentice.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/apprentice"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
