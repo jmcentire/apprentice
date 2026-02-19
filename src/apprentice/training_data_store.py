@@ -228,6 +228,49 @@ class TrainingDataStore:
             batch_ready=batch_ready,
         )
 
+    def add_examples(self, examples: list[TrainingExample]) -> list[AddExampleResult]:
+        """Bulk-add a list of training examples. More efficient than calling add_example() in a loop
+        because it groups writes by task_type and flushes once per file."""
+        if self._config is None:
+            raise RuntimeError("Store not initialized")
+        if not examples:
+            return []
+
+        os.makedirs(self._config.base_dir, exist_ok=True)
+
+        # Group by task_type for batched file writes
+        by_task: dict[str, list[TrainingExample]] = {}
+        for ex in examples:
+            by_task.setdefault(ex.task_type, []).append(ex)
+
+        results = []
+        for task_type, task_examples in by_task.items():
+            jsonl_path = self._get_jsonl_path(task_type)
+            lines = []
+            for ex in task_examples:
+                json.dumps(ex.metadata)  # validate serializable
+                lines.append(json.dumps(ex.model_dump()) + "\n")
+
+            with open(jsonl_path, "a", encoding="utf-8") as f:
+                f.writelines(lines)
+
+            self._counts[task_type] = self._counts.get(task_type, 0) + len(task_examples)
+            self._save_counts()
+
+            total = self._counts[task_type]
+            training_count, validation_count = self._compute_split_counts(task_type)
+            batch_ready = training_count >= self._config.fine_tune_batch_size
+
+            results.append(AddExampleResult(
+                task_type=task_type,
+                example_count=total,
+                training_count=training_count,
+                validation_count=validation_count,
+                batch_ready=batch_ready,
+            ))
+
+        return results
+
     def iter_training_examples(self, task_type: str) -> TrainingExampleList:
         """Returns an iterator over all training-split examples for the task type."""
         self._validate_task_type_format(task_type)

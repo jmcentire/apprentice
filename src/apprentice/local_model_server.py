@@ -497,23 +497,208 @@ class OllamaClient:
 
 
 class VLLMClient:
-    """vLLM backend client implementation (placeholder)."""
+    """vLLM backend client — uses OpenAI-compatible /v1/completions API."""
 
     def __init__(self, config: VLLMClientConfig, http_client: Optional[httpx.AsyncClient] = None):
         self.config = config
-        self._client = http_client
-        self._active_model = ""
+        self._external_client = http_client
+        self._active_model = config.model_name_override or ""
         self._promotion_lock = asyncio.Lock()
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._external_client is not None:
+            return self._external_client
+        return httpx.AsyncClient(timeout=httpx.Timeout(
+            connect=self.config.connect_timeout_s,
+            read=self.config.inference_timeout_s,
+            pool=None, write=None,
+        ))
+
+    async def infer(self, request: InferenceRequest) -> InferenceResult:
+        """Send prompt to vLLM via OpenAI-compatible chat/completions endpoint."""
+        client = self._get_client()
+        try:
+            model = self._active_model or request.model
+            if not model:
+                return LocalModelUnavailable(reason=UnavailableReason.no_model_loaded)
+
+            headers = {"Content-Type": "application/json"}
+            if self.config.api_key:
+                headers["Authorization"] = f"Bearer {self.config.api_key}"
+
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": request.prompt}],
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+            }
+
+            start = time.perf_counter()
+            resp = await client.post(f"{self.config.base_url}/v1/chat/completions", json=payload, headers=headers)
+            elapsed = (time.perf_counter() - start) * 1000
+
+            if resp.status_code != 200:
+                return LocalModelUnavailable(reason=UnavailableReason.inference_error)
+
+            data = resp.json()
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            usage = data.get("usage", {})
+
+            return InferenceSuccess(
+                content=content,
+                model=data.get("model", model),
+                tokens_generated=usage.get("completion_tokens", 0),
+                duration_ms=elapsed,
+            )
+        except httpx.ConnectError:
+            return LocalModelUnavailable(reason=UnavailableReason.server_not_running)
+        except httpx.ReadTimeout:
+            return LocalModelUnavailable(reason=UnavailableReason.inference_timeout)
+        finally:
+            if self._external_client is None:
+                await client.aclose()
+
+    async def health(self) -> HealthStatus:
+        """Check vLLM health via /health endpoint."""
+        client = self._get_client()
+        try:
+            resp = await client.get(f"{self.config.base_url}/health",
+                                    timeout=self.config.health_check_timeout_s)
+            return HealthStatus(
+                is_ready=resp.status_code == 200,
+                active_model=self._active_model,
+                server_version="vllm",
+            )
+        except Exception:
+            return HealthStatus(is_ready=False, active_model="", server_version="vllm")
+        finally:
+            if self._external_client is None:
+                await client.aclose()
+
+    async def promote_model(self, model_tag: str, smoke_test_prompt: str = "Hello") -> PromotionResult:
+        """vLLM model promotion — update active model name (vLLM loads models at startup)."""
+        async with self._promotion_lock:
+            old = self._active_model
+            self._active_model = model_tag
+            # Smoke test
+            result = await self.infer(InferenceRequest(prompt=smoke_test_prompt, model=model_tag))
+            if isinstance(result, InferenceSuccess):
+                return PromotionResult(
+                    status=PromotionStatus.success,
+                    previous_model=old,
+                    new_model=model_tag,
+                    smoke_test_response=result.content[:200],
+                )
+            else:
+                self._active_model = old
+                return PromotionResult(
+                    status=PromotionStatus.smoke_test_failed,
+                    previous_model=old,
+                    new_model=model_tag,
+                    smoke_test_response="",
+                )
+
+    async def get_active_model(self) -> str:
+        return self._active_model
 
 
 class LlamaCppClient:
-    """llama.cpp backend client implementation (placeholder)."""
+    """llama.cpp server backend client — uses /completion endpoint."""
 
     def __init__(self, config: LlamaCppClientConfig, http_client: Optional[httpx.AsyncClient] = None):
         self.config = config
-        self._client = http_client
+        self._external_client = http_client
         self._active_model = ""
         self._promotion_lock = asyncio.Lock()
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._external_client is not None:
+            return self._external_client
+        return httpx.AsyncClient(timeout=httpx.Timeout(
+            connect=self.config.connect_timeout_s,
+            read=self.config.inference_timeout_s,
+            pool=None, write=None,
+        ))
+
+    async def infer(self, request: InferenceRequest) -> InferenceResult:
+        """Send prompt to llama.cpp server via /completion endpoint."""
+        client = self._get_client()
+        try:
+            payload = {
+                "prompt": request.prompt,
+                "n_predict": self.config.n_predict,
+                "temperature": request.temperature,
+            }
+            if self.config.slot_id >= 0:
+                payload["slot_id"] = self.config.slot_id
+
+            start = time.perf_counter()
+            resp = await client.post(f"{self.config.base_url}/completion", json=payload)
+            elapsed = (time.perf_counter() - start) * 1000
+
+            if resp.status_code != 200:
+                return LocalModelUnavailable(reason=UnavailableReason.inference_error)
+
+            data = resp.json()
+            content = data.get("content", "")
+            tokens = data.get("tokens_predicted", 0)
+
+            return InferenceSuccess(
+                content=content,
+                model=self._active_model or "llama.cpp",
+                tokens_generated=tokens,
+                duration_ms=elapsed,
+            )
+        except httpx.ConnectError:
+            return LocalModelUnavailable(reason=UnavailableReason.server_not_running)
+        except httpx.ReadTimeout:
+            return LocalModelUnavailable(reason=UnavailableReason.inference_timeout)
+        finally:
+            if self._external_client is None:
+                await client.aclose()
+
+    async def health(self) -> HealthStatus:
+        """Check llama.cpp health via /health endpoint."""
+        client = self._get_client()
+        try:
+            resp = await client.get(f"{self.config.base_url}/health",
+                                    timeout=self.config.health_check_timeout_s)
+            data = resp.json() if resp.status_code == 200 else {}
+            return HealthStatus(
+                is_ready=data.get("status") == "ok" if data else resp.status_code == 200,
+                active_model=self._active_model,
+                server_version="llama.cpp",
+            )
+        except Exception:
+            return HealthStatus(is_ready=False, active_model="", server_version="llama.cpp")
+        finally:
+            if self._external_client is None:
+                await client.aclose()
+
+    async def promote_model(self, model_tag: str, smoke_test_prompt: str = "Hello") -> PromotionResult:
+        """llama.cpp promotion — the server loads one model at startup, so this just updates the label."""
+        async with self._promotion_lock:
+            old = self._active_model
+            self._active_model = model_tag
+            result = await self.infer(InferenceRequest(prompt=smoke_test_prompt, model=model_tag))
+            if isinstance(result, InferenceSuccess):
+                return PromotionResult(
+                    status=PromotionStatus.success,
+                    previous_model=old,
+                    new_model=model_tag,
+                    smoke_test_response=result.content[:200],
+                )
+            else:
+                self._active_model = old
+                return PromotionResult(
+                    status=PromotionStatus.smoke_test_failed,
+                    previous_model=old,
+                    new_model=model_tag,
+                    smoke_test_response="",
+                )
+
+    async def get_active_model(self) -> str:
+        return self._active_model
 
 
 # ── Auto-injected export aliases (Pact export gate) ──

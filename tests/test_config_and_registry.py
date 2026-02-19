@@ -605,17 +605,15 @@ class TestLoadConfigCrossFieldErrors:
 class TestLoadConfigEnvVars:
     """Tests for env var resolution in load_config."""
 
-    def test_env_var_not_found(self, tmp_path):
-        """Raises EnvVarNotFoundError when env var is not set."""
+    def test_env_var_not_found_returns_placeholder(self, tmp_path):
+        """Returns placeholder when env var is not set (deferred resolution)."""
         yaml_content = _make_valid_yaml_content(
             provider_api_key="env:MISSING_API_KEY"
         )
         config_path = _write_yaml(tmp_path, yaml_content)
-        # Provide env without the referenced var
-        with pytest.raises(EnvVarNotFoundError) as exc_info:
-            load_config(config_path, env={"FINETUNING_API_KEY": "ft-key"})
-        assert "MISSING_API_KEY" in str(exc_info.value) or \
-               hasattr(exc_info.value, 'env_var_name') and exc_info.value.env_var_name == "MISSING_API_KEY"
+        # Provide env without the referenced var — should succeed with placeholder
+        cfg = load_config(config_path, env={"FINETUNING_API_KEY": "ft-key"})
+        assert "UNRESOLVED" in cfg.provider.api_key.get_secret_value()
 
     def test_yaml_boolean_gotcha(self, tmp_path, mock_env):
         """YAML bare 'yes' parsed as boolean causes strict type validation error."""
@@ -646,10 +644,11 @@ class TestResolveEnvVar:
         result = resolve_env_var("plain_value", {}, "test.path")
         assert result == "plain_value"
 
-    def test_env_var_not_set(self):
-        """Raises EnvVarNotFoundError when referenced env var is not in mapping."""
-        with pytest.raises(EnvVarNotFoundError):
-            resolve_env_var("env:MISSING_VAR", {}, "test.path")
+    def test_env_var_not_set_returns_placeholder(self):
+        """Returns placeholder when referenced env var is not in mapping."""
+        result = resolve_env_var("env:MISSING_VAR", {}, "test.path")
+        assert "UNRESOLVED" in result
+        assert "MISSING_VAR" in result
 
     def test_empty_var_name(self):
         """Raises error when value is 'env:' with no variable name."""

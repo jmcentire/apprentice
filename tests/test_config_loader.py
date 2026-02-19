@@ -611,23 +611,24 @@ class TestEnvVarResolution:
         result = resolve_env_var("env:MY_SECRET", {"MY_SECRET": "s3cret"}, "provider.api_key")
         assert result == "s3cret", "Should resolve to the env var value"
 
-    def test_resolve_env_var_not_found(self):
-        """Raises error when env var is not in the mapping."""
-        with pytest.raises((EnvVarNotFoundError, ConfigError, KeyError, ValueError)):
-            resolve_env_var("env:MISSING_VAR", {}, "provider.api_key")
+    def test_resolve_env_var_not_found_returns_placeholder(self):
+        """Returns placeholder when env var is not in the mapping."""
+        result = resolve_env_var("env:MISSING_VAR", {}, "provider.api_key")
+        assert "UNRESOLVED" in result
+        assert "MISSING_VAR" in result
 
     def test_resolve_env_var_empty_var_name(self):
         """Raises error when env: has no variable name."""
         with pytest.raises((EnvVarNotFoundError, ConfigError, KeyError, ValueError)):
             resolve_env_var("env:", {}, "provider.api_key")
 
-    def test_load_config_env_var_not_found(self, tmp_path):
-        """Raises EnvVarNotFoundError when env:MISSING cannot be resolved during loading."""
+    def test_load_config_env_var_not_found_returns_placeholder(self, tmp_path):
+        """Config loads with placeholder when env vars cannot be resolved."""
         cfg_dict = make_valid_config_dict(env_ref=True)
         path = write_config(tmp_path, cfg_dict)
-        # Provide empty env — env:PROVIDER_API_KEY won't resolve
-        with pytest.raises((EnvVarNotFoundError, ConfigError)):
-            load_config(path, env={})
+        # Provide empty env — env:PROVIDER_API_KEY won't resolve, gets placeholder
+        cfg = load_config(path, env={})
+        assert "UNRESOLVED" in cfg.provider.api_key.get_secret_value()
 
     def test_resolve_env_var_preserves_non_env_colon(self):
         """A value like 'https://example.com' is not treated as env ref."""
@@ -635,9 +636,10 @@ class TestEnvVarResolution:
         assert result == "https://example.com", "URLs should not be treated as env refs"
 
     def test_resolve_env_var_case_sensitive(self):
-        """Env var names are case-sensitive."""
-        with pytest.raises((EnvVarNotFoundError, ConfigError, KeyError, ValueError)):
-            resolve_env_var("env:my_var", {"MY_VAR": "value"}, "field")
+        """Env var names are case-sensitive — mismatched case returns placeholder."""
+        result = resolve_env_var("env:my_var", {"MY_VAR": "value"}, "field")
+        assert "UNRESOLVED" in result
+        assert "my_var" in result
 
 
 # ---------------------------------------------------------------------------

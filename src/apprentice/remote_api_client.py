@@ -513,6 +513,123 @@ class AnthropicClient(BaseRemoteClient):
             )
 
 
+class OpenAIClient(BaseRemoteClient):
+    """Concrete implementation for OpenAI API (chat completions)."""
+
+    async def _make_api_request(
+        self,
+        messages: list[PromptMessage],
+        params: GenerationParams,
+        request_id: str,
+    ) -> TaskResponse:
+        """Make a request to OpenAI Chat Completions API."""
+        start_time = time.perf_counter()
+
+        conversation_messages = [
+            {"role": msg.role.value, "content": msg.content}
+            for msg in messages
+        ]
+
+        payload = {
+            "model": self.config.model,
+            "messages": conversation_messages,
+            "max_tokens": params.max_tokens,
+        }
+
+        if params.temperature != 0.0:
+            payload["temperature"] = params.temperature
+        if params.top_p != 1.0:
+            payload["top_p"] = params.top_p
+        if params.stop_sequences:
+            payload["stop"] = params.stop_sequences
+
+        base_url = self.config.api_base_url or "https://api.openai.com/v1"
+        headers = {
+            "Authorization": f"Bearer {self._api_key.get_secret_value()}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = await self._http_client.post(
+                f"{base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+
+            elapsed = (time.perf_counter() - start_time) * 1000
+
+            if response.status_code == 200:
+                data = response.json()
+                usage_data = data.get("usage", {})
+                usage = TokenUsage(
+                    input_tokens=usage_data.get("prompt_tokens", 0),
+                    output_tokens=usage_data.get("completion_tokens", 0),
+                )
+
+                content = ""
+                choices = data.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+
+                pricing = get_pricing(self.config.provider, data.get("model", self.config.model), self.config.pricing_overrides)
+                cost = compute_cost(usage, pricing) if pricing else 0.0
+
+                return TaskResponse(
+                    content=content,
+                    model=data.get("model", self.config.model),
+                    provider=self.config.provider,
+                    usage=usage,
+                    cost_usd=cost,
+                    latency_ms=elapsed,
+                    request_id=request_id,
+                )
+
+            elif response.status_code in (401, 403):
+                raise AuthError(
+                    provider=self.config.provider,
+                    message=f"Authentication failed: {response.text}",
+                    request_id=request_id,
+                    retries_attempted=0,
+                    status_code=response.status_code,
+                )
+            elif response.status_code == 429:
+                retry_after = float(response.headers.get("Retry-After", 0))
+                raise RateLimitError(
+                    provider=self.config.provider,
+                    message=f"Rate limited: {response.text}",
+                    request_id=request_id,
+                    retries_attempted=0,
+                    status_code=429,
+                    retry_after_seconds=retry_after,
+                )
+            elif response.status_code in (400, 422):
+                raise InvalidRequestError(
+                    provider=self.config.provider,
+                    message=f"Invalid request: {response.text}",
+                    request_id=request_id,
+                    retries_attempted=0,
+                    status_code=response.status_code,
+                )
+            else:
+                raise RemoteUnavailableError(
+                    provider=self.config.provider,
+                    message=f"Remote unavailable: {response.text}",
+                    request_id=request_id,
+                    retries_attempted=0,
+                    status_code=response.status_code,
+                )
+
+        except httpx.HTTPError as e:
+            raise RemoteUnavailableError(
+                provider=self.config.provider,
+                message=f"HTTP error: {str(e)}",
+                request_id=request_id,
+                retries_attempted=0,
+                status_code=0,
+                last_error_type=type(e).__name__,
+            )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Factory Function
 # ──────────────────────────────────────────────────────────────────────────────
@@ -547,7 +664,7 @@ def create_remote_client(
     if config.provider == ProviderName.anthropic:
         return AnthropicClient(config, api_key, http_client)
     elif config.provider == ProviderName.openai:
-        raise ValueError(f"Provider {config.provider.value} not yet implemented")
+        return OpenAIClient(config, api_key, http_client)
     elif config.provider == ProviderName.google:
         raise ValueError(f"Provider {config.provider.value} not yet implemented")
     else:
