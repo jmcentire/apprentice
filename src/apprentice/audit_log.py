@@ -7,10 +7,12 @@ All timestamps are UTC. Uses stdlib logging with custom JSON formatter.
 import json
 import logging
 import os
+import sys
 from datetime import datetime, timezone
 from enum import Enum
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Optional, Protocol
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -112,11 +114,15 @@ class AuditEntry(BaseModel):
 # ── AUDIT CONFIG MODEL ────────────────────────────────────────────────────────
 class AuditConfig(BaseModel):
     """Pydantic v2 BaseModel for audit logger configuration.
-    
+
     Validated at startup — fail fast on invalid config.
     Typically loaded from the YAML config file's 'audit' section.
     """
     log_path: str = Field(min_length=1)
+    log_level: str = "INFO"
+    log_to_stdout: bool = False
+    max_file_size_mb: int = 100
+    backup_count: int = 5
 
     @field_validator('log_path')
     @classmethod
@@ -124,16 +130,16 @@ class AuditConfig(BaseModel):
         """Validate that log_path parent directory exists and is writable."""
         if not v or len(v.strip()) == 0:
             raise ValueError("log_path must be a non-empty string")
-        
+
         path = Path(v)
         parent = path.parent
-        
+
         if not parent.exists():
             raise ValueError(f"Parent directory does not exist: {parent}")
-        
+
         if not os.access(parent, os.W_OK):
             raise ValueError(f"Parent directory is not writable: {parent}")
-        
+
         return v
 
 
@@ -187,18 +193,20 @@ class JsonLinesAuditLogger:
     Thread-safe via stdlib logging internals.
     """
     
-    def __init__(self, config: AuditConfig) -> None:
+    def __init__(self, config: AuditConfig, event_dispatcher: Optional[Any] = None) -> None:
         """Construct a JsonLinesAuditLogger from an AuditConfig.
-        
+
         Validates that log_path's parent directory exists and is writable.
         Creates the log file if it does not exist.
         Configures a dedicated stdlib logging.Logger named 'apprentice.audit'
-        with a FileHandler in append mode and a custom JSON formatter.
-        The logger is isolated — propagate=False.
-        
+        with a RotatingFileHandler using max_file_size_mb and backup_count.
+        Honors log_level and log_to_stdout from config.
+        Optionally accepts an EventDispatcher to route events to additional sinks.
+
         Args:
             config: Validated AuditConfig instance
-            
+            event_dispatcher: Optional EventDispatcher for multi-sink routing
+
         Raises:
             FileNotFoundError: Parent directory does not exist
             PermissionError: Parent directory is not writable
@@ -206,59 +214,77 @@ class JsonLinesAuditLogger:
         """
         if not isinstance(config, AuditConfig):
             raise ValueError(f"Invalid AuditConfig: {config}")
-        
+
         self.config = config
+        self._event_dispatcher = event_dispatcher
         log_path = Path(config.log_path)
         parent = log_path.parent
-        
+
         # Validate parent directory exists
         if not parent.exists():
             raise FileNotFoundError(f"Parent directory does not exist: {parent}")
-        
+
         # Validate parent directory is writable
         if not os.access(parent, os.W_OK):
             raise PermissionError(f"Cannot write to audit log path: {config.log_path}")
-        
+
         # Create the log file if it doesn't exist
         if not log_path.exists():
             log_path.touch()
-        
+
         # Check if the file itself is writable (if it already exists)
         if log_path.exists() and not os.access(log_path, os.W_OK):
             raise PermissionError(f"Cannot write to audit log path: {config.log_path}")
-        
+
+        # Resolve log level from config
+        log_level = getattr(logging, config.log_level.upper(), logging.INFO)
+
         # Set up the dedicated logger
         self._logger = logging.getLogger('apprentice.audit')
-        self._logger.setLevel(logging.INFO)
+        self._logger.setLevel(log_level)
         self._logger.propagate = False  # Isolate from root logger
-        
+
         # Remove any existing handlers to avoid duplicates
         self._logger.handlers.clear()
-        
-        # Create file handler in append mode
-        file_handler = logging.FileHandler(config.log_path, mode='a', encoding='utf-8')
-        file_handler.setLevel(logging.INFO)
-        
+
+        # Create RotatingFileHandler with config-driven rotation
+        max_bytes = config.max_file_size_mb * 1024 * 1024
+        file_handler = RotatingFileHandler(
+            config.log_path,
+            maxBytes=max_bytes,
+            backupCount=config.backup_count,
+            encoding='utf-8',
+        )
+        file_handler.setLevel(log_level)
+
         # Set custom JSON formatter
         json_formatter = JsonFormatter()
         file_handler.setFormatter(json_formatter)
-        
+
         # Add handler to logger
         self._logger.addHandler(file_handler)
-        
+
+        # Add stdout handler if configured
+        if config.log_to_stdout:
+            stdout_handler = logging.StreamHandler(sys.stdout)
+            stdout_handler.setLevel(log_level)
+            stdout_handler.setFormatter(json_formatter)
+            self._logger.addHandler(stdout_handler)
+
         _log('info', f"Initialized audit logger with log_path={config.log_path}")
     
     def log(self, entry: AuditEntry) -> None:
         """Append a single AuditEntry to the audit log.
-        
+
         Serializes the entry via to_json_line() and emits it through the
         stdlib 'apprentice.audit' logger, which writes to the configured JSONL
-        file handler. Synchronous — blocks until the entry is flushed.
+        file handler. Also dispatches to the EventDispatcher if configured.
+        Synchronous — blocks until the entry is flushed.
         Thread-safe via stdlib logging internals.
-        
+
         Args:
             entry: Valid AuditEntry instance
-            
+
         Raises:
             OSError: Log file has become inaccessible
             ValueError: Entry's details dict contains non-JSON-serializable value
@@ -269,6 +295,9 @@ class JsonLinesAuditLogger:
             # Flush to ensure immediate write to disk
             for handler in self._logger.handlers:
                 handler.flush()
+            # Dispatch to additional sinks if configured
+            if self._event_dispatcher is not None:
+                self._event_dispatcher.emit(entry)
         except ValueError as e:
             raise ValueError(f"Cannot serialize audit entry: {e}")
         except OSError as e:

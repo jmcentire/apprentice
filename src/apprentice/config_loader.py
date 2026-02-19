@@ -122,6 +122,15 @@ class EnvVarNotFoundError(ConfigError):
 _ENV_CONTEXT: Mapping[str, str] = {}
 _CONFIG_PATH_CONTEXT: str = ""
 
+# Tracks env vars that could not be resolved during config loading.
+# Each entry is (var_name, field_path).
+_UNRESOLVED_VARS: list[tuple[str, str]] = []
+
+
+def get_unresolved_vars() -> list[tuple[str, str]]:
+    """Return list of (var_name, field_path) for env vars that were not resolved."""
+    return list(_UNRESOLVED_VARS)
+
 
 def resolve_env_var(value: str, env: Mapping[str, str], field_path: Optional[str] = None) -> str:
     """
@@ -144,6 +153,8 @@ def resolve_env_var(value: str, env: Mapping[str, str], field_path: Optional[str
         )
 
     if var_name not in env:
+        # Track the unresolved variable for startup warnings
+        _UNRESOLVED_VARS.append((var_name, field_path or "unknown"))
         # Return a placeholder — the real value is only needed at request time.
         # This allows loading config for status/report without requiring API keys.
         return f"UNRESOLVED:env:{var_name}"
@@ -300,6 +311,21 @@ class FinetuningConfig(BaseModel):
         return v if v else None
 
 
+class EventHandlerConfig(BaseModel):
+    """Config for a single event handler/sink."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    type: str = Field(pattern=r"^(file|stdout|socket|http|callable)$")
+    level: str = "INFO"
+    path: str = ""
+    host: str = ""
+    port: int = Field(default=0, ge=0, le=65535)
+    url: str = ""
+    method: str = "POST"
+    handler: str = ""
+    format: str = Field(default="json", pattern=r"^(json|text)$")
+
+
 class AuditConfig(BaseModel):
     """Configuration for the structured audit logging system."""
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid", use_enum_values=False)
@@ -309,6 +335,7 @@ class AuditConfig(BaseModel):
     log_to_stdout: bool = False
     max_file_size_mb: int = Field(default=100, ge=1, le=10000)
     backup_count: int = Field(default=5, ge=0, le=100)
+    handlers: Optional[List[EventHandlerConfig]] = None
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -342,6 +369,27 @@ class MiddlewareEntryConfig(BaseModel):
 
     name: str = Field(min_length=1)
     config: Mapping[str, Any] = Field(default_factory=dict)
+
+
+class PIIConfig(BaseModel):
+    """Configuration for PII tokenization middleware."""
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    enabled: bool = True
+    entity_types: List[str] = Field(default_factory=lambda: [
+        "email", "phone", "ssn", "credit_card", "ip_address", "api_key"
+    ])
+    custom_patterns: Mapping[str, str] = Field(default_factory=dict)
+    sensitive_fields: List[str] = Field(default_factory=lambda: [
+        "password", "secret", "api_key"
+    ])
+    learned_patterns_path: str = ".apprentice/pii_learned_patterns.yaml"
+    token_format: str = "<PII:{type}:{hash}>"
+    detection_mode: str = "regex_only"
+    ner_model: Optional[str] = None
+    ner_device: str = "cpu"
+    ner_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    ner_max_text_length: int = Field(default=10000, ge=100)
 
 
 class FeedbackConfig(BaseModel):
@@ -380,6 +428,7 @@ class ApprenticeConfig(BaseModel):
     middleware: Optional[List[MiddlewareEntryConfig]] = None
     feedback: Optional[FeedbackConfig] = None
     observer: Optional[ObserverConfig] = None
+    pii: Optional[PIIConfig] = None
 
     @model_validator(mode="after")
     def validate_cross_field_constraints(self) -> "ApprenticeConfig":
@@ -496,11 +545,14 @@ def load_config(path: Path, env: Optional[Mapping[str, str]] = None) -> Apprenti
     env:VAR_NAME references, constructs and validates ApprenticeConfig via Pydantic v2,
     and returns a frozen/immutable config object.
     """
-    global _ENV_CONTEXT, _CONFIG_PATH_CONTEXT
+    global _ENV_CONTEXT, _CONFIG_PATH_CONTEXT, _UNRESOLVED_VARS
 
     # Use os.environ if no env mapping provided
     if env is None:
         env = os.environ
+
+    # Reset unresolved var tracking for this load
+    _UNRESOLVED_VARS = []
 
     # Set global context for validators
     _ENV_CONTEXT = env
@@ -609,3 +661,4 @@ EvaluatorConfigList = EvaluatorConfig
 TaskFieldSpecList = TaskFieldSpec
 TaskConfigList = TaskConfig
 ValidationErrorDetailList = ValidationErrorDetail
+EventHandlerConfigList = EventHandlerConfig

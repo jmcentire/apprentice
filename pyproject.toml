@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "apprentice-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Adaptive model distillation framework — progressively replace expensive API calls with fine-tuned local models through coaching, evaluation, and phased rollout"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,6 +29,11 @@ gke = [
     "google-cloud-storage>=2.10",
 ]
 wos = []
+ml = [
+    "transformers>=4.35.0",
+    "torch>=2.0.0",
+    "datasets>=2.14.0",
+]
 lint = [
     "ruff>=0.4.0",
 ]

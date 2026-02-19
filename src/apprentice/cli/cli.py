@@ -30,6 +30,8 @@ try:
         InputData,
         ParsedArgs,
         PhaseInfo,
+        PIIEvaluateArgs,
+        PIIIngestArgs,
         ReportArgs,
         ReportResult,
         RunArgs,
@@ -51,6 +53,8 @@ except ImportError:
         InputData,
         ParsedArgs,
         PhaseInfo,
+        PIIEvaluateArgs,
+        PIIIngestArgs,
         ReportArgs,
         ReportResult,
         RunArgs,
@@ -177,6 +181,20 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     serve_parser.add_argument("--allowed-ips", default="",
                               help="Comma-separated IP allowlist (CIDRs or addresses)")
 
+    # pii-ingest subcommand
+    pii_ingest_parser = subparsers.add_parser("pii-ingest", help="Ingest PII training data")
+    pii_ingest_parser.add_argument("--dataset", default="ai4privacy/pii-masking-200k",
+                                    help="HuggingFace dataset ID (default: ai4privacy/pii-masking-200k)")
+    pii_ingest_parser.add_argument("--split", default="train", help="Dataset split (default: train)")
+    pii_ingest_parser.add_argument("--limit", type=int, default=10000, help="Max examples to ingest (default: 10000)")
+
+    # pii-evaluate subcommand
+    pii_evaluate_parser = subparsers.add_parser("pii-evaluate", help="Evaluate PII detection quality")
+    pii_evaluate_parser.add_argument("--mode", default="regex_only",
+                                      choices=["regex_only", "hybrid", "ner_only"],
+                                      help="Detection mode (default: regex_only)")
+    pii_evaluate_parser.add_argument("--limit", type=int, default=1000, help="Max examples to evaluate (default: 1000)")
+
     # ingest subcommand
     ingest_parser = subparsers.add_parser("ingest", help="Bulk-load training examples from file")
     ingest_parser.add_argument("file", help="Path to JSONL or CSV file")
@@ -208,6 +226,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     init_args = None
     serve_args = None
     ingest_args = None
+    pii_ingest_args = None
+    pii_evaluate_args = None
 
     if command == SubcommandName.run:
         run_args = RunArgs(
@@ -239,6 +259,17 @@ def parse_args(argv: list[str]) -> ParsedArgs:
             format=args.ingest_format,
             task=args.ingest_task,
         )
+    elif command == SubcommandName.pii_ingest:
+        pii_ingest_args = PIIIngestArgs(
+            dataset=args.dataset,
+            split=args.split,
+            limit=args.limit,
+        )
+    elif command == SubcommandName.pii_evaluate:
+        pii_evaluate_args = PIIEvaluateArgs(
+            mode=args.mode,
+            limit=args.limit,
+        )
 
     return ParsedArgs(
         global_flags=global_flags,
@@ -249,6 +280,8 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         init_args=init_args,
         serve_args=serve_args,
         ingest_args=ingest_args,
+        pii_ingest_args=pii_ingest_args,
+        pii_evaluate_args=pii_evaluate_args,
     )
 
 
@@ -521,6 +554,161 @@ async def execute_report(
     return result
 
 
+def execute_pii_ingest(pii_ingest_args: PIIIngestArgs) -> int:
+    """Execute the 'pii-ingest' subcommand.
+
+    Downloads and ingests a PII detection dataset from HuggingFace.
+    """
+    try:
+        from datasets import load_dataset
+    except ImportError:
+        print("Error: 'datasets' library required. Install with: pip install datasets", file=sys.stderr)
+        return 1
+
+    print(f"Loading dataset '{pii_ingest_args.dataset}' (split={pii_ingest_args.split}, limit={pii_ingest_args.limit})...")
+
+    try:
+        ds = load_dataset(
+            pii_ingest_args.dataset,
+            split=f"{pii_ingest_args.split}[:{pii_ingest_args.limit}]",
+        )
+    except Exception as e:
+        print(f"Error loading dataset: {e}", file=sys.stderr)
+        return 1
+
+    # Store examples as JSON-lines
+    output_dir = Path(".apprentice/pii_training_data")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "pii_detection_examples.jsonl"
+
+    count = 0
+    with open(output_file, "w", encoding="utf-8") as fh:
+        for row in ds:
+            example = {
+                "task_type": "pii_detection",
+                "source_text": row.get("source_text", row.get("text", "")),
+                "privacy_mask": row.get("privacy_mask", {}),
+                "span_labels": row.get("span_labels", []),
+                "bio_labels": row.get("bio_labels", []),
+                "tokenised_text": row.get("tokenised_text", ""),
+            }
+            fh.write(json.dumps(example) + "\n")
+            count += 1
+
+    print(f"Ingested {count} examples to {output_file}")
+    return 0
+
+
+def execute_pii_evaluate(pii_evaluate_args: PIIEvaluateArgs) -> int:
+    """Execute the 'pii-evaluate' subcommand.
+
+    Runs detection strategies against labeled data and prints F1 metrics.
+    """
+    from apprentice.pii_detection import (
+        CompositeDetectionPipeline,
+        FieldHeuristicStrategy,
+        NERDetectionStrategy,
+        PIIDetection,
+        RegexDetectionStrategy,
+    )
+    from apprentice.pii_evaluation import PIIDetectionEvaluator
+
+    # Load examples
+    examples_file = Path(".apprentice/pii_training_data/pii_detection_examples.jsonl")
+    if not examples_file.exists():
+        print("Error: No training data found. Run 'apprentice pii-ingest' first.", file=sys.stderr)
+        return 1
+
+    examples = []
+    with open(examples_file, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                try:
+                    examples.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
+    if not examples:
+        print("Error: No valid examples found.", file=sys.stderr)
+        return 1
+
+    # Limit examples
+    examples = examples[:pii_evaluate_args.limit]
+
+    # Build detection pipeline based on mode
+    pipeline = CompositeDetectionPipeline()
+    mode = pii_evaluate_args.mode
+
+    if mode in ("regex_only", "hybrid"):
+        pipeline.add_strategy(RegexDetectionStrategy())
+        pipeline.add_strategy(FieldHeuristicStrategy())
+
+    if mode in ("hybrid", "ner_only"):
+        pipeline.add_strategy(NERDetectionStrategy())
+
+    evaluator = PIIDetectionEvaluator()
+
+    # Run evaluation
+    all_predictions: list[PIIDetection] = []
+    all_ground_truth: list[PIIDetection] = []
+    offset = 0
+
+    print(f"Evaluating {len(examples)} examples with mode={mode}...")
+
+    for ex in examples:
+        text = ex.get("source_text", "")
+        if not text:
+            continue
+
+        # Get predictions
+        preds = pipeline.detect_all(text)
+        # Offset predictions for global evaluation
+        for p in preds:
+            all_predictions.append(PIIDetection(
+                start=p.start + offset,
+                end=p.end + offset,
+                value=p.value,
+                entity_type=p.entity_type,
+                confidence=p.confidence,
+                source=p.source,
+            ))
+
+        # Parse ground truth from span_labels if available
+        span_labels = ex.get("span_labels", [])
+        if isinstance(span_labels, list):
+            for sl in span_labels:
+                if isinstance(sl, dict):
+                    gt_start = sl.get("start", 0)
+                    gt_end = sl.get("end", 0)
+                    gt_type = sl.get("label", sl.get("type", "unknown")).lower()
+                    gt_value = text[gt_start:gt_end] if gt_start < gt_end <= len(text) else ""
+                    all_ground_truth.append(PIIDetection(
+                        start=gt_start + offset,
+                        end=gt_end + offset,
+                        value=gt_value,
+                        entity_type=gt_type,
+                        confidence=1.0,
+                        source="ground_truth",
+                    ))
+
+        offset += len(text) + 1
+
+    result = evaluator.evaluate(all_predictions, all_ground_truth)
+
+    # Print results
+    print(f"\n{'Entity Type':<25} {'Precision':>10} {'Recall':>10} {'F1':>10} {'TP':>6} {'FP':>6} {'FN':>6}")
+    print("-" * 79)
+    for m in result.entity_metrics:
+        print(f"{m.entity_type:<25} {m.precision:>10.3f} {m.recall:>10.3f} {m.f1:>10.3f} {m.true_positives:>6} {m.false_positives:>6} {m.false_negatives:>6}")
+    print("-" * 79)
+    print(f"{'Micro Average':<25} {result.micro_precision:>10.3f} {result.micro_recall:>10.3f} {result.micro_f1:>10.3f}")
+    print(f"{'Macro Average':<25} {result.macro_precision:>10.3f} {result.macro_recall:>10.3f} {result.macro_f1:>10.3f}")
+    print(f"\nTotal predictions: {result.total_predictions}, Total ground truth: {result.total_ground_truth}")
+
+    return 0
+
+
 def execute_ingest(ingest_args: IngestArgs, config_path: str) -> dict:
     """
     Execute the 'ingest' subcommand.
@@ -672,6 +860,32 @@ def main(argv: Optional[list[str]] = None) -> int:
             ))
             return 0
 
+        # Handle pii-ingest subcommand (no config needed)
+        if args.command == SubcommandName.pii_ingest:
+            return execute_pii_ingest(args.pii_ingest_args)
+
+        # Handle pii-evaluate subcommand (no config needed)
+        if args.command == SubcommandName.pii_evaluate:
+            return execute_pii_evaluate(args.pii_evaluate_args)
+
+        # Check for unresolved env vars and warn on stderr
+        try:
+            from apprentice import config_loader as _cl
+            unresolved = _cl.get_unresolved_vars()
+            if unresolved:
+                for var_name, field_path in unresolved:
+                    print(
+                        f"\u26a0 {var_name} not set (referenced by {field_path})",
+                        file=sys.stderr,
+                    )
+                print(
+                    "\u2192 Commands requiring API access will fail. "
+                    "Set these in your shell profile.",
+                    file=sys.stderr,
+                )
+        except ImportError:
+            pass
+
         # Handle ingest subcommand (needs config but not full Apprentice)
         if args.command == SubcommandName.ingest:
             try:
@@ -702,6 +916,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             logging.error("Apprentice package not properly installed")
             print("Error: apprentice package not properly installed", file=sys.stderr)
             return 1
+
+        # For 'run' command, fail early if provider API key is unresolved
+        if args.command == SubcommandName.run:
+            try:
+                from apprentice import config_loader as _cl2
+                for var_name, field_path in _cl2.get_unresolved_vars():
+                    if field_path == "provider.api_key":
+                        print(
+                            f"Error: Cannot run task — {var_name} is not set. "
+                            f"Set it in your shell profile or environment.",
+                            file=sys.stderr,
+                        )
+                        return 1
+            except ImportError:
+                pass
 
         # Execute the appropriate subcommand within Apprentice async context
         async def async_main():

@@ -72,6 +72,7 @@ if not HAS_HYPOTHESIS:
 from src.config_loader import (
     load_config,
     resolve_env_var,
+    get_unresolved_vars,
     ApprenticeConfig,
     ConfigError,
     ConfigFileNotFoundError,
@@ -640,6 +641,101 @@ class TestEnvVarResolution:
         result = resolve_env_var("env:my_var", {"MY_VAR": "value"}, "field")
         assert "UNRESOLVED" in result
         assert "my_var" in result
+
+    def test_get_unresolved_vars_populated(self, tmp_path):
+        """get_unresolved_vars() returns list of unresolved env vars after load."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        load_config(path, env={})
+        unresolved = get_unresolved_vars()
+        var_names = [name for name, _ in unresolved]
+        assert "PROVIDER_API_KEY" in var_names
+        assert "FT_API_KEY" in var_names
+
+    def test_get_unresolved_vars_empty_when_resolved(self, tmp_path, sample_env):
+        """get_unresolved_vars() returns empty list when all vars are resolved."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        load_config(path, env=sample_env)
+        unresolved = get_unresolved_vars()
+        assert len(unresolved) == 0
+
+    def test_get_unresolved_vars_includes_field_path(self, tmp_path):
+        """get_unresolved_vars() entries include the field path."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        load_config(path, env={})
+        unresolved = get_unresolved_vars()
+        field_paths = [fp for _, fp in unresolved]
+        assert "provider.api_key" in field_paths
+
+    def test_get_unresolved_vars_resets_between_loads(self, tmp_path, sample_env):
+        """get_unresolved_vars() is reset on each load_config call."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        # First load without env — should have unresolved
+        load_config(path, env={})
+        assert len(get_unresolved_vars()) > 0
+        # Second load with env — should be empty
+        load_config(path, env=sample_env)
+        assert len(get_unresolved_vars()) == 0
+
+    def test_unresolved_placeholder_masked_in_repr(self, tmp_path):
+        """UNRESOLVED placeholder in SecretStr is masked in repr/str (env var name doesn't leak)."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        config = load_config(path, env={})
+
+        config_repr = repr(config)
+        api_key_str = str(config.provider.api_key)
+        # The UNRESOLVED placeholder (and the env var name) must not leak
+        assert "UNRESOLVED" not in config_repr, \
+            "UNRESOLVED placeholder should be masked in repr"
+        assert "PROVIDER_API_KEY" not in config_repr, \
+            "Env var name should be masked in repr"
+        assert "UNRESOLVED" not in api_key_str, \
+            "UNRESOLVED placeholder should be masked in str"
+
+    def test_unresolved_placeholder_survives_secretstr_roundtrip(self, tmp_path):
+        """UNRESOLVED placeholder is intact when extracted via get_secret_value()."""
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        config = load_config(path, env={})
+
+        raw = config.provider.api_key.get_secret_value()
+        assert raw == "UNRESOLVED:env:PROVIDER_API_KEY", \
+            f"Placeholder should survive SecretStr round-trip, got: {raw}"
+
+    def test_unresolved_placeholder_detected_by_remote_client(self, tmp_path):
+        """Full chain: config_loader → SecretStr → get_secret_value → create_remote_client rejects."""
+        from apprentice.remote_api_client import (
+            create_remote_client,
+            RemoteClientConfig,
+            ProviderName,
+            AuthError,
+        )
+
+        cfg_dict = make_valid_config_dict(env_ref=True)
+        path = write_config(tmp_path, cfg_dict)
+        config = load_config(path, env={})
+
+        # Extract the UNRESOLVED placeholder exactly as factory.py does
+        placeholder = config.provider.api_key.get_secret_value()
+        assert placeholder.startswith("UNRESOLVED:env:")
+
+        # Simulate factory.py setting it into os.environ
+        env_var = "TEST_UNRESOLVED_ROUNDTRIP"
+        os.environ[env_var] = placeholder
+        try:
+            with pytest.raises(AuthError) as exc_info:
+                create_remote_client(RemoteClientConfig(
+                    provider=ProviderName.anthropic,
+                    model="test-model",
+                    api_key_env_var=env_var,
+                ))
+            assert "PROVIDER_API_KEY" in exc_info.value.message
+        finally:
+            del os.environ[env_var]
 
 
 # ---------------------------------------------------------------------------

@@ -90,3 +90,30 @@ audit:
 training_data:
   storage_dir: .apprentice/training_data/
   max_examples_per_task: 50000
+
+# ── PII Protection ──
+# Scrubs sensitive data before it reaches models, training stores, or audit logs.
+# detection_mode: regex_only (default, no extra deps) | hybrid | ner_only
+pii:
+  enabled: true
+  detection_mode: regex_only           # regex_only | hybrid | ner_only
+  sensitive_fields:
+    - email
+    - phone
+    - ssn
+    - password
+    - credit_card
+    - api_key
+
+  # ── NER model settings (uncomment for hybrid or ner_only mode) ──
+  # Requires: pip install apprentice-ai[ml]
+  # ner_model: "dslim/bert-base-NER"  # HuggingFace model ID
+  # ner_device: cpu                     # cpu | cuda
+  # ner_confidence_threshold: 0.7       # discard NER detections below this
+  # ner_max_text_length: 10000          # skip NER on very long strings
+
+# ── Feedback ──
+# Human and AI feedback collection for continuous improvement.
+feedback:
+  enabled: true
+  storage_dir: .apprentice/feedback/

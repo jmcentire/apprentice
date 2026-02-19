@@ -86,6 +86,76 @@ Router ────────────────────────�
 2. **Reinforcement** — Both models process each request. The evaluator scores local vs. remote output. A rolling window tracks correlation. When sustained correlation exceeds the threshold, the system promotes to Phase 3.
 3. **Steady State** — The local model handles most traffic. An adaptive sampler periodically sends requests to both models to verify quality hasn't degraded. If it has, the system automatically regresses to Phase 2.
 
+## PII Protection
+
+Apprentice includes a built-in PII detection and tokenization middleware that scrubs sensitive data before it reaches models, training stores, or audit logs. The system uses a hybrid multi-modal approach that combines fast regex patterns with optional NER model inference.
+
+### Detection Modes
+
+| Mode | Strategies | Latency | Dependencies |
+|------|-----------|---------|-------------|
+| `regex_only` (default) | Regex patterns + field heuristics | ~0.1ms | None |
+| `hybrid` | Regex + field heuristics + NER model | ~50ms | `pip install apprentice-ai[ml]` |
+| `ner_only` | NER model only | ~50ms | `pip install apprentice-ai[ml]` |
+
+### What It Detects
+
+**Regex**: Emails, phone numbers, SSNs, credit cards, IP addresses, API keys, dates of birth
+**Field Heuristics**: Sensitive field names (email, phone, ssn, password, etc.) + learned patterns from prior detections
+**NER Model**: Person names, locations, organizations, miscellaneous entities — unstructured PII that regex can't catch
+
+### How It Works
+
+```
+Input data (may contain PII)
+  │
+  ├─ RegexDetectionStrategy        [confidence=1.0]
+  ├─ FieldHeuristicStrategy        [confidence=0.9]
+  └─ NERDetectionStrategy          [confidence=varies]
+  │
+  ▼
+Merge + deduplicate (union, highest confidence wins overlaps)
+  │
+  ▼
+Replace spans with opaque tokens → model sees __PII_EMAIL_a1b2c3__
+  │
+  ▼
+Post-process: restore tokens → original PII for end user
+```
+
+The system learns over time — fields that repeatedly contain PII get auto-flagged, and user feedback (false positives/negatives) adjusts confidence.
+
+### Configuration
+
+```yaml
+pii:
+  enabled: true
+  detection_mode: hybrid       # regex_only | hybrid | ner_only
+  ner_model: dslim/bert-base-NER
+  ner_device: cpu              # cpu | cuda
+  ner_confidence_threshold: 0.7
+  sensitive_fields:
+    - email
+    - phone
+    - ssn
+    - password
+```
+
+### Evaluation
+
+Apprentice includes a built-in evaluation harness for measuring PII detection quality against labeled datasets:
+
+```bash
+# Ingest the ai4privacy/pii-masking-200k dataset
+apprentice pii-ingest --dataset ai4privacy/pii-masking-200k --limit 1000
+
+# Evaluate regex baseline
+apprentice pii-evaluate --mode regex_only
+
+# Evaluate hybrid (regex + NER)
+apprentice pii-evaluate --mode hybrid
+```
+
 ## CLI
 
 | Command | Purpose |
@@ -94,6 +164,9 @@ Router ────────────────────────�
 | `apprentice serve <config>` | Start HTTP server with REST API |
 | `apprentice status <config>` | Show phase, confidence, budget for each task |
 | `apprentice report <config>` | Generate summary report with metrics |
+| `apprentice ingest <file>` | Bulk ingest training data from file |
+| `apprentice pii-ingest` | Download and ingest PII evaluation dataset |
+| `apprentice pii-evaluate` | Evaluate PII detection against labeled data |
 
 ### HTTP Server Endpoints
 
@@ -156,7 +229,7 @@ Each task gets its own phase progression, confidence window, and evaluator. A si
 
 ## Architecture
 
-25 components organized in two layers — 18 leaf implementations with zero cross-dependencies, wired together by 7 integration compositions:
+28 components organized in two layers — 21 leaf implementations with zero cross-dependencies, wired together by 7 integration compositions:
 
 ### Leaf Components
 
@@ -180,6 +253,9 @@ Each task gets its own phase progression, confidence window, and evaluator. A si
 | `cli` | Command-line interface and HTTP server |
 | `audit_log` | Structured event logging (JSONL) |
 | `report_generator` | Reports, metrics, and observability |
+| `pii_tokenizer` | PII detection middleware with learned patterns |
+| `pii_detection` | Multi-strategy PII detection (regex, NER, heuristic) |
+| `pii_evaluation` | Span-level PII detection evaluation harness |
 
 ### Integration Compositions
 
@@ -199,14 +275,14 @@ Each task gets its own phase progression, confidence window, and evaluator. A si
 git clone https://github.com/jmcentire/apprentice.git
 cd apprentice
 make dev          # Install with dev + lint dependencies
-make test         # Run all 2,390 tests
+make test         # Run all 2,486 tests
 make test-quick   # Stop on first failure
 make lint         # Run ruff linter
 make lint-fix     # Auto-fix lint issues
 make clean        # Remove build artifacts
 ```
 
-Requires Python 3.12+. Core dependencies: `pydantic`, `pyyaml`, `httpx`.
+Requires Python 3.12+. Core dependencies: `pydantic`, `pyyaml`, `httpx`. Optional: `pip install apprentice-ai[ml]` for NER-based PII detection (adds `transformers`, `torch`, `datasets`).
 
 ## Built With
 
