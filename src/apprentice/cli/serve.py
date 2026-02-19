@@ -273,6 +273,14 @@ class ApprenticeServer:
                 await self._handle_status(writer)
             elif path == "/v1/report" and method == "GET":
                 await self._handle_report(writer)
+            elif path == "/v1/events" and method == "POST":
+                await self._handle_events(writer, body)
+            elif path == "/v1/feedback" and method == "POST":
+                await self._handle_feedback(writer, body)
+            elif path == "/v1/recommendations" and method == "POST":
+                await self._handle_recommendations(writer, body)
+            elif path == "/v1/skills" and method == "GET":
+                await self._handle_skills(writer)
             else:
                 await self._send_response(writer, 404, {"error": "Not found"})
 
@@ -344,6 +352,71 @@ class ApprenticeServer:
         except Exception as e:
             await self._send_response(writer, 500, {"error": str(e)})
 
+    async def _handle_events(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/events — Fire-and-forget event ingestion. Always returns 200."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        try:
+            from apprentice.wos_models import WOSEvent
+            from apprentice.wos_handler import handle_event
+            event = WOSEvent(**data)
+            result = await handle_event(self._apprentice, event)
+            await self._send_response(writer, 200, result.model_dump())
+        except Exception as e:
+            # Fire-and-forget: always 200 even on internal errors
+            print(f"[wos] Event handler error (non-fatal): {e}", file=sys.stderr)
+            await self._send_response(writer, 200, {"status": "accepted"})
+
+    async def _handle_feedback(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/feedback — Record agent feedback."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        try:
+            from apprentice.wos_models import FeedbackRecord
+            from apprentice.wos_handler import handle_feedback
+            feedback = FeedbackRecord(**data)
+            result = await handle_feedback(self._apprentice, feedback)
+            await self._send_response(writer, 200, result.model_dump())
+        except Exception as e:
+            await self._send_response(writer, 500, {"error": str(e)})
+
+    async def _handle_recommendations(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/recommendations — Get a recommendation from Apprentice."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        try:
+            from apprentice.wos_models import RecommendRequest
+            from apprentice.wos_handler import handle_recommend
+            request = RecommendRequest(**data)
+            result = await handle_recommend(self._apprentice, request)
+            await self._send_response(writer, 200, result.model_dump())
+        except Exception as e:
+            await self._send_response(writer, 503, {"error": str(e)})
+
+    async def _handle_skills(self, writer: asyncio.StreamWriter) -> None:
+        """GET /v1/skills — List configured skills with phase/confidence."""
+        try:
+            from apprentice.wos_handler import list_skills
+            skills = await list_skills(self._apprentice)
+            await self._send_response(writer, 200, {
+                "skills": [s.model_dump() for s in skills],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            await self._send_response(writer, 500, {"error": str(e)})
+
     async def _handle_report(self, writer: asyncio.StreamWriter) -> None:
         try:
             report = self._apprentice.report()
@@ -365,7 +438,7 @@ class ApprenticeServer:
         status_text = {
             200: "OK", 400: "Bad Request", 401: "Unauthorized",
             403: "Forbidden", 404: "Not Found", 408: "Timeout",
-            500: "Internal Server Error",
+            500: "Internal Server Error", 503: "Service Unavailable",
         }
         body_bytes = json.dumps(body).encode("utf-8")
         response = (
@@ -520,10 +593,14 @@ async def serve_main(
         server = ApprenticeServer(apprentice, host, port, pipeline_interval, security)
         await server.start()
         print(f"Apprentice serving on {host}:{port}")
-        print(f"  Health:  {scheme}://{host}:{port}/health")
-        print(f"  Run:     POST {scheme}://{host}:{port}/v1/run")
-        print(f"  Status:  {scheme}://{host}:{port}/v1/status")
-        print(f"  Report:  {scheme}://{host}:{port}/v1/report")
+        print(f"  Health:          {scheme}://{host}:{port}/health")
+        print(f"  Run:             POST {scheme}://{host}:{port}/v1/run")
+        print(f"  Status:          {scheme}://{host}:{port}/v1/status")
+        print(f"  Report:          {scheme}://{host}:{port}/v1/report")
+        print(f"  Events (WOS):    POST {scheme}://{host}:{port}/v1/events")
+        print(f"  Feedback (WOS):  POST {scheme}://{host}:{port}/v1/feedback")
+        print(f"  Recommend (WOS): POST {scheme}://{host}:{port}/v1/recommendations")
+        print(f"  Skills (WOS):    GET  {scheme}://{host}:{port}/v1/skills")
         print(f"  Pipeline interval: {pipeline_interval}s")
         print(f"  Security: auth={auth_mode}", end="")
         if tls_cert:
