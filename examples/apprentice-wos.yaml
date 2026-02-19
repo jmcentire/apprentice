@@ -1,0 +1,215 @@
+# Apprentice WOS Copilot Configuration
+# ------------------------------------
+# Full config for the Wander Operations System copilot service.
+# Defines all 5 skills, PII patterns, middleware, observer, feedback,
+# budget constraints, and fine-tuning settings.
+
+service:
+  name: apprentice-wos-copilot
+  version: "0.1.0"
+  host: "0.0.0.0"
+  port: 8100
+
+auth:
+  api_key_env: APPRENTICE_API_KEY
+
+rate_limiting:
+  max_requests_per_minute: 60
+
+# ---------------------------------------------------------------------------
+# Skills
+# ---------------------------------------------------------------------------
+skills:
+  ticket_triage:
+    description: "Categorize and prioritize support tickets"
+    required_context:
+      - conversation_id
+      - conversation_text
+    output_fields:
+      - category
+      - priority
+      - suggested_assignee
+      - confidence
+      - reasoning
+    autonomy_threshold: 0.85
+    risk_level: low
+    os_task_categories:
+      - general_inquiry
+      - complaint
+      - maintenance
+      - booking_issue
+      - payment_issue
+    evaluator:
+      type: custom
+      name: triage_evaluator
+      match_fields:
+        - category
+        - priority
+        - suggested_assignee
+      weights:
+        category: 0.50
+        priority: 0.30
+        suggested_assignee: 0.20
+
+  guest_response:
+    description: "Generate suggested replies to guest messages"
+    required_context:
+      - conversation_id
+      - conversation_text
+      - booking_id
+    output_fields:
+      - suggested_text
+      - tone
+      - referenced_booking_details
+      - confidence
+    autonomy_threshold: 0.95
+    risk_level: high
+    os_task_categories:
+      - guest_communication
+    evaluator:
+      type: semantic_similarity
+      match_fields:
+        - tone
+
+  refund_handling:
+    description: "Evaluate refund requests and recommend actions"
+    required_context:
+      - conversation_id
+      - conversation_text
+      - booking_id
+      - booking_value
+    output_fields:
+      - action
+      - amount
+      - category
+      - reasoning
+      - policy_reference
+      - confidence
+    autonomy_threshold: 0.95
+    risk_level: high
+    os_task_categories:
+      - refund
+      - payment_dispute
+    evaluator:
+      type: custom
+      name: refund_evaluator
+      match_fields:
+        - action
+        - amount
+        - category
+      weights:
+        action: 0.40
+        amount: 0.40
+        category: 0.20
+      amount_tolerance: 0.05
+
+  booking_modification:
+    description: "Analyze booking change requests"
+    required_context:
+      - conversation_id
+      - conversation_text
+      - booking_id
+      - availability
+    output_fields:
+      - mod_type
+      - changes
+      - impact_summary
+      - confidence
+    autonomy_threshold: 0.90
+    risk_level: medium
+    os_task_categories:
+      - date_change
+      - guest_count_change
+      - cancellation
+    evaluator:
+      type: structured_match
+      match_fields:
+        - mod_type
+        - changes
+
+  escalation_detection:
+    description: "Detect conversations that need escalation"
+    required_context:
+      - conversation_id
+      - conversation_text
+    output_fields:
+      - should_escalate
+      - urgency
+      - reason
+      - suggested_team
+      - confidence
+    autonomy_threshold: 0.80
+    risk_level: low
+    os_task_categories:
+      - escalation
+    evaluator:
+      type: structured_match
+      match_fields:
+        - should_escalate
+        - urgency
+
+# ---------------------------------------------------------------------------
+# PII Tokenization
+# ---------------------------------------------------------------------------
+pii:
+  enabled: true
+  token_format: "<PII:{type}:{hash}>"
+  builtin_entity_types:
+    - email
+    - phone
+    - ssn
+    - credit_card
+  wos_patterns:
+    wander_booking_id: '\bW-[A-Z0-9]{8}\b'
+    stripe_payment_intent: '\bpi_[a-zA-Z0-9]{24,}\b'
+    stripe_charge: '\bch_[a-zA-Z0-9]{24,}\b'
+    stripe_refund: '\bre_[a-zA-Z0-9]{24,}\b'
+    stripe_customer: '\bcus_[a-zA-Z0-9]{14,}\b'
+    guesty_reservation_id: '\b[0-9a-f]{24}\b'
+    hostaway_reservation_id: '\b\d{6,10}\b'
+    ownerrez_reservation_id: '\bOR-[A-Za-z0-9]{6,}\b'
+    streamline_reservation_id: '\bSL\d{8,}\b'
+    us_street_address: '\b\d{1,6}\s+[A-Za-z0-9.\s]+?(?:St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Ln|Lane|Rd|Road|Way|Ct|Court|Pl|Place|Cir|Circle)\b'
+
+# ---------------------------------------------------------------------------
+# Middleware Pipeline
+# ---------------------------------------------------------------------------
+middleware:
+  - name: wos_pii_tokenizer
+    config: {}
+
+# ---------------------------------------------------------------------------
+# Observer
+# ---------------------------------------------------------------------------
+observer:
+  enabled: true
+  context_window_size: 100
+  shadow_recommendation_rate: 0.1
+  min_context_before_recommending: 20
+
+# ---------------------------------------------------------------------------
+# Feedback
+# ---------------------------------------------------------------------------
+feedback:
+  enabled: true
+  storage_dir: ".apprentice/wos-feedback/"
+
+# ---------------------------------------------------------------------------
+# Budget
+# ---------------------------------------------------------------------------
+budget:
+  daily_limit_usd: 50.00
+  monthly_limit_usd: 1000.00
+  alert_threshold_pct: 80
+
+# ---------------------------------------------------------------------------
+# Fine-Tuning
+# ---------------------------------------------------------------------------
+fine_tuning:
+  enabled: false
+  schedule: weekly
+  base_model: "llama3.1:8b"
+  min_training_examples: 100
+  validation_split: 0.2
+  promotion_threshold: 0.85
+  backend: ollama
