@@ -275,12 +275,14 @@ Each task gets its own phase progression, confidence window, and evaluator. A si
 git clone https://github.com/jmcentire/apprentice.git
 cd apprentice
 make dev          # Install with dev + lint dependencies
-make test         # Run all 2,486 tests
+make test         # Run all 2,628 tests (2,486 unit/integration + 142 smoke)
 make test-quick   # Stop on first failure
 make lint         # Run ruff linter
 make lint-fix     # Auto-fix lint issues
 make clean        # Remove build artifacts
 ```
+
+The `tests/smoke/` directory contains 142 pact-generated smoke tests across 44 files, covering all 51 source modules. These tests verify every module imports correctly and every public function is callable. Generated via `pact adopt --dry-run`.
 
 Requires Python 3.12+. Core dependencies: `pydantic`, `pyyaml`, `httpx`. Optional: `pip install apprentice-ai[ml]` for NER-based PII detection (adds `transformers`, `torch`, `datasets`).
 
