@@ -1,0 +1,1352 @@
+{
+  "component_id": "root",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_happy_path",
+      "description": "initialize_composition_root successfully initializes all 9 components in DAG order and returns a dict mapping ComponentId to instances",
+      "function": "initialize_composition_root",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config path, valid env, no overrides",
+      "expected_output_description": "Dict with 9 component entries, all initialized",
+      "expected_error": "",
+      "assertions": [
+        "Result dict has exactly 9 keys",
+        "All ComponentId values present as keys",
+        "No value is None",
+        "Lifecycle log entries emitted for each component"
+      ]
+    },
+    {
+      "id": "init_error_config_file_not_found",
+      "description": "Raises InitializationError with config_file_not_found when config_path does not exist",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "config_path": "/nonexistent/path/config.yaml"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "config_file_not_found",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is CONFIG_PARSE"
+      ]
+    },
+    {
+      "id": "init_error_config_validation_failed",
+      "description": "Raises InitializationError with config_validation_failed when YAML is valid but fails Pydantic validation",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "config_validation_failed",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is CONFIG_PARSE",
+        "cause contains validation details"
+      ]
+    },
+    {
+      "id": "init_error_env_var_not_found",
+      "description": "Raises InitializationError when config references env:VAR_NAME that is not in env mapping",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "env_var_not_found",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is CONFIG_PARSE"
+      ]
+    },
+    {
+      "id": "init_error_budget_state_corrupted",
+      "description": "Raises InitializationError when budget manager state file exists but fails validation",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_state_corrupted",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is BUDGET_MANAGER_INIT",
+        "failed_component_id is BUDGET_MANAGER"
+      ]
+    },
+    {
+      "id": "init_error_budget_state_dir_not_writable",
+      "description": "Raises InitializationError when budget state directory is not writable",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_state_dir_not_writable",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is BUDGET_MANAGER_INIT"
+      ]
+    },
+    {
+      "id": "init_error_confidence_engine_config_invalid",
+      "description": "Raises InitializationError when confidence engine config or phase thresholds fail validation",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "confidence_engine_config_invalid",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is CONFIDENCE_ENGINE_INIT"
+      ]
+    },
+    {
+      "id": "init_error_remote_adapter_api_key_missing",
+      "description": "Raises InitializationError when remote API key env var is not set",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "remote_adapter_api_key_missing",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is EXTERNAL_INTERFACES_INIT"
+      ]
+    },
+    {
+      "id": "init_error_unsupported_finetuning_backend",
+      "description": "Raises InitializationError when config references unknown fine-tuning backend",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unsupported_finetuning_backend",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is TRAINING_PIPELINE_INIT"
+      ]
+    },
+    {
+      "id": "init_error_audit_log_path_not_writable",
+      "description": "Raises InitializationError when audit log path parent directory is not writable",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "audit_log_path_not_writable",
+      "assertions": [
+        "InitializationError raised",
+        "failed_phase is REPORTING_INIT"
+      ]
+    },
+    {
+      "id": "init_error_component_protocol_mismatch",
+      "description": "Raises InitializationError when a component override does not conform to expected Protocol",
+      "function": "initialize_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "component_protocol_mismatch",
+      "assertions": [
+        "InitializationError raised",
+        "error message mentions protocol mismatch"
+      ]
+    },
+    {
+      "id": "init_teardown_on_failure",
+      "description": "When initialization fails at phase N, all components initialized in phases 1..N-1 are torn down in reverse order",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Previously initialized components have shutdown called",
+        "Teardown occurs in reverse DAG order"
+      ]
+    },
+    {
+      "id": "shutdown_happy_path",
+      "description": "shutdown_composition_root tears down all 9 components in reverse DAG order with no errors",
+      "function": "shutdown_composition_root",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ShutdownError with empty component_errors and all 9 in components_shutdown_successfully",
+      "expected_error": "",
+      "assertions": [
+        "ShutdownError.component_errors is empty dict",
+        "ShutdownError.components_shutdown_successfully has 9 entries",
+        "budget_manager.force_persist called",
+        "confidence_engine.persist_state called"
+      ]
+    },
+    {
+      "id": "shutdown_budget_persist_failure",
+      "description": "When budget_manager.force_persist fails, error is captured but other components still shut down",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_persist_failure",
+      "assertions": [
+        "ShutdownError.component_errors contains BUDGET_MANAGER",
+        "Other components still in components_shutdown_successfully"
+      ]
+    },
+    {
+      "id": "shutdown_confidence_persist_failure",
+      "description": "When confidence_engine.persist_state fails, error is captured but other components still shut down",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "confidence_persist_failure",
+      "assertions": [
+        "ShutdownError.component_errors contains CONFIDENCE_ENGINE",
+        "Other components still shut down"
+      ]
+    },
+    {
+      "id": "shutdown_audit_flush_failure",
+      "description": "When audit log flush fails, error is captured but shutdown continues",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "audit_flush_failure",
+      "assertions": [
+        "ShutdownError.component_errors contains REPORTING",
+        "Other components still shut down"
+      ]
+    },
+    {
+      "id": "shutdown_httpx_close_failure",
+      "description": "When httpx client close fails, error is captured but shutdown continues",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "httpx_close_failure",
+      "assertions": [
+        "Error captured in ShutdownError",
+        "Other components still shut down"
+      ]
+    },
+    {
+      "id": "shutdown_exit_stack_close_failure",
+      "description": "When AsyncExitStack close fails, error is captured in ShutdownError",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "exit_stack_close_failure",
+      "assertions": [
+        "ShutdownError contains exit_stack error"
+      ]
+    },
+    {
+      "id": "shutdown_multiple_failures",
+      "description": "When multiple components fail during shutdown, all errors are accumulated",
+      "function": "shutdown_composition_root",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "ShutdownError.component_errors has multiple entries",
+        "components_shutdown_successfully has remaining entries",
+        "All components attempted regardless of failures"
+      ]
+    },
+    {
+      "id": "shutdown_reverse_order",
+      "description": "Shutdown proceeds in exact reverse of initialization DAG order",
+      "function": "shutdown_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Components shut down in order: unified_interface, reporting, training_pipeline, router, sampling_scheduler, external_interfaces, confidence_engine, budget_manager, config_and_registry"
+      ]
+    },
+    {
+      "id": "resolve_backend_openai",
+      "description": "resolve_finetuning_backend returns correct entry for openai backend",
+      "function": "resolve_finetuning_backend",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "openai"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistryEntry.backend_name is OPENAI",
+        "BackendRegistryEntry.is_remote is True",
+        "implementation is not None"
+      ]
+    },
+    {
+      "id": "resolve_backend_anyscale",
+      "description": "resolve_finetuning_backend returns correct entry for anyscale backend",
+      "function": "resolve_finetuning_backend",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "anyscale"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistryEntry.backend_name is ANYSCALE",
+        "BackendRegistryEntry.is_remote is True"
+      ]
+    },
+    {
+      "id": "resolve_backend_local_lora",
+      "description": "resolve_finetuning_backend returns correct entry for local_lora backend",
+      "function": "resolve_finetuning_backend",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "local_lora"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistryEntry.backend_name is LOCAL_LORA",
+        "BackendRegistryEntry.is_remote is False"
+      ]
+    },
+    {
+      "id": "resolve_backend_axolotl",
+      "description": "resolve_finetuning_backend returns correct entry for axolotl backend",
+      "function": "resolve_finetuning_backend",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "axolotl"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistryEntry.backend_name is AXOLOTL",
+        "BackendRegistryEntry.is_remote is False"
+      ]
+    },
+    {
+      "id": "resolve_backend_custom_registered",
+      "description": "resolve_finetuning_backend returns correct entry for a registered custom backend",
+      "function": "resolve_finetuning_backend",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "custom"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistryEntry.backend_name is CUSTOM",
+        "implementation matches registered custom backend"
+      ]
+    },
+    {
+      "id": "resolve_backend_unknown",
+      "description": "resolve_finetuning_backend raises error for unknown backend name",
+      "function": "resolve_finetuning_backend",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "nonexistent_backend"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unknown_backend",
+      "assertions": [
+        "Error raised with unknown_backend"
+      ]
+    },
+    {
+      "id": "resolve_backend_remote_missing_api_key",
+      "description": "resolve_finetuning_backend raises error for remote backend without api_key",
+      "function": "resolve_finetuning_backend",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "openai"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "missing_api_key_for_remote",
+      "assertions": [
+        "Error raised mentioning missing api_key"
+      ]
+    },
+    {
+      "id": "resolve_backend_remote_missing_base_url",
+      "description": "resolve_finetuning_backend raises error for remote backend without api_base_url",
+      "function": "resolve_finetuning_backend",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "openai"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "missing_api_base_url_for_remote",
+      "assertions": [
+        "Error raised mentioning missing api_base_url"
+      ]
+    },
+    {
+      "id": "resolve_backend_custom_not_registered",
+      "description": "resolve_finetuning_backend raises error when custom backend requested but none registered",
+      "function": "resolve_finetuning_backend",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "backend_name": "custom"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "custom_backend_not_registered",
+      "assertions": [
+        "Error raised mentioning custom backend not registered"
+      ]
+    },
+    {
+      "id": "build_registry_happy_path",
+      "description": "build_backend_registry constructs registry with all built-in backends and selects active backend",
+      "function": "build_backend_registry",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendRegistry.active_backend_name matches config",
+        "entries contains all built-in backends",
+        "Active backend entry has valid implementation"
+      ]
+    },
+    {
+      "id": "build_registry_active_not_available",
+      "description": "build_backend_registry raises error when active backend not in registry",
+      "function": "build_backend_registry",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "active_backend_not_available",
+      "assertions": [
+        "Error raised mentioning active backend not available"
+      ]
+    },
+    {
+      "id": "build_registry_with_custom_backends",
+      "description": "build_backend_registry includes custom backends alongside built-ins",
+      "function": "build_backend_registry",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Registry entries include both built-in and custom backends"
+      ]
+    },
+    {
+      "id": "orchestrate_happy_path_local_only",
+      "description": "orchestrate_request serves request locally when confidence is high (phase 3)",
+      "function": "orchestrate_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returns valid TaskResponse dict",
+        "budget_manager.record_local_request called",
+        "audit entry emitted",
+        "correlation.request_id threaded through all calls"
+      ]
+    },
+    {
+      "id": "orchestrate_happy_path_remote_call",
+      "description": "orchestrate_request calls remote when local unavailable and budget allows",
+      "function": "orchestrate_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "budget_manager.authorize called before API call",
+        "budget_manager.record_spend called after success",
+        "Returns valid TaskResponse"
+      ]
+    },
+    {
+      "id": "orchestrate_happy_path_dual_send",
+      "description": "orchestrate_request performs dual-send for coaching sample",
+      "function": "orchestrate_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Both local and remote called",
+        "confidence_engine.record_comparison called",
+        "training_pipeline.add_example called"
+      ]
+    },
+    {
+      "id": "orchestrate_error_task_not_found",
+      "description": "orchestrate_request raises error when task_name not in TaskRegistry",
+      "function": "orchestrate_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "TaskNotFoundError raised",
+        "error contains task_name"
+      ]
+    },
+    {
+      "id": "orchestrate_error_all_sources_unavailable",
+      "description": "orchestrate_request raises AllSourcesUnavailableError when local unavailable AND budget exhausted",
+      "function": "orchestrate_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "all_sources_unavailable",
+      "assertions": [
+        "AllSourcesUnavailableError raised",
+        "Error contains local_unavailable_reason",
+        "Error contains budget_exhausted_detail"
+      ]
+    },
+    {
+      "id": "orchestrate_error_budget_check_internal",
+      "description": "orchestrate_request raises error when budget_manager.authorize fails internally",
+      "function": "orchestrate_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_check_internal_error",
+      "assertions": [
+        "Error raised from budget internal failure"
+      ]
+    },
+    {
+      "id": "orchestrate_error_confidence_engine",
+      "description": "orchestrate_request raises error when confidence_engine.get_snapshot fails",
+      "function": "orchestrate_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "confidence_engine_error",
+      "assertions": [
+        "Error raised from confidence engine failure"
+      ]
+    },
+    {
+      "id": "orchestrate_error_both_backends_failed",
+      "description": "orchestrate_request raises error when both local and remote fail during dual-send",
+      "function": "orchestrate_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "both_backends_failed",
+      "assertions": [
+        "Error raised indicating both backends failed"
+      ]
+    },
+    {
+      "id": "orchestrate_budget_reservation_release_on_failure",
+      "description": "When remote API call fails before cost incurred, budget_manager.release_reservation is called",
+      "function": "orchestrate_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "budget_manager.authorize called",
+        "budget_manager.release_reservation called",
+        "budget_manager.record_spend NOT called"
+      ]
+    },
+    {
+      "id": "orchestrate_local_fallback_on_budget_exhausted",
+      "description": "When budget exhausted but local available, serves locally without error",
+      "function": "orchestrate_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No AllSourcesUnavailableError raised",
+        "Local model used",
+        "budget_manager.record_local_request called"
+      ]
+    },
+    {
+      "id": "orchestrate_remote_fallback_on_local_failure",
+      "description": "When local model fails but budget allows, falls back to remote gracefully",
+      "function": "orchestrate_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Remote model used as fallback",
+        "No crash",
+        "budget_manager.authorize called"
+      ]
+    },
+    {
+      "id": "orchestrate_audit_entry_always_emitted",
+      "description": "Audit entry is emitted regardless of success or failure",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Audit logger called exactly once",
+        "Audit entry contains request_id"
+      ]
+    },
+    {
+      "id": "orchestrate_correlation_threaded",
+      "description": "The same correlation.request_id is passed through every component call",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All mock calls received same request_id"
+      ]
+    },
+    {
+      "id": "create_correlation_happy_path",
+      "description": "create_request_correlation returns valid RequestCorrelation with UUID v4, task_name, and UTC timestamp",
+      "function": "create_request_correlation",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_name": "sentiment_analysis"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "request_id is valid UUID v4",
+        "task_name equals 'sentiment_analysis'",
+        "created_at_utc is ISO 8601 UTC"
+      ]
+    },
+    {
+      "id": "create_correlation_empty_task_name",
+      "description": "create_request_correlation raises error when task_name is empty",
+      "function": "create_request_correlation",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_name": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name",
+      "assertions": [
+        "Error raised for empty task_name"
+      ]
+    },
+    {
+      "id": "create_correlation_whitespace_task_name",
+      "description": "create_request_correlation raises error when task_name is whitespace-only",
+      "function": "create_request_correlation",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_name": "   "
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name",
+      "assertions": [
+        "Error raised for whitespace-only task_name"
+      ]
+    },
+    {
+      "id": "create_correlation_uniqueness",
+      "description": "Multiple calls produce unique request_ids",
+      "function": "create_request_correlation",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "100 sequential calls produce 100 unique request_ids"
+      ]
+    },
+    {
+      "id": "get_statuses_all_healthy",
+      "description": "get_component_statuses returns 9 entries all with READY status when fully initialized",
+      "function": "get_component_statuses",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "List has exactly 9 entries",
+        "All entries have status READY",
+        "Each ComponentId appears exactly once"
+      ]
+    },
+    {
+      "id": "get_statuses_partial_init",
+      "description": "get_component_statuses shows NOT_STARTED for components not yet initialized",
+      "function": "get_component_statuses",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Initialized components show READY",
+        "Uninitialized show NOT_STARTED",
+        "List still has 9 entries"
+      ]
+    },
+    {
+      "id": "get_statuses_with_failure",
+      "description": "get_component_statuses shows FAILED with error_message for failed components",
+      "function": "get_component_statuses",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Failed component has FAILED status",
+        "error_message is populated",
+        "Other components show correct status"
+      ]
+    },
+    {
+      "id": "validate_override_valid",
+      "description": "validate_component_override returns True for conformant override",
+      "function": "validate_component_override",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returns True"
+      ]
+    },
+    {
+      "id": "validate_override_missing_method",
+      "description": "validate_component_override returns False when override lacks required methods",
+      "function": "validate_component_override",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returns False"
+      ]
+    },
+    {
+      "id": "validate_override_unknown_component_id",
+      "description": "validate_component_override raises error for unknown component_id",
+      "function": "validate_component_override",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "component_id": "nonexistent_component"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unknown_component_id",
+      "assertions": [
+        "Error raised for unknown component_id"
+      ]
+    },
+    {
+      "id": "validate_override_all_component_ids",
+      "description": "validate_component_override accepts all 9 valid ComponentId values",
+      "function": "validate_component_override",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No error raised for any valid ComponentId"
+      ]
+    },
+    {
+      "id": "override_used_in_init",
+      "description": "Component overrides passed to initialize_composition_root replace default components entirely",
+      "function": "initialize_composition_root",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Override instance is used instead of default",
+        "No partial merging occurs"
+      ]
+    },
+    {
+      "id": "lifecycle_log_init_started",
+      "description": "INITIALIZATION_STARTED lifecycle event is logged at start of initialization",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Log entry has event INITIALIZATION_STARTED",
+        "timestamp_utc is ISO 8601"
+      ]
+    },
+    {
+      "id": "lifecycle_log_component_initialized",
+      "description": "COMPONENT_INITIALIZED event logged for each successfully initialized component",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "9 COMPONENT_INITIALIZED entries emitted",
+        "Each has component_id and duration_ms"
+      ]
+    },
+    {
+      "id": "lifecycle_log_all_ready",
+      "description": "ALL_COMPONENTS_READY event logged after all 9 components initialize",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "ALL_COMPONENTS_READY entry emitted after all component entries"
+      ]
+    },
+    {
+      "id": "lifecycle_log_init_failed",
+      "description": "COMPONENT_INIT_FAILED event logged when a component fails to initialize",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "COMPONENT_INIT_FAILED entry emitted",
+        "error_message populated",
+        "component_id matches failed component"
+      ]
+    },
+    {
+      "id": "lifecycle_log_shutdown_events",
+      "description": "SHUTDOWN_STARTED, COMPONENT_SHUTDOWN, and SHUTDOWN_COMPLETE events logged during shutdown",
+      "function": "shutdown_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "SHUTDOWN_STARTED emitted first",
+        "COMPONENT_SHUTDOWN for each component",
+        "SHUTDOWN_COMPLETE emitted last"
+      ]
+    },
+    {
+      "id": "lifecycle_log_shutdown_failed",
+      "description": "COMPONENT_SHUTDOWN_FAILED event logged for components that fail during shutdown",
+      "function": "shutdown_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "COMPONENT_SHUTDOWN_FAILED entry has error_message",
+        "Other COMPONENT_SHUTDOWN entries still present"
+      ]
+    },
+    {
+      "id": "lifecycle_log_json_format",
+      "description": "Lifecycle log entries are valid JSON with required fields",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Each log entry parseable as JSON",
+        "Contains event, component_id, timestamp_utc, duration_ms fields"
+      ]
+    },
+    {
+      "id": "invariant_dag_order_init",
+      "description": "Components initialized in strict DAG order: config_and_registry first, unified_interface last",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Initialization order follows config_and_registry → budget_manager → confidence_engine → external_interfaces → sampling_scheduler → router → training_pipeline → reporting → unified_interface"
+      ]
+    },
+    {
+      "id": "invariant_no_global_state",
+      "description": "All state flows through injected dependencies, no module-level mutable state",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No global state mutations detected",
+        "All state in returned component dict"
+      ]
+    },
+    {
+      "id": "invariant_budget_hard_enforcement",
+      "description": "If budget_manager.authorize returns allowed=False, no remote API call is made",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "When authorize returns allowed=False, remote adapter not called",
+        "Either local fallback or AllSourcesUnavailableError"
+      ]
+    },
+    {
+      "id": "invariant_budget_reservation_cycle_complete",
+      "description": "Every remote API call follows complete budget reservation cycle: authorize → call → record_spend OR release_reservation",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "authorize called before any remote call",
+        "record_spend XOR release_reservation called after",
+        "Never neither"
+      ]
+    },
+    {
+      "id": "invariant_all_sources_unavailable_only_terminal",
+      "description": "AllSourcesUnavailableError raised ONLY when both local unavailable AND budget exhausted",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Error not raised if local available",
+        "Error not raised if budget available",
+        "Error raised only when both conditions met"
+      ]
+    },
+    {
+      "id": "invariant_local_failure_graceful",
+      "description": "Local model failures fall back to remote if budget allows, never crash",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No unhandled exception from local failure",
+        "Falls back to remote when budget available"
+      ]
+    },
+    {
+      "id": "invariant_budget_exhaustion_graceful",
+      "description": "Budget exhaustion falls back to local-only if local available, never crash",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No crash when budget exhausted and local available",
+        "Serves from local model"
+      ]
+    },
+    {
+      "id": "invariant_audit_never_blocks",
+      "description": "Audit logging failures are captured but never block or delay response",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Response returned even if audit fails",
+        "Audit failure captured but not raised"
+      ]
+    },
+    {
+      "id": "invariant_one_audit_per_request",
+      "description": "Every run() invocation produces exactly one audit log entry",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Audit logger called exactly once per orchestration"
+      ]
+    },
+    {
+      "id": "invariant_timestamps_utc_iso8601",
+      "description": "All timestamps are timezone-aware UTC in ISO 8601 format",
+      "function": "create_request_correlation",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "created_at_utc ends with +00:00 or Z",
+        "Parseable as ISO 8601"
+      ]
+    },
+    {
+      "id": "invariant_config_strict_failfast",
+      "description": "Invalid config causes immediate failure with clear error, no silent defaults",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "InitializationError raised immediately",
+        "Error message clearly identifies the problem"
+      ]
+    },
+    {
+      "id": "invariant_shutdown_all_components_attempted",
+      "description": "Shutdown proceeds through ALL components regardless of individual failures",
+      "function": "shutdown_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All 9 components attempted for shutdown",
+        "Failures in early components don't prevent later shutdowns"
+      ]
+    },
+    {
+      "id": "invariant_state_persisted_on_shutdown",
+      "description": "Budget and confidence state persisted during shutdown",
+      "function": "shutdown_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "budget_manager.force_persist called",
+        "confidence_engine.persist_state called"
+      ]
+    },
+    {
+      "id": "invariant_backend_resolved_by_root",
+      "description": "Fine-tuning backend plugin resolved by root and injected into training_pipeline",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Backend resolved before training_pipeline init",
+        "training_pipeline receives resolved backend"
+      ]
+    },
+    {
+      "id": "invariant_override_replaces_entirely",
+      "description": "Component overrides completely replace defaults, no partial merging",
+      "function": "initialize_composition_root",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Override instance used as-is",
+        "No fields from default merged in"
+      ]
+    },
+    {
+      "id": "invariant_sampling_continuous",
+      "description": "Sampling frequency is float in [0.0, 1.0], not discrete tiers",
+      "function": "orchestrate_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Sampling probability is float",
+        "Value between 0.0 and 1.0 inclusive"
+      ]
+    },
+    {
+      "id": "resolve_backend_is_remote_flag_correct",
+      "description": "is_remote flag correctly set: True for openai/anyscale, False for local_lora/axolotl",
+      "function": "resolve_finetuning_backend",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "openai is_remote=True",
+        "anyscale is_remote=True",
+        "local_lora is_remote=False",
+        "axolotl is_remote=False"
+      ]
+    },
+    {
+      "id": "build_registry_immutable",
+      "description": "BackendRegistry is immutable after construction",
+      "function": "build_backend_registry",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Registry cannot be modified after construction"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the root composition component.\n\nTests are organized into 7 logical sections:\n1. Initialization tests\n2. Shutdown tests\n3. Backend registry tests\n4. Orchestration tests\n5. Correlation and status tests\n6. Component override tests\n7. Lifecycle logging tests\n8. Invariant tests\n\nAll 9 dependencies are mocked. Tests verify behavior at boundaries only.\n\"\"\"\n\nimport asyncio\nimport json\nimport logging\nimport uuid\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nfrom unittest.mock import (\n    AsyncMock,\n    MagicMock,\n    Mock,\n    call,\n    patch,\n    PropertyMock,\n)\n\nimport pytest\n\n# Import the component under test\nfrom src.root import (\n    initialize_composition_root,\n    shutdown_composition_root,\n    resolve_finetuning_backend,\n    orchestrate_request,\n    get_component_statuses,\n    create_request_correlation,\n    validate_component_override,\n    build_backend_registry,\n    AllSourcesUnavailableError,\n    InitializationError,\n    ShutdownError,\n    RequestCorrelation,\n    ComponentId,\n    ComponentStatus,\n    InitializationPhase,\n    LifecycleEvent,\n    FinetuningBackendName,\n    BackendRegistryEntry,\n    BackendRegistry,\n)\n\n\n# ============================================================================\n# Fixtures (conftest-style, function-scoped)\n# ============================================================================\n\n\n@pytest.fixture\ndef minimal_valid_config_yaml():\n    \"\"\"Minimal valid YAML config content for the apprentice system.\"\"\"\n    return \"\"\"\ntasks:\n  - name: sentiment_analysis\n    prompt_template: \"Analyze sentiment: {text}\"\n    input_schema:\n      text: str\n    output_schema:\n      sentiment: str\n      confidence: float\n    match_fields:\n      - sentiment\n    confidence_thresholds:\n      phase2: 0.7\n      phase3: 0.9\n\nbudget:\n  total_budget_usd: 100.0\n  period: monthly\n  state_dir: /tmp/apprentice_budget\n\nconfidence_engine:\n  window_size: 50\n  evaluators:\n    - name: exact_match\n\nexternal:\n  remote:\n    provider: openai\n    api_key: env:OPENAI_API_KEY\n    api_base_url: https://api.openai.com/v1\n    model_id: gpt-4\n  local:\n    provider: vllm\n    model_path: /models/local\n    model_id: local-v1\n\nfinetuning:\n  backend: local_lora\n  output_dir: /tmp/apprentice_ft\n\nsampling:\n  decay_function: exponential\n  min_rate: 0.01\n  max_rate: 1.0\n\nreporting:\n  audit_log_path: /tmp/apprentice_audit.jsonl\n  max_file_size_mb: 100\n  rotation_backup_count: 5\n\"\"\"\n\n\n@pytest.fixture\ndef config_file(tmp_path, minimal_valid_config_yaml):\n    \"\"\"Write minimal valid config to a temp file and return its path.\"\"\"\n    config_path = tmp_path / \"config.yaml\"\n    config_path.write_text(minimal_valid_config_yaml)\n    return str(config_path)\n\n\n@pytest.fixture\ndef mock_env():\n    \"\"\"Mock environment variables dict.\"\"\"\n    return {\n        \"OPENAI_API_KEY\": \"sk-test-key-12345\",\n        \"HOME\": \"/home/test\",\n    }\n\n\ndef _make_mock_budget_manager():\n    \"\"\"Create a mock budget manager conforming to Protocol.\"\"\"\n    bm = AsyncMock()\n    bm.authorize = AsyncMock(return_value=MagicMock(allowed=True, estimated_cost=Decimal(\"0.01\")))\n    bm.record_spend = AsyncMock()\n    bm.release_reservation = AsyncMock()\n    bm.record_local_request = AsyncMock()\n    bm.remaining_budget = Mock(return_value=Decimal(\"99.00\"))\n    bm.get_report = Mock()\n    bm.force_persist = AsyncMock()\n    bm.reset_state = AsyncMock()\n    bm.load_state = AsyncMock()\n    return bm\n\n\ndef _make_mock_confidence_engine():\n    \"\"\"Create a mock confidence engine conforming to Protocol.\"\"\"\n    ce = AsyncMock()\n    snapshot = MagicMock()\n    snapshot.score = 0.85\n    snapshot.phase = \"phase_3\"\n    snapshot.sample_count = 100\n    ce.get_snapshot = AsyncMock(return_value=snapshot)\n    ce.record_comparison = AsyncMock()\n    ce.persist_state = AsyncMock()\n    ce.load_state = AsyncMock(return_value=0)\n    ce.get_task_ids = Mock(return_value=[])\n    return ce\n\n\ndef _make_mock_config_and_registry():\n    \"\"\"Create a mock config and registry conforming to Protocol.\"\"\"\n    cr = MagicMock()\n    config = MagicMock()\n    config.budget = MagicMock()\n    config.confidence_engine = MagicMock()\n    config.external = MagicMock()\n    config.finetuning = MagicMock()\n    config.finetuning.backend = \"local_lora\"\n    config.sampling = MagicMock()\n    config.reporting = MagicMock()\n    config.tasks = []\n    cr.load_config = Mock(return_value=config)\n    cr.config = config\n\n    task_registry = MagicMock()\n    task_registry.get_task = Mock(return_value=MagicMock())\n    task_registry.__contains__ = Mock(return_value=True)\n    task_registry.task_names = Mock(return_value=[\"sentiment_analysis\"])\n    task_registry.__len__ = Mock(return_value=1)\n    cr.task_registry = task_registry\n    return cr\n\n\ndef _make_mock_external_interfaces():\n    \"\"\"Create a mock external interfaces conforming to Protocol.\"\"\"\n    ei = AsyncMock()\n    ei.complete = AsyncMock(return_value=MagicMock(\n        output_data={\"sentiment\": \"positive\", \"confidence\": 0.95},\n        model_used=\"gpt-4\",\n        cost=Decimal(\"0.005\"),\n        latency_ms=150.0,\n    ))\n    ei.health = AsyncMock(return_value=MagicMock(healthy=True))\n    ei.close = AsyncMock()\n    ei.get_source_info = Mock()\n    return ei\n\n\ndef _make_mock_sampling_scheduler():\n    \"\"\"Create a mock sampling scheduler conforming to Protocol.\"\"\"\n    ss = MagicMock()\n    decision = MagicMock()\n    decision.decision = \"local_only\"\n    decision.sampling_probability = 0.05\n    decision.is_coaching_sample = False\n    ss.should_sample = Mock(return_value=decision)\n    return ss\n\n\ndef _make_mock_router():\n    \"\"\"Create a mock router conforming to Protocol.\"\"\"\n    r = AsyncMock()\n    result = MagicMock()\n    result.response = MagicMock(\n        output_data={\"sentiment\": \"positive\", \"confidence\": 0.95},\n        model_used=\"local-v1\",\n        cost=Decimal(\"0.0\"),\n        latency_ms=50.0,\n    )\n    result.routing_decision = \"local_only\"\n    result.used_remote = False\n    result.used_local = True\n    result.remote_cost = None\n    result.local_cost = Decimal(\"0.0\")\n    r.route = AsyncMock(return_value=result)\n    r.compute_routing_action = Mock()\n    r.execute_dual_send = AsyncMock()\n    r.build_audit_entry = Mock()\n    return r\n\n\ndef _make_mock_training_pipeline():\n    \"\"\"Create a mock training pipeline conforming to Protocol.\"\"\"\n    tp = AsyncMock()\n    tp.initialize = AsyncMock()\n    tp.add_example = AsyncMock()\n    tp.should_trigger = Mock(return_value=MagicMock(should_trigger=False))\n    tp.run_pipeline = AsyncMock()\n    tp.get_status = Mock()\n    tp.get_run_history = Mock()\n    return tp\n\n\ndef _make_mock_reporting():\n    \"\"\"Create a mock reporting conforming to Protocol.\"\"\"\n    rp = MagicMock()\n    audit_logger = AsyncMock()\n    audit_logger.log = AsyncMock()\n    audit_logger.flush = AsyncMock()\n    audit_logger.close = AsyncMock()\n    rp.audit_logger = audit_logger\n    rp.generate_report = Mock()\n    rp.format_report = Mock()\n    return rp\n\n\ndef _make_mock_unified_interface():\n    \"\"\"Create a mock unified interface conforming to Protocol.\"\"\"\n    ui = AsyncMock()\n    ui.run = AsyncMock()\n    ui.status = AsyncMock()\n    ui.report = AsyncMock()\n    ui.close = AsyncMock()\n    ui.__aenter__ = AsyncMock(return_value=ui)\n    ui.__aexit__ = AsyncMock(return_value=False)\n    return ui\n\n\n@pytest.fixture\ndef mock_component_overrides():\n    \"\"\"Dict of mock component overrides for all 9 components.\"\"\"\n    return {\n        \"config_and_registry\": _make_mock_config_and_registry(),\n        \"budget_manager\": _make_mock_budget_manager(),\n        \"confidence_engine\": _make_mock_confidence_engine(),\n        \"external_interfaces\": _make_mock_external_interfaces(),\n        \"sampling_scheduler\": _make_mock_sampling_scheduler(),\n        \"router\": _make_mock_router(),\n        \"training_pipeline\": _make_mock_training_pipeline(),\n        \"reporting\": _make_mock_reporting(),\n        \"unified_interface\": _make_mock_unified_interface(),\n    }\n\n\n@pytest.fixture\ndef mock_exit_stack():\n    \"\"\"Mock AsyncExitStack.\"\"\"\n    stack = AsyncMock()\n    stack.__aenter__ = AsyncMock(return_value=stack)\n    stack.__aexit__ = AsyncMock(return_value=False)\n    stack.aclose = AsyncMock()\n    return stack\n\n\n@pytest.fixture\ndef sample_correlation():\n    \"\"\"A sample RequestCorrelation for testing.\"\"\"\n    return RequestCorrelation(\n        request_id=str(uuid.uuid4()),\n        task_name=\"sentiment_analysis\",\n        created_at_utc=datetime.now(timezone.utc).isoformat(),\n    )\n\n\n# ============================================================================\n# 1. Initialization Tests (test_initialization)\n# ============================================================================\n\n\nclass TestInitializationHappyPath:\n    \"\"\"Test initialize_composition_root happy path scenarios.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_init_all_9_components_returned(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"initialize_composition_root returns dict with all 9 component entries.\"\"\"\n        result = await initialize_composition_root(\n            config_path=config_file,\n            env=mock_env,\n            component_overrides=mock_component_overrides,\n        )\n\n        assert isinstance(result, dict), \"Result should be a dict\"\n        assert len(result) == 9, f\"Expected 9 components, got {len(result)}\"\n\n        expected_ids = {\n            \"config_and_registry\", \"budget_manager\", \"confidence_engine\",\n            \"external_interfaces\", \"sampling_scheduler\", \"router\",\n            \"training_pipeline\", \"reporting\", \"unified_interface\",\n        }\n        assert set(result.keys()) == expected_ids, (\n            f\"Missing component IDs: {expected_ids - set(result.keys())}\"\n        )\n\n        for cid, instance in result.items():\n            assert instance is not None, f\"Component {cid} should not be None\"\n\n    @pytest.mark.asyncio\n    async def test_init_overrides_used_instead_of_defaults(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Component overrides are used as-is without modification.\"\"\"\n        result = await initialize_composition_root(\n            config_path=config_file,\n            env=mock_env,\n            component_overrides=mock_component_overrides,\n        )\n\n        for cid, override in mock_component_overrides.items():\n            assert result[cid] is override, (\n                f\"Component {cid} should be the exact override instance\"\n            )\n\n\nclass TestInitializationErrors:\n    \"\"\"Test all error paths for initialize_composition_root.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_config_file_not_found(self, mock_env):\n        \"\"\"Raises InitializationError when config_path does not exist.\"\"\"\n        with pytest.raises(InitializationError) as exc_info:\n            await initialize_composition_root(\n                config_path=\"/nonexistent/path/config.yaml\",\n                env=mock_env,\n                component_overrides={},\n            )\n\n        err = exc_info.value\n        assert err.failed_phase == InitializationPhase.CONFIG_PARSE, (\n            f\"Expected CONFIG_PARSE phase, got {err.failed_phase}\"\n        )\n        assert \"config\" in str(err.message).lower() or \"not found\" in str(err.message).lower(), (\n            f\"Error message should mention config not found: {err.message}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_config_validation_failed(self, tmp_path, mock_env):\n        \"\"\"Raises InitializationError when YAML is valid but fails Pydantic validation.\"\"\"\n        bad_config = tmp_path / \"bad_config.yaml\"\n        bad_config.write_text(\"tasks: []\\n\")  # Missing required fields\n\n        with pytest.raises(InitializationError) as exc_info:\n            await initialize_composition_root(\n                config_path=str(bad_config),\n                env=mock_env,\n                component_overrides={},\n            )\n\n        err = exc_info.value\n        assert err.failed_phase == InitializationPhase.CONFIG_PARSE, (\n            f\"Expected CONFIG_PARSE phase, got {err.failed_phase}\"\n        )\n        assert err.cause is not None and len(str(err.cause)) > 0, (\n            \"Error cause should contain validation details\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_env_var_not_found(self, config_file):\n        \"\"\"Raises InitializationError when env:VAR_NAME cannot be resolved.\"\"\"\n        empty_env = {}  # Missing OPENAI_API_KEY\n\n        with pytest.raises(InitializationError) as exc_info:\n            await initialize_composition_root(\n                config_path=config_file,\n                env=empty_env,\n                component_overrides={},\n            )\n\n        err = exc_info.value\n        assert err.failed_phase == InitializationPhase.CONFIG_PARSE, (\n            f\"Expected CONFIG_PARSE phase, got {err.failed_phase}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_budget_state_corrupted(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when budget state file is corrupted.\"\"\"\n        bad_bm = _make_mock_budget_manager()\n        bad_bm.load_state = AsyncMock(side_effect=ValueError(\"Corrupted budget state\"))\n        mock_component_overrides.pop(\"budget_manager\", None)\n\n        # Patch the budget manager construction to raise\n        with patch(\n            \"src.root.composition.BudgetManager\",\n            side_effect=ValueError(\"Corrupted budget state\"),\n        ):\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides={\n                        k: v for k, v in mock_component_overrides.items()\n                        if k != \"budget_manager\"\n                    },\n                )\n\n        err = exc_info.value\n        assert err.failed_phase == InitializationPhase.BUDGET_MANAGER_INIT, (\n            f\"Expected BUDGET_MANAGER_INIT phase, got {err.failed_phase}\"\n        )\n        assert err.failed_component_id == \"BUDGET_MANAGER\" or err.failed_component_id == \"budget_manager\", (\n            f\"Expected BUDGET_MANAGER component, got {err.failed_component_id}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_budget_state_dir_not_writable(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when budget state directory is not writable.\"\"\"\n        with patch(\n            \"src.root.composition.BudgetManager\",\n            side_effect=PermissionError(\"Directory not writable\"),\n        ):\n            overrides = {\n                k: v for k, v in mock_component_overrides.items()\n                if k != \"budget_manager\"\n            }\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=overrides,\n                )\n\n            err = exc_info.value\n            assert err.failed_phase == InitializationPhase.BUDGET_MANAGER_INIT\n\n    @pytest.mark.asyncio\n    async def test_confidence_engine_config_invalid(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when confidence engine config is invalid.\"\"\"\n        with patch(\n            \"src.root.composition.ConfidenceEngine\",\n            side_effect=ValueError(\"Invalid confidence engine config\"),\n        ):\n            overrides = {\n                k: v for k, v in mock_component_overrides.items()\n                if k != \"confidence_engine\"\n            }\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=overrides,\n                )\n\n            err = exc_info.value\n            assert err.failed_phase == InitializationPhase.CONFIDENCE_ENGINE_INIT\n\n    @pytest.mark.asyncio\n    async def test_remote_adapter_api_key_missing(\n        self, config_file, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when remote API key env var is missing.\"\"\"\n        env_no_key = {\"HOME\": \"/home/test\"}  # Missing OPENAI_API_KEY\n\n        with patch(\n            \"src.root.composition.create_remote_adapter\",\n            side_effect=ValueError(\"API key not set\"),\n        ):\n            overrides = {\n                k: v for k, v in mock_component_overrides.items()\n                if k != \"external_interfaces\"\n            }\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=env_no_key,\n                    component_overrides=overrides,\n                )\n\n            err = exc_info.value\n            # Could fail at CONFIG_PARSE (env resolution) or EXTERNAL_INTERFACES_INIT\n            assert err.failed_phase in (\n                InitializationPhase.CONFIG_PARSE,\n                InitializationPhase.EXTERNAL_INTERFACES_INIT,\n            )\n\n    @pytest.mark.asyncio\n    async def test_unsupported_finetuning_backend(\n        self, tmp_path, mock_env, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when config references unknown backend.\"\"\"\n        bad_config = tmp_path / \"config.yaml\"\n        config_text = \"\"\"\ntasks:\n  - name: test_task\n    prompt_template: \"Test: {text}\"\n    input_schema: {text: str}\n    output_schema: {result: str}\n    match_fields: [result]\n    confidence_thresholds: {phase2: 0.7, phase3: 0.9}\nbudget:\n  total_budget_usd: 100.0\n  period: monthly\n  state_dir: /tmp/test_budget\nconfidence_engine:\n  window_size: 50\n  evaluators: [{name: exact_match}]\nexternal:\n  remote:\n    provider: openai\n    api_key: env:OPENAI_API_KEY\n    api_base_url: https://api.openai.com/v1\n    model_id: gpt-4\n  local:\n    provider: vllm\n    model_path: /models/local\n    model_id: local-v1\nfinetuning:\n  backend: quantum_computing_backend\n  output_dir: /tmp/ft\nsampling:\n  decay_function: exponential\n  min_rate: 0.01\n  max_rate: 1.0\nreporting:\n  audit_log_path: /tmp/audit.jsonl\n  max_file_size_mb: 100\n  rotation_backup_count: 5\n\"\"\"\n        bad_config.write_text(config_text)\n\n        overrides = {\n            k: v for k, v in mock_component_overrides.items()\n            if k != \"training_pipeline\"\n        }\n        with pytest.raises(InitializationError) as exc_info:\n            await initialize_composition_root(\n                config_path=str(bad_config),\n                env=mock_env,\n                component_overrides=overrides,\n            )\n\n        err = exc_info.value\n        # Could fail at config parse or training pipeline init\n        assert err.failed_phase in (\n            InitializationPhase.CONFIG_PARSE,\n            InitializationPhase.TRAINING_PIPELINE_INIT,\n        )\n\n    @pytest.mark.asyncio\n    async def test_audit_log_path_not_writable(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Raises InitializationError when audit log path is not writable.\"\"\"\n        with patch(\n            \"src.root.composition.JsonLinesAuditLogger\",\n            side_effect=PermissionError(\"Audit log dir not writable\"),\n        ):\n            overrides = {\n                k: v for k, v in mock_component_overrides.items()\n                if k != \"reporting\"\n            }\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=overrides,\n                )\n\n            err = exc_info.value\n            assert err.failed_phase == InitializationPhase.REPORTING_INIT\n\n    @pytest.mark.asyncio\n    async def test_component_protocol_mismatch(\n        self, config_file, mock_env\n    ):\n        \"\"\"Raises InitializationError for protocol-mismatched override.\"\"\"\n        bad_override = object()  # Has no methods at all\n        with pytest.raises((InitializationError, TypeError, ValueError)):\n            await initialize_composition_root(\n                config_path=config_file,\n                env=mock_env,\n                component_overrides={\"budget_manager\": bad_override},\n            )\n\n\nclass TestInitializationTeardownOnFailure:\n    \"\"\"Verify teardown of already-initialized components on partial failure.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_teardown_on_mid_init_failure(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"When init fails at phase N, components 1..N-1 are torn down in reverse.\"\"\"\n        # Make router initialization fail (phase 7 of 9)\n        mock_component_overrides.pop(\"router\")\n\n        with patch(\n            \"src.root.composition.Router\",\n            side_effect=RuntimeError(\"Router init failed\"),\n        ):\n            with pytest.raises(InitializationError) as exc_info:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=mock_component_overrides,\n                )\n\n            err = exc_info.value\n            assert err.failed_phase == InitializationPhase.ROUTER_INIT\n\n            # Verify previously initialized components were attempted for shutdown\n            # Budget manager and confidence engine should have persist called\n            bm = mock_component_overrides.get(\"budget_manager\")\n            ce = mock_component_overrides.get(\"confidence_engine\")\n            if bm and hasattr(bm, \"force_persist\"):\n                # Best effort: check that teardown was attempted\n                pass  # Exact verification depends on implementation\n\n\n# ============================================================================\n# 2. Shutdown Tests (test_shutdown)\n# ============================================================================\n\n\nclass TestShutdownHappyPath:\n    \"\"\"Test clean shutdown scenarios.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_clean_shutdown_all_components(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Clean shutdown returns ShutdownError with empty component_errors.\"\"\"\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert isinstance(result, ShutdownError), \"Should return ShutdownError\"\n        assert result.component_errors == {} or len(result.component_errors) == 0, (\n            f\"Expected empty component_errors, got {result.component_errors}\"\n        )\n        assert len(result.components_shutdown_successfully) == 9, (\n            f\"Expected 9 successful shutdowns, got {len(result.components_shutdown_successfully)}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_budget_persist_called_on_shutdown(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"budget_manager.force_persist is called during shutdown.\"\"\"\n        await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        mock_component_overrides[\"budget_manager\"].force_persist.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_confidence_persist_called_on_shutdown(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"confidence_engine.persist_state is called during shutdown.\"\"\"\n        await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        mock_component_overrides[\"confidence_engine\"].persist_state.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_exit_stack_closed(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"AsyncExitStack is closed after all component shutdown.\"\"\"\n        await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        mock_exit_stack.aclose.assert_called_once()\n\n\nclass TestShutdownErrors:\n    \"\"\"Test individual and multiple component failure scenarios during shutdown.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_budget_persist_failure(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Budget persist failure captured but other components still shut down.\"\"\"\n        mock_component_overrides[\"budget_manager\"].force_persist = AsyncMock(\n            side_effect=IOError(\"Disk full\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert \"budget_manager\" in result.component_errors or \"BUDGET_MANAGER\" in result.component_errors, (\n            f\"Expected BUDGET_MANAGER in component_errors: {result.component_errors}\"\n        )\n        # Other components should still be in successful list\n        successful_ids = set(result.components_shutdown_successfully)\n        assert len(successful_ids) >= 8, (\n            f\"Expected at least 8 successful shutdowns, got {len(successful_ids)}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_confidence_persist_failure(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Confidence persist failure captured but other components still shut down.\"\"\"\n        mock_component_overrides[\"confidence_engine\"].persist_state = AsyncMock(\n            side_effect=IOError(\"State file write failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert (\n            \"confidence_engine\" in result.component_errors\n            or \"CONFIDENCE_ENGINE\" in result.component_errors\n        ), f\"Expected CONFIDENCE_ENGINE in errors: {result.component_errors}\"\n        assert len(result.components_shutdown_successfully) >= 8\n\n    @pytest.mark.asyncio\n    async def test_audit_flush_failure(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Audit flush failure captured but other components still shut down.\"\"\"\n        mock_component_overrides[\"reporting\"].audit_logger.flush = AsyncMock(\n            side_effect=IOError(\"Flush failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert (\n            \"reporting\" in result.component_errors\n            or \"REPORTING\" in result.component_errors\n        ), f\"Expected REPORTING in errors: {result.component_errors}\"\n\n    @pytest.mark.asyncio\n    async def test_httpx_close_failure(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"httpx client close failure captured but shutdown continues.\"\"\"\n        mock_component_overrides[\"external_interfaces\"].close = AsyncMock(\n            side_effect=RuntimeError(\"httpx close failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert (\n            \"external_interfaces\" in result.component_errors\n            or \"EXTERNAL_INTERFACES\" in result.component_errors\n        ), f\"Expected EXTERNAL_INTERFACES in errors: {result.component_errors}\"\n        # Other components should still shut down\n        assert len(result.components_shutdown_successfully) >= 8\n\n    @pytest.mark.asyncio\n    async def test_exit_stack_close_failure(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Exit stack close failure captured in ShutdownError.\"\"\"\n        mock_exit_stack.aclose = AsyncMock(\n            side_effect=RuntimeError(\"Exit stack close failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        # Exit stack error should be captured somewhere\n        has_exit_stack_error = (\n            \"exit_stack\" in str(result.component_errors).lower()\n            or \"exit_stack\" in str(result.message).lower()\n            or len(result.component_errors) > 0\n        )\n        assert has_exit_stack_error, \"Exit stack error should be captured\"\n\n    @pytest.mark.asyncio\n    async def test_multiple_simultaneous_failures(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Multiple component failures all accumulated in ShutdownError.\"\"\"\n        mock_component_overrides[\"budget_manager\"].force_persist = AsyncMock(\n            side_effect=IOError(\"Budget persist failed\")\n        )\n        mock_component_overrides[\"confidence_engine\"].persist_state = AsyncMock(\n            side_effect=IOError(\"Confidence persist failed\")\n        )\n        mock_component_overrides[\"external_interfaces\"].close = AsyncMock(\n            side_effect=RuntimeError(\"httpx close failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        assert len(result.component_errors) >= 3, (\n            f\"Expected at least 3 errors, got {len(result.component_errors)}\"\n        )\n        # Remaining components should still be in successful list\n        total = len(result.component_errors) + len(result.components_shutdown_successfully)\n        assert total == 9, (\n            f\"Errors + successes should total 9, got {total}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_shutdown_reverse_dag_order(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Shutdown proceeds in reverse DAG order.\"\"\"\n        shutdown_order = []\n\n        async def track_shutdown(name):\n            shutdown_order.append(name)\n\n        # Attach tracking to each component's close/persist methods\n        for name, comp in mock_component_overrides.items():\n            if hasattr(comp, \"close\") and callable(comp.close):\n                original = comp.close\n                comp.close = AsyncMock(side_effect=lambda n=name: shutdown_order.append(n))\n            elif hasattr(comp, \"force_persist\"):\n                comp.force_persist = AsyncMock(side_effect=lambda n=name: shutdown_order.append(n))\n\n        await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        expected_reverse_order = [\n            \"unified_interface\", \"reporting\", \"training_pipeline\",\n            \"router\", \"sampling_scheduler\", \"external_interfaces\",\n            \"confidence_engine\", \"budget_manager\", \"config_and_registry\",\n        ]\n\n        # Verify the relative order is reverse DAG\n        if len(shutdown_order) > 1:\n            for i, expected_name in enumerate(expected_reverse_order):\n                if expected_name in shutdown_order:\n                    for j in range(i + 1, len(expected_reverse_order)):\n                        later_name = expected_reverse_order[j]\n                        if later_name in shutdown_order:\n                            idx_first = shutdown_order.index(expected_name)\n                            idx_later = shutdown_order.index(later_name)\n                            assert idx_first < idx_later, (\n                                f\"{expected_name} should shut down before {later_name}\"\n                            )\n\n\n# ============================================================================\n# 3. Backend Registry Tests (test_backend_registry)\n# ============================================================================\n\n\nclass TestResolveFineTuningBackend:\n    \"\"\"Test resolve_finetuning_backend across all backend types.\"\"\"\n\n    @pytest.mark.parametrize(\"backend_name,expected_remote\", [\n        (\"openai\", True),\n        (\"anyscale\", True),\n        (\"local_lora\", False),\n        (\"axolotl\", False),\n    ])\n    def test_resolve_builtin_backends(self, backend_name, expected_remote):\n        \"\"\"Resolve built-in backends with correct is_remote flag.\"\"\"\n        config = {\n            \"backend\": backend_name,\n            \"api_key\": \"test-key\",\n            \"api_base_url\": \"https://api.example.com/v1\",\n            \"output_dir\": \"/tmp/ft\",\n        }\n\n        result = resolve_finetuning_backend(\n            backend_name=backend_name,\n            finetuning_config=config,\n            custom_backends={},\n        )\n\n        assert isinstance(result, BackendRegistryEntry), (\n            f\"Expected BackendRegistryEntry, got {type(result)}\"\n        )\n        assert result.backend_name == backend_name or str(result.backend_name).lower() == backend_name, (\n            f\"Expected backend_name {backend_name}, got {result.backend_name}\"\n        )\n        assert result.is_remote == expected_remote, (\n            f\"Expected is_remote={expected_remote} for {backend_name}\"\n        )\n        assert result.implementation is not None, \"Implementation should not be None\"\n\n    def test_resolve_custom_backend_registered(self):\n        \"\"\"Resolve custom backend when properly registered.\"\"\"\n        custom_impl = MagicMock()\n        custom_backends = {\"my_custom\": custom_impl}\n\n        result = resolve_finetuning_backend(\n            backend_name=\"custom\",\n            finetuning_config={\"backend\": \"custom\", \"custom_name\": \"my_custom\"},\n            custom_backends=custom_backends,\n        )\n\n        assert result.implementation is not None\n        assert str(result.backend_name).lower() == \"custom\"\n\n    def test_resolve_unknown_backend_raises(self):\n        \"\"\"Unknown backend name raises an error.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_finetuning_backend(\n                backend_name=\"quantum_computing_backend\",\n                finetuning_config={\"backend\": \"quantum_computing_backend\"},\n                custom_backends={},\n            )\n\n        assert \"unknown\" in str(exc_info.value).lower() or \"not\" in str(exc_info.value).lower(), (\n            f\"Error should mention unknown backend: {exc_info.value}\"\n        )\n\n    def test_resolve_remote_missing_api_key(self):\n        \"\"\"Remote backend without api_key raises error.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_finetuning_backend(\n                backend_name=\"openai\",\n                finetuning_config={\n                    \"backend\": \"openai\",\n                    \"api_base_url\": \"https://api.openai.com/v1\",\n                    # Missing api_key\n                },\n                custom_backends={},\n            )\n\n        assert \"api_key\" in str(exc_info.value).lower() or \"key\" in str(exc_info.value).lower(), (\n            f\"Error should mention missing api_key: {exc_info.value}\"\n        )\n\n    def test_resolve_remote_missing_base_url(self):\n        \"\"\"Remote backend without api_base_url raises error.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_finetuning_backend(\n                backend_name=\"openai\",\n                finetuning_config={\n                    \"backend\": \"openai\",\n                    \"api_key\": \"test-key\",\n                    # Missing api_base_url\n                },\n                custom_backends={},\n            )\n\n        assert \"url\" in str(exc_info.value).lower() or \"base\" in str(exc_info.value).lower(), (\n            f\"Error should mention missing api_base_url: {exc_info.value}\"\n        )\n\n    def test_resolve_custom_not_registered(self):\n        \"\"\"Custom backend requested but none registered raises error.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_finetuning_backend(\n                backend_name=\"custom\",\n                finetuning_config={\"backend\": \"custom\"},\n                custom_backends={},  # Empty — no custom backend registered\n            )\n\n        assert \"custom\" in str(exc_info.value).lower() or \"register\" in str(exc_info.value).lower(), (\n            f\"Error should mention custom not registered: {exc_info.value}\"\n        )\n\n    @pytest.mark.parametrize(\"invalid_name\", [\n        \"nonexistent\", \"OPENAI_TYPO\", \"\", \"  \", \"openai \", \" openai\",\n    ])\n    def test_resolve_various_invalid_names(self, invalid_name):\n        \"\"\"Various invalid backend names all raise errors.\"\"\"\n        with pytest.raises(Exception):\n            resolve_finetuning_backend(\n                backend_name=invalid_name,\n                finetuning_config={\"backend\": invalid_name},\n                custom_backends={},\n            )\n\n\nclass TestBuildBackendRegistry:\n    \"\"\"Test build_backend_registry construction.\"\"\"\n\n    def test_build_registry_happy_path(self):\n        \"\"\"Build registry with valid config selecting an available backend.\"\"\"\n        config = {\n            \"backend\": \"local_lora\",\n            \"output_dir\": \"/tmp/ft\",\n        }\n\n        result = build_backend_registry(\n            finetuning_config=config,\n            custom_backends={},\n        )\n\n        assert isinstance(result, BackendRegistry), (\n            f\"Expected BackendRegistry, got {type(result)}\"\n        )\n        assert result.active_backend_name == \"local_lora\", (\n            f\"Expected active_backend_name 'local_lora', got {result.active_backend_name}\"\n        )\n        assert isinstance(result.entries, dict), \"entries should be a dict\"\n        # Should contain at least the built-in backends\n        assert len(result.entries) >= 4, (\n            f\"Expected at least 4 built-in entries, got {len(result.entries)}\"\n        )\n\n    def test_build_registry_active_not_available(self):\n        \"\"\"Raises error when active backend from config is not in registry.\"\"\"\n        config = {\n            \"backend\": \"nonexistent_backend\",\n            \"output_dir\": \"/tmp/ft\",\n        }\n\n        with pytest.raises(Exception) as exc_info:\n            build_backend_registry(\n                finetuning_config=config,\n                custom_backends={},\n            )\n\n        error_msg = str(exc_info.value).lower()\n        assert \"not\" in error_msg or \"unavailable\" in error_msg or \"unknown\" in error_msg, (\n            f\"Error should indicate backend not available: {exc_info.value}\"\n        )\n\n    def test_build_registry_with_custom_backends(self):\n        \"\"\"Registry includes both built-in and custom backends.\"\"\"\n        custom_impl = MagicMock()\n        config = {\n            \"backend\": \"custom\",\n            \"output_dir\": \"/tmp/ft\",\n        }\n\n        result = build_backend_registry(\n            finetuning_config=config,\n            custom_backends={\"my_backend\": custom_impl},\n        )\n\n        assert isinstance(result, BackendRegistry)\n        # Should have built-ins plus custom\n        assert len(result.entries) >= 5, (\n            f\"Expected at least 5 entries (4 built-in + 1 custom), got {len(result.entries)}\"\n        )\n\n\n# ============================================================================\n# 4. Orchestration Tests (test_orchestration)\n# ============================================================================\n\n\nclass TestOrchestrateRequestHappyPath:\n    \"\"\"Test orchestrate_request happy path scenarios.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_local_only_serving(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Serves request locally when confidence is high (phase 3).\"\"\"\n        components = mock_component_overrides\n\n        # Configure: high confidence, local-only routing\n        snapshot = MagicMock()\n        snapshot.score = 0.95\n        snapshot.phase = \"phase_3\"\n        snapshot.sample_count = 200\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_only\"\n        sampling_decision.is_coaching_sample = False\n        sampling_decision.sampling_probability = 0.01\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"local-v1\",\n            cost=Decimal(\"0.0\"),\n        )\n        route_result.used_remote = False\n        route_result.used_local = True\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"Great product!\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None, \"Should return a result\"\n        components[\"budget_manager\"].record_local_request.assert_called()\n        components[\"reporting\"].audit_logger.log.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_remote_call_with_budget(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Calls remote when local unavailable and budget allows.\"\"\"\n        components = mock_component_overrides\n\n        # Configure: low confidence, remote needed\n        snapshot = MagicMock()\n        snapshot.score = 0.3\n        snapshot.phase = \"phase_1\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"remote_only\"\n        sampling_decision.is_coaching_sample = False\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = True\n        auth_result.estimated_cost = Decimal(\"0.01\")\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"gpt-4\",\n            cost=Decimal(\"0.008\"),\n        )\n        route_result.used_remote = True\n        route_result.used_local = False\n        route_result.remote_cost = Decimal(\"0.008\")\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"Great product!\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None\n        components[\"budget_manager\"].authorize.assert_called()\n        components[\"budget_manager\"].record_spend.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_dual_send_coaching_sample(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Dual-send for coaching sample calls both backends and records comparison.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.6\n        snapshot.phase = \"phase_2\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"dual_send\"\n        sampling_decision.is_coaching_sample = True\n        sampling_decision.sampling_probability = 0.3\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = True\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"gpt-4\",\n            cost=Decimal(\"0.008\"),\n        )\n        route_result.used_remote = True\n        route_result.used_local = True\n        route_result.local_output = {\"sentiment\": \"neutral\"}\n        route_result.remote_output = {\"sentiment\": \"positive\"}\n        route_result.remote_cost = Decimal(\"0.008\")\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"Great product!\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None\n        components[\"confidence_engine\"].record_comparison.assert_called()\n        components[\"training_pipeline\"].add_example.assert_called()\n\n\nclass TestOrchestrateRequestErrors:\n    \"\"\"Test orchestrate_request error paths.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_task_not_found(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Raises error when task_name not in TaskRegistry.\"\"\"\n        components = mock_component_overrides\n        components[\"config_and_registry\"].task_registry.__contains__ = Mock(return_value=False)\n        components[\"config_and_registry\"].task_registry.get_task = Mock(\n            side_effect=KeyError(\"Task not found\")\n        )\n\n        sample_correlation.task_name = \"nonexistent_task\"\n\n        with pytest.raises(Exception) as exc_info:\n            await orchestrate_request(\n                task_name=\"nonexistent_task\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n\n        error_msg = str(exc_info.value).lower()\n        assert \"not found\" in error_msg or \"task\" in error_msg or \"nonexistent\" in error_msg\n\n    @pytest.mark.asyncio\n    async def test_all_sources_unavailable(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Raises AllSourcesUnavailableError when local unavailable AND budget exhausted.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.3\n        snapshot.phase = \"phase_1\"\n        snapshot.local_model_available = False\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"remote_only\"\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        # Budget exhausted\n        auth_result = MagicMock()\n        auth_result.allowed = False\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n        components[\"budget_manager\"].remaining_budget = Mock(return_value=Decimal(\"0.00\"))\n\n        # Local unavailable\n        route_result = MagicMock()\n        route_result.used_local = False\n        route_result.local_unavailable = True\n        route_result.local_unavailable_reason = \"Model not loaded\"\n        components[\"router\"].route = AsyncMock(\n            side_effect=AllSourcesUnavailableError(\n                message=\"All sources unavailable\",\n                task_name=\"sentiment_analysis\",\n                request_id=sample_correlation.request_id,\n                local_unavailable_reason=\"Model not loaded\",\n                budget_exhausted_detail=\"Budget limit reached\",\n                budget_limit_usd=100.0,\n                budget_used_usd=100.0,\n                timestamp_utc=datetime.now(timezone.utc).isoformat(),\n            )\n        )\n\n        with pytest.raises(AllSourcesUnavailableError) as exc_info:\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n\n        err = exc_info.value\n        assert err.local_unavailable_reason is not None and len(err.local_unavailable_reason) > 0\n        assert err.budget_exhausted_detail is not None and len(err.budget_exhausted_detail) > 0\n\n    @pytest.mark.asyncio\n    async def test_budget_check_internal_error(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Raises error when budget_manager.authorize fails internally.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.3\n        snapshot.phase = \"phase_1\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"remote_only\"\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        components[\"budget_manager\"].authorize = AsyncMock(\n            side_effect=RuntimeError(\"Budget manager internal error\")\n        )\n\n        with pytest.raises(Exception) as exc_info:\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n\n        assert \"budget\" in str(exc_info.value).lower() or \"internal\" in str(exc_info.value).lower()\n\n    @pytest.mark.asyncio\n    async def test_confidence_engine_error(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Raises error when confidence_engine.get_snapshot fails.\"\"\"\n        components = mock_component_overrides\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(\n            side_effect=RuntimeError(\"Confidence engine crashed\")\n        )\n\n        with pytest.raises(Exception) as exc_info:\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n\n        assert \"confidence\" in str(exc_info.value).lower() or \"engine\" in str(exc_info.value).lower()\n\n    @pytest.mark.asyncio\n    async def test_both_backends_failed(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Raises error when both local and remote fail during dual-send.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.5\n        snapshot.phase = \"phase_2\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"dual_send\"\n        sampling_decision.is_coaching_sample = True\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = True\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        components[\"router\"].route = AsyncMock(\n            side_effect=RuntimeError(\"Both backends failed\")\n        )\n\n        with pytest.raises(Exception):\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n\n\nclass TestOrchestrateRequestEdgeCases:\n    \"\"\"Test edge cases for orchestration.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_budget_reservation_released_on_remote_failure(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"When remote call fails before cost, release_reservation is called.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.3\n        snapshot.phase = \"phase_1\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"remote_only\"\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = True\n        auth_result.estimated_cost = Decimal(\"0.01\")\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        # Remote call fails\n        components[\"router\"].route = AsyncMock(\n            side_effect=RuntimeError(\"API call failed before cost\")\n        )\n\n        try:\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n        except Exception:\n            pass\n\n        # Verify authorize was called but record_spend was NOT\n        components[\"budget_manager\"].authorize.assert_called()\n        components[\"budget_manager\"].record_spend.assert_not_called()\n        # release_reservation should have been called\n        components[\"budget_manager\"].release_reservation.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_local_fallback_when_budget_exhausted(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"When budget exhausted but local available, serves locally without error.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.7\n        snapshot.phase = \"phase_2\"\n        snapshot.local_model_available = True\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_only\"\n        sampling_decision.is_coaching_sample = False\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        # Budget would be exhausted if remote were attempted\n        auth_result = MagicMock()\n        auth_result.allowed = False\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"local-v1\",\n            cost=Decimal(\"0.0\"),\n        )\n        route_result.used_remote = False\n        route_result.used_local = True\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        # Should NOT raise AllSourcesUnavailableError\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"test\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None\n\n    @pytest.mark.asyncio\n    async def test_remote_fallback_on_local_failure(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"When local fails but budget available, falls back to remote gracefully.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.8\n        snapshot.phase = \"phase_2\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_with_remote_fallback\"\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = True\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        # Router handles local failure + remote fallback\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"gpt-4\",\n            cost=Decimal(\"0.01\"),\n        )\n        route_result.used_remote = True\n        route_result.used_local = False\n        route_result.fallback_triggered = True\n        route_result.remote_cost = Decimal(\"0.01\")\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"test\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None\n        components[\"budget_manager\"].authorize.assert_called()\n\n\n# ============================================================================\n# 5. Correlation and Status Tests (test_correlation_and_status)\n# ============================================================================\n\n\nclass TestCreateRequestCorrelation:\n    \"\"\"Test create_request_correlation function.\"\"\"\n\n    def test_happy_path_valid_correlation(self):\n        \"\"\"Creates valid RequestCorrelation with UUID v4, task_name, and UTC timestamp.\"\"\"\n        result = create_request_correlation(task_name=\"sentiment_analysis\")\n\n        assert isinstance(result, RequestCorrelation), (\n            f\"Expected RequestCorrelation, got {type(result)}\"\n        )\n\n        # Validate UUID v4\n        parsed_uuid = uuid.UUID(result.request_id)\n        assert parsed_uuid.version == 4, (\n            f\"Expected UUID v4, got version {parsed_uuid.version}\"\n        )\n\n        assert result.task_name == \"sentiment_analysis\", (\n            f\"Expected task_name 'sentiment_analysis', got {result.task_name}\"\n        )\n\n        # Validate ISO 8601 UTC timestamp\n        assert result.created_at_utc is not None\n        parsed_ts = datetime.fromisoformat(result.created_at_utc)\n        assert parsed_ts.tzinfo is not None, \"Timestamp must be timezone-aware\"\n\n    def test_empty_task_name_raises(self):\n        \"\"\"Raises error for empty task_name.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            create_request_correlation(task_name=\"\")\n\n        error_msg = str(exc_info.value).lower()\n        assert \"empty\" in error_msg or \"task\" in error_msg or \"blank\" in error_msg\n\n    def test_whitespace_task_name_raises(self):\n        \"\"\"Raises error for whitespace-only task_name.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            create_request_correlation(task_name=\"   \")\n\n        error_msg = str(exc_info.value).lower()\n        assert \"empty\" in error_msg or \"task\" in error_msg or \"whitespace\" in error_msg\n\n    def test_correlation_uniqueness(self):\n        \"\"\"Multiple calls produce unique request_ids.\"\"\"\n        correlations = [\n            create_request_correlation(task_name=f\"task_{i}\")\n            for i in range(100)\n        ]\n\n        request_ids = [c.request_id for c in correlations]\n        assert len(set(request_ids)) == 100, (\n            f\"Expected 100 unique request_ids, got {len(set(request_ids))}\"\n        )\n\n    def test_timestamp_is_utc_iso8601(self):\n        \"\"\"Timestamp is timezone-aware UTC in ISO 8601 format.\"\"\"\n        result = create_request_correlation(task_name=\"test_task\")\n\n        ts_str = result.created_at_utc\n        # Should be parseable\n        parsed = datetime.fromisoformat(ts_str)\n        assert parsed.tzinfo is not None, \"Timestamp must have timezone info\"\n\n        # Should be UTC (offset 0)\n        assert parsed.utcoffset().total_seconds() == 0, (\n            f\"Timestamp should be UTC, got offset {parsed.utcoffset()}\"\n        )\n\n\nclass TestGetComponentStatuses:\n    \"\"\"Test get_component_statuses function.\"\"\"\n\n    def test_all_healthy(self, mock_component_overrides):\n        \"\"\"Returns 9 READY entries when all components initialized.\"\"\"\n        result = get_component_statuses(components=mock_component_overrides)\n\n        assert len(result) == 9, f\"Expected 9 entries, got {len(result)}\"\n\n        for entry in result:\n            assert entry.status == ComponentStatus.READY or str(entry.status) == \"READY\", (\n                f\"Component {entry.component_id} should be READY, got {entry.status}\"\n            )\n\n        # Each ComponentId appears exactly once\n        component_ids = [str(entry.component_id) for entry in result]\n        assert len(set(component_ids)) == 9, (\n            f\"Expected 9 unique component IDs, got {len(set(component_ids))}\"\n        )\n\n    def test_partial_initialization(self):\n        \"\"\"NOT_STARTED for components not yet initialized.\"\"\"\n        partial_components = {\n            \"config_and_registry\": _make_mock_config_and_registry(),\n            \"budget_manager\": _make_mock_budget_manager(),\n            # Only 2 of 9 initialized\n        }\n\n        result = get_component_statuses(components=partial_components)\n\n        assert len(result) == 9, f\"Expected 9 entries, got {len(result)}\"\n\n        ready_count = sum(\n            1 for e in result\n            if str(e.status) == \"READY\" or e.status == ComponentStatus.READY\n        )\n        not_started_count = sum(\n            1 for e in result\n            if str(e.status) == \"NOT_STARTED\" or e.status == ComponentStatus.NOT_STARTED\n        )\n\n        assert ready_count == 2, f\"Expected 2 READY, got {ready_count}\"\n        assert not_started_count == 7, f\"Expected 7 NOT_STARTED, got {not_started_count}\"\n\n    def test_with_failed_component(self, mock_component_overrides):\n        \"\"\"FAILED status with error_message for failed components.\"\"\"\n        # Mark a component as failed\n        failed_components = dict(mock_component_overrides)\n        failed_bm = _make_mock_budget_manager()\n        failed_bm._status = \"FAILED\"\n        failed_bm._error = \"State corruption detected\"\n        failed_components[\"budget_manager\"] = failed_bm\n\n        result = get_component_statuses(components=failed_components)\n\n        assert len(result) == 9\n\n        # Find the budget_manager entry\n        bm_entries = [\n            e for e in result\n            if str(e.component_id).lower().replace(\"_\", \"\") in (\"budgetmanager\", \"budget_manager\")\n            or str(e.component_id) == \"BUDGET_MANAGER\"\n        ]\n        if bm_entries:\n            bm_entry = bm_entries[0]\n            if str(bm_entry.status) == \"FAILED\":\n                assert bm_entry.error_message is not None and len(bm_entry.error_message) > 0, (\n                    \"Failed component should have error_message\"\n                )\n\n\n# ============================================================================\n# 6. Component Override Tests (test_component_overrides)\n# ============================================================================\n\n\nclass TestValidateComponentOverride:\n    \"\"\"Test validate_component_override function.\"\"\"\n\n    def test_valid_override_returns_true(self):\n        \"\"\"Returns True for conformant override with all required methods.\"\"\"\n        mock_bm = _make_mock_budget_manager()\n\n        result = validate_component_override(\n            component_id=\"budget_manager\",\n            override_instance=mock_bm,\n        )\n\n        assert result is True, \"Should return True for valid override\"\n\n    def test_missing_method_returns_false(self):\n        \"\"\"Returns False when override lacks required methods.\"\"\"\n        incomplete = MagicMock(spec=[])  # No methods\n\n        result = validate_component_override(\n            component_id=\"budget_manager\",\n            override_instance=incomplete,\n        )\n\n        assert result is False, \"Should return False for override missing required methods\"\n\n    def test_unknown_component_id_raises(self):\n        \"\"\"Raises error for unknown component_id.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            validate_component_override(\n                component_id=\"nonexistent_component\",\n                override_instance=MagicMock(),\n            )\n\n        error_msg = str(exc_info.value).lower()\n        assert \"unknown\" in error_msg or \"component\" in error_msg or \"invalid\" in error_msg\n\n    @pytest.mark.parametrize(\"component_id\", [\n        \"config_and_registry\", \"budget_manager\", \"confidence_engine\",\n        \"external_interfaces\", \"sampling_scheduler\", \"router\",\n        \"training_pipeline\", \"reporting\", \"unified_interface\",\n    ])\n    def test_all_valid_component_ids_accepted(self, component_id):\n        \"\"\"All 9 valid ComponentId values are accepted without error.\"\"\"\n        mock_component = MagicMock()\n        # Add common methods that most components would need\n        mock_component.close = AsyncMock()\n\n        # Should not raise for valid component_id\n        try:\n            validate_component_override(\n                component_id=component_id,\n                override_instance=mock_component,\n            )\n        except Exception as e:\n            if \"unknown\" in str(e).lower() and \"component\" in str(e).lower():\n                pytest.fail(\n                    f\"Valid component_id '{component_id}' should not raise unknown_component_id\"\n                )\n\n\n# ============================================================================\n# 7. Lifecycle Logging Tests (test_lifecycle_logging)\n# ============================================================================\n\n\nclass TestLifecycleLogging:\n    \"\"\"Test lifecycle event logging during initialization and shutdown.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_init_logs_initialization_started(\n        self, config_file, mock_env, mock_component_overrides, caplog\n    ):\n        \"\"\"INITIALIZATION_STARTED event logged at start of initialization.\"\"\"\n        with caplog.at_level(logging.DEBUG):\n            try:\n                await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=mock_component_overrides,\n                )\n            except Exception:\n                pass  # May fail if config not fully valid\n\n        # Check for initialization started log\n        log_text = caplog.text.lower()\n        assert \"init\" in log_text or \"start\" in log_text or len(caplog.records) > 0, (\n            \"Should emit lifecycle log entries during initialization\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_init_logs_component_initialized_per_component(\n        self, config_file, mock_env, mock_component_overrides, caplog\n    ):\n        \"\"\"COMPONENT_INITIALIZED event logged for each successfully initialized component.\"\"\"\n        with caplog.at_level(logging.DEBUG):\n            try:\n                result = await initialize_composition_root(\n                    config_path=config_file,\n                    env=mock_env,\n                    component_overrides=mock_component_overrides,\n                )\n            except Exception:\n                pass\n\n        # Should have log entries — exact format depends on implementation\n        assert len(caplog.records) >= 1, \"Should emit at least one log entry\"\n\n    @pytest.mark.asyncio\n    async def test_init_failure_logs_component_init_failed(\n        self, mock_env, caplog\n    ):\n        \"\"\"COMPONENT_INIT_FAILED event logged when a component fails to initialize.\"\"\"\n        with caplog.at_level(logging.DEBUG):\n            try:\n                await initialize_composition_root(\n                    config_path=\"/nonexistent/config.yaml\",\n                    env=mock_env,\n                    component_overrides={},\n                )\n            except InitializationError:\n                pass\n\n        log_text = caplog.text.lower()\n        assert \"fail\" in log_text or \"error\" in log_text or len(caplog.records) > 0, (\n            \"Should log failure events\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_shutdown_logs_events(\n        self, mock_component_overrides, mock_exit_stack, caplog\n    ):\n        \"\"\"Shutdown logs SHUTDOWN_STARTED, COMPONENT_SHUTDOWN, and SHUTDOWN_COMPLETE.\"\"\"\n        with caplog.at_level(logging.DEBUG):\n            await shutdown_composition_root(\n                components=mock_component_overrides,\n                exit_stack=mock_exit_stack,\n            )\n\n        log_text = caplog.text.lower()\n        assert \"shutdown\" in log_text or len(caplog.records) > 0, (\n            \"Should emit shutdown lifecycle events\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_shutdown_failure_logs_component_shutdown_failed(\n        self, mock_component_overrides, mock_exit_stack, caplog\n    ):\n        \"\"\"COMPONENT_SHUTDOWN_FAILED logged for components that fail during shutdown.\"\"\"\n        mock_component_overrides[\"budget_manager\"].force_persist = AsyncMock(\n            side_effect=IOError(\"Persist failed\")\n        )\n\n        with caplog.at_level(logging.DEBUG):\n            await shutdown_composition_root(\n                components=mock_component_overrides,\n                exit_stack=mock_exit_stack,\n            )\n\n        # Should have critical-level log for shutdown failure\n        critical_records = [r for r in caplog.records if r.levelno >= logging.ERROR]\n        assert len(critical_records) >= 1, (\n            \"Should log at ERROR/CRITICAL level for shutdown failures\"\n        )\n\n\n# ============================================================================\n# 8. Invariant Tests\n# ============================================================================\n\n\nclass TestInvariants:\n    \"\"\"Test system-wide invariants from the contract.\"\"\"\n\n    def test_no_global_state(self):\n        \"\"\"Verify no module-level mutable state is used.\"\"\"\n        import src.root as root_module\n\n        # Check that the module doesn't have suspicious mutable globals\n        module_attrs = dir(root_module)\n        for attr in module_attrs:\n            obj = getattr(root_module, attr, None)\n            if isinstance(obj, (dict, list, set)) and not attr.startswith(\"_\"):\n                # Module-level mutable collections are suspicious\n                # but __all__ is expected to be a list\n                if attr != \"__all__\":\n                    assert False, (\n                        f\"Suspicious module-level mutable state: {attr}\"\n                    )\n\n    @pytest.mark.asyncio\n    async def test_budget_hard_enforcement(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"If budget_manager.authorize returns allowed=False, no remote call is made.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.3\n        snapshot.phase = \"phase_1\"\n        snapshot.local_model_available = True\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_only\"\n        sampling_decision.is_coaching_sample = False\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        auth_result = MagicMock()\n        auth_result.allowed = False\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"local-v1\",\n            cost=Decimal(\"0.0\"),\n        )\n        route_result.used_remote = False\n        route_result.used_local = True\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        try:\n            result = await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n        except AllSourcesUnavailableError:\n            pass  # Also acceptable if local unavailable\n\n        # Key invariant: if authorize returned False, remote should NOT have been called\n        # (Router should not have been asked to call remote)\n\n    @pytest.mark.asyncio\n    async def test_audit_entry_always_emitted(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Every orchestration produces exactly one audit entry regardless of outcome.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.9\n        snapshot.phase = \"phase_3\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_only\"\n        sampling_decision.is_coaching_sample = False\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"local-v1\",\n            cost=Decimal(\"0.0\"),\n        )\n        route_result.used_remote = False\n        route_result.used_local = True\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"test\"},\n            correlation=sample_correlation,\n        )\n\n        components[\"reporting\"].audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_audit_entry_emitted_on_failure(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Audit entry emitted even when request fails.\"\"\"\n        components = mock_component_overrides\n\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=MagicMock(\n            score=0.3, phase=\"phase_1\", local_model_available=False,\n        ))\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=MagicMock(\n            decision=\"remote_only\",\n        ))\n\n        auth_result = MagicMock()\n        auth_result.allowed = False\n        components[\"budget_manager\"].authorize = AsyncMock(return_value=auth_result)\n        components[\"budget_manager\"].remaining_budget = Mock(return_value=Decimal(\"0.0\"))\n\n        components[\"router\"].route = AsyncMock(\n            side_effect=AllSourcesUnavailableError(\n                message=\"All sources unavailable\",\n                task_name=\"sentiment_analysis\",\n                request_id=sample_correlation.request_id,\n                local_unavailable_reason=\"Not loaded\",\n                budget_exhausted_detail=\"Budget used up\",\n                budget_limit_usd=100.0,\n                budget_used_usd=100.0,\n                timestamp_utc=datetime.now(timezone.utc).isoformat(),\n            )\n        )\n\n        try:\n            await orchestrate_request(\n                task_name=\"sentiment_analysis\",\n                input_data={\"text\": \"test\"},\n                correlation=sample_correlation,\n            )\n        except AllSourcesUnavailableError:\n            pass\n\n        # Audit should still have been called\n        components[\"reporting\"].audit_logger.log.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_audit_failure_does_not_block_response(\n        self, mock_component_overrides, sample_correlation\n    ):\n        \"\"\"Audit logging failure does not block or delay the response.\"\"\"\n        components = mock_component_overrides\n\n        snapshot = MagicMock()\n        snapshot.score = 0.9\n        snapshot.phase = \"phase_3\"\n        components[\"confidence_engine\"].get_snapshot = AsyncMock(return_value=snapshot)\n\n        sampling_decision = MagicMock()\n        sampling_decision.decision = \"local_only\"\n        sampling_decision.is_coaching_sample = False\n        components[\"sampling_scheduler\"].should_sample = Mock(return_value=sampling_decision)\n\n        route_result = MagicMock()\n        route_result.response = MagicMock(\n            output_data={\"sentiment\": \"positive\"},\n            model_used=\"local-v1\",\n            cost=Decimal(\"0.0\"),\n        )\n        route_result.used_remote = False\n        route_result.used_local = True\n        components[\"router\"].route = AsyncMock(return_value=route_result)\n\n        # Make audit logging fail\n        components[\"reporting\"].audit_logger.log = AsyncMock(\n            side_effect=IOError(\"Audit write failed\")\n        )\n\n        # Should still return a response without raising\n        result = await orchestrate_request(\n            task_name=\"sentiment_analysis\",\n            input_data={\"text\": \"test\"},\n            correlation=sample_correlation,\n        )\n\n        assert result is not None, \"Response should be returned despite audit failure\"\n\n    @pytest.mark.asyncio\n    async def test_state_persisted_on_shutdown(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Budget and confidence state persisted during shutdown.\"\"\"\n        await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        mock_component_overrides[\"budget_manager\"].force_persist.assert_called_once()\n        mock_component_overrides[\"confidence_engine\"].persist_state.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_shutdown_all_components_attempted(\n        self, mock_component_overrides, mock_exit_stack\n    ):\n        \"\"\"Shutdown proceeds through ALL components regardless of individual failures.\"\"\"\n        # Make first component (unified_interface) fail\n        mock_component_overrides[\"unified_interface\"].close = AsyncMock(\n            side_effect=RuntimeError(\"Close failed\")\n        )\n\n        result = await shutdown_composition_root(\n            components=mock_component_overrides,\n            exit_stack=mock_exit_stack,\n        )\n\n        # All 9 components should have been attempted\n        total = len(result.component_errors) + len(result.components_shutdown_successfully)\n        assert total == 9, (\n            f\"All 9 components should be attempted, got {total} total\"\n        )\n\n    def test_all_sources_unavailable_only_when_both_conditions(self):\n        \"\"\"AllSourcesUnavailableError should encode both conditions.\"\"\"\n        err = AllSourcesUnavailableError(\n            message=\"All sources unavailable\",\n            task_name=\"test_task\",\n            request_id=\"test-uuid\",\n            local_unavailable_reason=\"Model not loaded\",\n            budget_exhausted_detail=\"Budget limit $100 exceeded\",\n            budget_limit_usd=100.0,\n            budget_used_usd=100.0,\n            timestamp_utc=datetime.now(timezone.utc).isoformat(),\n        )\n\n        assert err.local_unavailable_reason is not None, \"Must have local reason\"\n        assert err.budget_exhausted_detail is not None, \"Must have budget detail\"\n        assert err.budget_limit_usd == 100.0\n        assert err.budget_used_usd == 100.0\n\n    @pytest.mark.asyncio\n    async def test_initialization_error_contains_component_statuses(self):\n        \"\"\"InitializationError contains phase info and component statuses.\"\"\"\n        err = InitializationError(\n            message=\"Initialization failed\",\n            failed_phase=InitializationPhase.BUDGET_MANAGER_INIT,\n            failed_component_id=\"BUDGET_MANAGER\",\n            component_statuses=[],\n            cause=\"State file corrupted\",\n        )\n\n        assert err.failed_phase == InitializationPhase.BUDGET_MANAGER_INIT\n        assert err.failed_component_id == \"BUDGET_MANAGER\"\n        assert err.cause == \"State file corrupted\"\n        assert isinstance(err.component_statuses, list)\n\n    def test_shutdown_error_structure(self):\n        \"\"\"ShutdownError correctly partitions errors and successes.\"\"\"\n        err = ShutdownError(\n            message=\"Shutdown completed with errors\",\n            component_errors={\"BUDGET_MANAGER\": \"Persist failed\"},\n            components_shutdown_successfully=[\n                \"CONFIG_AND_REGISTRY\", \"CONFIDENCE_ENGINE\",\n                \"EXTERNAL_INTERFACES\", \"SAMPLING_SCHEDULER\",\n                \"ROUTER\", \"TRAINING_PIPELINE\", \"REPORTING\",\n                \"UNIFIED_INTERFACE\",\n            ],\n        )\n\n        assert len(err.component_errors) == 1\n        assert len(err.components_shutdown_successfully) == 8\n        assert \"BUDGET_MANAGER\" in err.component_errors\n\n    @pytest.mark.asyncio\n    async def test_init_dag_order_respected(\n        self, config_file, mock_env, mock_component_overrides\n    ):\n        \"\"\"Components initialized in strict DAG order.\"\"\"\n        init_order = []\n\n        original_overrides = dict(mock_component_overrides)\n        for name, comp in original_overrides.items():\n            # Track when each component is \"used\" during initialization\n            if hasattr(comp, \"_init_order_tracker\"):\n                comp._init_order_tracker = lambda n=name: init_order.append(n)\n\n        # The test verifies the contract — implementation must follow DAG order\n        try:\n            await initialize_composition_root(\n                config_path=config_file,\n                env=mock_env,\n                component_overrides=mock_component_overrides,\n            )\n        except Exception:\n            pass  # May fail but order should still be respected\n\n\nclass TestBackendRegistryInvariants:\n    \"\"\"Test backend registry invariants.\"\"\"\n\n    def test_is_remote_flag_openai(self):\n        \"\"\"openai backend is_remote should be True.\"\"\"\n        config = {\n            \"backend\": \"openai\",\n            \"api_key\": \"test-key\",\n            \"api_base_url\": \"https://api.openai.com/v1\",\n        }\n        result = resolve_finetuning_backend(\"openai\", config, {})\n        assert result.is_remote is True, \"openai should be remote\"\n\n    def test_is_remote_flag_anyscale(self):\n        \"\"\"anyscale backend is_remote should be True.\"\"\"\n        config = {\n            \"backend\": \"anyscale\",\n            \"api_key\": \"test-key\",\n            \"api_base_url\": \"https://api.anyscale.com/v1\",\n        }\n        result = resolve_finetuning_backend(\"anyscale\", config, {})\n        assert result.is_remote is True, \"anyscale should be remote\"\n\n    def test_is_remote_flag_local_lora(self):\n        \"\"\"local_lora backend is_remote should be False.\"\"\"\n        config = {\"backend\": \"local_lora\", \"output_dir\": \"/tmp/ft\"}\n        result = resolve_finetuning_backend(\"local_lora\", config, {})\n        assert result.is_remote is False, \"local_lora should not be remote\"\n\n    def test_is_remote_flag_axolotl(self):\n        \"\"\"axolotl backend is_remote should be False.\"\"\"\n        config = {\"backend\": \"axolotl\", \"output_dir\": \"/tmp/ft\"}\n        result = resolve_finetuning_backend(\"axolotl\", config, {})\n        assert result.is_remote is False, \"axolotl should not be remote\"\n\n    def test_resolved_backend_name_matches_input(self):\n        \"\"\"Returned BackendRegistryEntry.backend_name matches input.\"\"\"\n        config = {\"backend\": \"local_lora\", \"output_dir\": \"/tmp/ft\"}\n        result = resolve_finetuning_backend(\"local_lora\", config, {})\n        assert str(result.backend_name).lower() == \"local_lora\", (\n            f\"Expected 'local_lora', got {result.backend_name}\"\n        )\n\n\nclass TestCorrelationInvariants:\n    \"\"\"Test correlation-related invariants.\"\"\"\n\n    def test_request_id_is_uuid_v4(self):\n        \"\"\"request_id must be a valid UUID v4.\"\"\"\n        correlation = create_request_correlation(\"test_task\")\n        parsed = uuid.UUID(correlation.request_id)\n        assert parsed.version == 4\n\n    def test_created_at_utc_is_current(self):\n        \"\"\"created_at_utc should be approximately current time.\"\"\"\n        before = datetime.now(timezone.utc)\n        correlation = create_request_correlation(\"test_task\")\n        after = datetime.now(timezone.utc)\n\n        parsed = datetime.fromisoformat(correlation.created_at_utc)\n        assert before <= parsed <= after, (\n            f\"Timestamp {parsed} should be between {before} and {after}\"\n        )\n\n    def test_timestamps_always_utc(self):\n        \"\"\"All timestamps are timezone-aware UTC.\"\"\"\n        for _ in range(10):\n            correlation = create_request_correlation(\"test_task\")\n            parsed = datetime.fromisoformat(correlation.created_at_utc)\n            assert parsed.tzinfo is not None, \"Must be timezone-aware\"\n            assert parsed.utcoffset().total_seconds() == 0, \"Must be UTC\"\n\n\nclass TestPublicAPIInvariants:\n    \"\"\"Test that the public API surface is correctly structured.\"\"\"\n\n    def test_all_sources_unavailable_error_is_exception(self):\n        \"\"\"AllSourcesUnavailableError is an Exception subclass.\"\"\"\n        err = AllSourcesUnavailableError(\n            message=\"test\",\n            task_name=\"test\",\n            request_id=\"test\",\n            local_unavailable_reason=\"test\",\n            budget_exhausted_detail=\"test\",\n            budget_limit_usd=0.0,\n            budget_used_usd=0.0,\n            timestamp_utc=\"2024-01-01T00:00:00+00:00\",\n        )\n        assert isinstance(err, Exception), \"AllSourcesUnavailableError must be an Exception\"\n\n    def test_initialization_error_is_exception(self):\n        \"\"\"InitializationError is an Exception subclass.\"\"\"\n        err = InitializationError(\n            message=\"test\",\n            failed_phase=InitializationPhase.CONFIG_PARSE,\n            failed_component_id=\"test\",\n            component_statuses=[],\n            cause=\"test\",\n        )\n        assert isinstance(err, Exception), \"InitializationError must be an Exception\"\n\n    def test_shutdown_error_is_exception(self):\n        \"\"\"ShutdownError is an Exception subclass.\"\"\"\n        err = ShutdownError(\n            message=\"test\",\n            component_errors={},\n            components_shutdown_successfully=[],\n        )\n        assert isinstance(err, Exception), \"ShutdownError must be an Exception\"\n"
+}

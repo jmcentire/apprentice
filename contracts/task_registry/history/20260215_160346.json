@@ -1,0 +1,667 @@
+{
+  "component_id": "task_registry",
+  "name": "Task Registry",
+  "description": "Holds the set of configured task types loaded from config. Each task entry includes: name, description, input/output schema, system_prompt and prompt_template, evaluator type, match_fields, and confidence thresholds. Provides lookup by task name. Built as a frozen Pydantic v2 model containing a validated, immutable mapping of task names to TaskConfig objects. Immutable after startup (no hot-reload). Downstream components depend on the TaskRegistryProtocol for read-only access, enabling test doubles without inheritance. All validation (schema structure, template placeholders, match_fields cross-referencing, threshold ordering, duplicate names) happens at construction time and fails fast with clear messages.",
+  "version": 1,
+  "types": [
+    {
+      "name": "EvaluatorType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "structured_match",
+        "semantic_similarity",
+        "exact_match",
+        "custom"
+      ],
+      "inner_types": [],
+      "description": "Enum of supported evaluator types for task output evaluation. Implemented as Python StrEnum."
+    },
+    {
+      "name": "ConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase1_to_phase2_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of validated training examples required before transitioning from Phase 1 (remote-only) to Phase 2 (coaching/shadow). Must be >= 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=1",
+              "error_message": "phase1_to_phase2_example_count must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "phase2_to_phase3_correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Minimum correlation score between local and remote outputs required to transition from Phase 2 to Phase 3 (local-primary). Must be in (0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0 AND <=1.0",
+              "error_message": "phase2_to_phase3_correlation must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "coaching_trigger",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score below which the system triggers a coaching/retraining cycle. Must be in (0.0, 1.0) and strictly less than phase2_to_phase3_correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0 AND <1.0",
+              "error_message": "coaching_trigger must be in (0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "emergency_threshold",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score below which the system raises an emergency alert and falls back to remote. Must be in [0.0, 1.0) and strictly less than coaching_trigger.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0 AND <1.0",
+              "error_message": "emergency_threshold must be in [0.0, 1.0)"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence thresholds governing phase transitions and alerting for a task. Frozen Pydantic v2 BaseModel. Cross-field invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation <= 1.0, and phase1_to_phase2_example_count >= 1. All float thresholds are in [0.0, 1.0]."
+    },
+    {
+      "name": "JsonSchemaDict",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A dict representing a JSON Schema object. Must be a valid JSON Schema with at minimum a 'type' key. Used for input_schema and output_schema on TaskConfig. Runtime type is dict[str, any]."
+    },
+    {
+      "name": "TaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique task identifier. Must be a non-empty snake_case string matching ^[a-z][a-z0-9_]*$.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]*$",
+              "error_message": "Task name must be non-empty snake_case: lowercase letters, digits, and underscores, starting with a letter."
+            },
+            {
+              "kind": "length",
+              "expression": ">=1 AND <=128",
+              "error_message": "Task name must be between 1 and 128 characters."
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of what this task does.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "Task description must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "input_schema",
+          "type_ref": "JsonSchemaDict",
+          "required": true,
+          "default": "",
+          "description": "JSON Schema defining the expected input structure for this task. Must have 'type': 'object' and a 'properties' key.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "'type' in value and value['type'] == 'object' and 'properties' in value",
+              "error_message": "input_schema must be a JSON Schema with type 'object' and a 'properties' key."
+            }
+          ]
+        },
+        {
+          "name": "output_schema",
+          "type_ref": "JsonSchemaDict",
+          "required": true,
+          "default": "",
+          "description": "JSON Schema defining the expected output structure for this task. Must have 'type': 'object' and a 'properties' key.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "'type' in value and value['type'] == 'object' and 'properties' in value",
+              "error_message": "output_schema must be a JSON Schema with type 'object' and a 'properties' key."
+            }
+          ]
+        },
+        {
+          "name": "system_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "System prompt sent to the LLM for this task. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "system_prompt must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "prompt_template",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Python str.format-style template for constructing the user prompt. All placeholders (e.g. {field_name}) must correspond to keys in input_schema.properties. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "prompt_template must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "evaluator_type",
+          "type_ref": "EvaluatorType",
+          "required": true,
+          "default": "",
+          "description": "Which evaluator strategy to use when scoring local model outputs against remote reference outputs for this task.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of output field names used by the evaluator to compare outputs. Each field must be a key in output_schema.properties. Non-empty list of strings.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "match_fields must contain at least one field."
+            }
+          ]
+        },
+        {
+          "name": "confidence_thresholds",
+          "type_ref": "ConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Confidence thresholds controlling phase transitions and alerting for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Full configuration for a single task type. Frozen Pydantic v2 BaseModel with extra='forbid'. Model validators ensure: (1) all match_fields reference keys present in output_schema properties, (2) all placeholders in prompt_template (Python str.format style, e.g. {field_name}) reference keys present in input_schema properties, (3) system_prompt is non-empty, (4) name is a non-empty lowercase_snake identifier."
+    },
+    {
+      "name": "TaskRegistry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Internal mapping from task name (str) to TaskConfig. Built from the validated task list at construction. Keys are task names, values are TaskConfig instances. This field is populated by the model_validator from the input task list and should not be set directly by callers.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 BaseModel containing a validated, immutable mapping of task names to TaskConfig objects. Constructed from a list of TaskConfig objects (typically parsed from the 'tasks' key in apprentice.yaml by config_loader). A model_validator detects duplicate task names at construction time. After construction, the registry is fully immutable — no tasks can be added, removed, or modified. Exposes read-only lookup methods."
+    },
+    {
+      "name": "TaskRegistryProtocol",
+      "kind": "struct",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "typing.Protocol defining the read-only interface for the Task Registry. Downstream components type-annotate their dependency as TaskRegistryProtocol, enabling test doubles (e.g. simple dict-backed stubs) without inheritance from the concrete TaskRegistry class. Methods: get_task(name: str) -> TaskConfig, __contains__(name: str) -> bool, task_names -> frozenset[str], __len__() -> int."
+    },
+    {
+      "name": "TaskNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was requested but not found.",
+          "validators": []
+        },
+        {
+          "name": "available_tasks",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Sorted list of task names that are available in the registry, for diagnostic messages.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Domain exception raised when a task name lookup fails in the registry. Contains the requested task name and the set of available task names for diagnostic purposes. Inherits from Exception (not KeyError) to distinguish domain errors from programming errors."
+    },
+    {
+      "name": "TaskConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of TaskConfig objects, used as the input to TaskRegistry construction from parsed YAML."
+    }
+  ],
+  "functions": [
+    {
+      "name": "TaskRegistry.__init__",
+      "description": "Construct a TaskRegistry from a list of TaskConfig objects. Validates all tasks, detects duplicate names, builds the internal immutable mapping. This is the only way to create a TaskRegistry — it is frozen after construction. Typically called by config_loader after parsing apprentice.yaml.",
+      "inputs": [
+        {
+          "name": "task_list",
+          "type_ref": "TaskConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of fully validated TaskConfig objects parsed from the 'tasks' section of apprentice.yaml. Must contain at least one task. All task names must be unique.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "At least one task must be configured."
+            }
+          ]
+        }
+      ],
+      "output_type": "TaskRegistry",
+      "error_cases": [
+        {
+          "name": "duplicate_task_names",
+          "condition": "Two or more TaskConfig objects in task_list share the same name",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError identifying the duplicate task name(s). Message format: 'Duplicate task name(s) found: {names}'"
+          }
+        },
+        {
+          "name": "empty_task_list",
+          "condition": "task_list is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError: 'At least one task must be configured.'"
+          }
+        },
+        {
+          "name": "invalid_task_config",
+          "condition": "Any TaskConfig in task_list fails Pydantic validation (invalid field values, failed cross-field validators)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError with details about which TaskConfig field(s) failed validation and why"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_list is a non-empty list of TaskConfig objects",
+        "Each TaskConfig in task_list has already passed its own field-level and model-level validation (schema structure, template placeholders, match_fields cross-referencing, threshold ordering)",
+        "All TaskConfig objects have been deserialized from a valid YAML config source"
+      ],
+      "postconditions": [
+        "Returned TaskRegistry is frozen — no mutations possible after construction",
+        "registry.tasks contains exactly one entry per input TaskConfig, keyed by TaskConfig.name",
+        "len(registry) == len(task_list)",
+        "For every tc in task_list: tc.name in registry and registry.get_task(tc.name) == tc",
+        "registry.task_names == frozenset(tc.name for tc in task_list)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure construction — no I/O, no logging, no file access. All validation is in-memory."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_task",
+      "description": "Look up a task configuration by its unique name. Returns the frozen TaskConfig for the given task name. Raises TaskNotFoundError if the name is not in the registry.",
+      "inputs": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name to look up. Must be a non-empty string.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "Task name must not be empty."
+            }
+          ]
+        }
+      ],
+      "output_type": "TaskConfig",
+      "error_cases": [
+        {
+          "name": "task_not_found",
+          "condition": "name is not a key in the registry's internal tasks mapping",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "The requested task name that was not found",
+            "available_tasks": "Sorted list of all registered task names for diagnostic output"
+          }
+        }
+      ],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed (all startup validation passed)",
+        "name is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned TaskConfig has config.name == name",
+        "Returned TaskConfig is the same object stored at construction time (identity equality due to frozen model)",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read-only lookup — no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "__contains__",
+      "description": "Check whether a task name exists in the registry. Supports the 'in' operator: `'my_task' in registry`. Returns True if the task name is registered, False otherwise.",
+      "inputs": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name to check for membership.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returns True if and only if name is a key in the internal tasks mapping",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read-only membership check."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "task_names",
+      "description": "Property returning the frozenset of all registered task names. Useful for diagnostics, logging, and iteration. Returns an immutable set — callers cannot modify the registry through this property.",
+      "inputs": [],
+      "output_type": "frozenset",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returned frozenset contains exactly the task names that were provided at construction time",
+        "len(returned) == len(registry)",
+        "For every name in returned: registry.get_task(name) succeeds",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read-only property access."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "__len__",
+      "description": "Return the number of tasks in the registry. Supports the len() builtin: `len(registry)`.",
+      "inputs": [],
+      "output_type": "int",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returned value == number of TaskConfig objects provided at construction time",
+        "Returned value >= 1 (since construction requires at least one task)",
+        "Returned value == len(registry.task_names)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read-only length computation."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "TaskConfig.validate_match_fields_against_output_schema",
+      "description": "Pydantic @model_validator(mode='after') on TaskConfig that checks every entry in match_fields is a key in output_schema['properties']. Runs automatically during TaskConfig construction. Ensures evaluator can actually find the fields it needs in the task output.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "TaskConfig",
+          "required": true,
+          "default": "",
+          "description": "The TaskConfig instance being validated after all field-level validation has passed.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskConfig",
+      "error_cases": [
+        {
+          "name": "match_field_not_in_output_schema",
+          "condition": "One or more entries in match_fields are not keys in output_schema['properties']",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError: 'match_fields references unknown output_schema properties: {missing_fields}. Available properties: {available_fields}'"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level validators on TaskConfig have passed",
+        "output_schema has 'properties' key (enforced by field validator)",
+        "match_fields is a non-empty list of strings (enforced by field validator)"
+      ],
+      "postconditions": [
+        "Every string in match_fields is a key in output_schema['properties']",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure validation — no side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskConfig.validate_prompt_template_against_input_schema",
+      "description": "Pydantic @model_validator(mode='after') on TaskConfig that extracts all {placeholder} names from prompt_template using string.Formatter and verifies each one is a key in input_schema['properties']. Runs automatically during TaskConfig construction.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "TaskConfig",
+          "required": true,
+          "default": "",
+          "description": "The TaskConfig instance being validated after all field-level validation has passed.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskConfig",
+      "error_cases": [
+        {
+          "name": "template_placeholder_not_in_input_schema",
+          "condition": "One or more placeholder names in prompt_template do not match keys in input_schema['properties']",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError: 'prompt_template references unknown input_schema properties: {missing_placeholders}. Available properties: {available_fields}'"
+          }
+        },
+        {
+          "name": "malformed_prompt_template",
+          "condition": "prompt_template contains syntax errors that prevent placeholder extraction (e.g. unmatched braces)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError: 'prompt_template has invalid format string syntax: {parse_error}'"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level validators on TaskConfig have passed",
+        "input_schema has 'properties' key (enforced by field validator)",
+        "prompt_template is a non-empty string (enforced by field validator)"
+      ],
+      "postconditions": [
+        "Every placeholder name extracted from prompt_template is a key in input_schema['properties']",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure validation — no side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "ConfidenceThresholds.validate_threshold_ordering",
+      "description": "Pydantic @model_validator(mode='after') on ConfidenceThresholds that verifies the logical ordering: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation. Ensures the confidence score boundaries make semantic sense for phase transitions.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "ConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "The ConfidenceThresholds instance being validated after all field-level range validators have passed.",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceThresholds",
+      "error_cases": [
+        {
+          "name": "invalid_threshold_ordering",
+          "condition": "emergency_threshold >= coaching_trigger OR coaching_trigger >= phase2_to_phase3_correlation",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError: 'Confidence thresholds must satisfy: emergency_threshold ({e}) < coaching_trigger ({c}) < phase2_to_phase3_correlation ({p}). Got: {e}, {c}, {p}'"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level range validators have passed",
+        "emergency_threshold is in [0.0, 1.0)",
+        "coaching_trigger is in (0.0, 1.0)",
+        "phase2_to_phase3_correlation is in (0.0, 1.0]"
+      ],
+      "postconditions": [
+        "emergency_threshold < coaching_trigger",
+        "coaching_trigger < phase2_to_phase3_correlation",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure validation — no side effects."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "The TaskRegistry is immutable after construction — no tasks can be added, removed, or modified at runtime",
+    "Every TaskConfig in the registry has a unique name",
+    "len(registry) >= 1 — a registry must contain at least one task",
+    "For every TaskConfig tc in the registry: all entries in tc.match_fields are keys in tc.output_schema['properties']",
+    "For every TaskConfig tc in the registry: all {placeholder} names in tc.prompt_template are keys in tc.input_schema['properties']",
+    "For every TaskConfig tc in the registry: tc.confidence_thresholds.emergency_threshold < tc.confidence_thresholds.coaching_trigger < tc.confidence_thresholds.phase2_to_phase3_correlation",
+    "registry.task_names returns a frozenset equal to the set of keys in registry.tasks",
+    "All Pydantic ValidationErrors from invalid config propagate at construction time — the registry never exists in an invalid state",
+    "TaskConfig models use extra='forbid' — unrecognized fields in YAML cause a ValidationError at parse time, preventing silent misconfiguration",
+    "The TaskRegistryProtocol can be satisfied by any object implementing get_task, __contains__, task_names, and __len__ — enabling lightweight test doubles"
+  ],
+  "requires": []
+}

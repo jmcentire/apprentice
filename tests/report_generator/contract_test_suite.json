@@ -1,0 +1,758 @@
+{
+  "component_id": "report_generator",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "validate_happy_path",
+      "description": "Valid ReportConfig passes validation and returns equivalent config",
+      "function": "validate_report_config",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "ReportConfig with all fields within valid ranges",
+      "expected_output_description": "Returns a valid ReportConfig instance equivalent to the input",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "validate_boundary_min_values",
+      "description": "ReportConfig with minimum boundary values passes validation",
+      "function": "validate_report_config",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "correlation_window_count=1, alerts_lookback_hours=1, webhook_timeout_seconds=1",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "validate_boundary_max_values",
+      "description": "ReportConfig with maximum boundary values passes validation",
+      "function": "validate_report_config",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "correlation_window_count=1000, alerts_lookback_hours=8760, webhook_timeout_seconds=300",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "validate_empty_webhook_url_allowed",
+      "description": "Empty webhook_url is valid (webhook delivery is optional)",
+      "function": "validate_report_config",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "webhook_url=''",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_correlation_window_count_zero",
+      "description": "correlation_window_count of 0 raises invalid_correlation_window_count",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "correlation_window_count=0",
+      "expected_output_description": "",
+      "expected_error": "invalid_correlation_window_count",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_correlation_window_count_negative",
+      "description": "Negative correlation_window_count raises invalid_correlation_window_count",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "correlation_window_count=-1",
+      "expected_output_description": "",
+      "expected_error": "invalid_correlation_window_count",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_correlation_window_count_above_max",
+      "description": "correlation_window_count above 1000 raises invalid_correlation_window_count",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "correlation_window_count=1001",
+      "expected_output_description": "",
+      "expected_error": "invalid_correlation_window_count",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_alerts_lookback_zero",
+      "description": "alerts_lookback_hours of 0 raises invalid_alerts_lookback_hours",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "alerts_lookback_hours=0",
+      "expected_output_description": "",
+      "expected_error": "invalid_alerts_lookback_hours",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_alerts_lookback_above_max",
+      "description": "alerts_lookback_hours above 8760 raises invalid_alerts_lookback_hours",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "alerts_lookback_hours=8761",
+      "expected_output_description": "",
+      "expected_error": "invalid_alerts_lookback_hours",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_webhook_url",
+      "description": "Non-empty webhook_url that is not HTTP(S) raises invalid_webhook_url",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "webhook_url='ftp://example.com/hook'",
+      "expected_output_description": "",
+      "expected_error": "invalid_webhook_url",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_webhook_url_garbage",
+      "description": "Non-empty webhook_url with garbage string raises invalid_webhook_url",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "webhook_url='not-a-url'",
+      "expected_output_description": "",
+      "expected_error": "invalid_webhook_url",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_webhook_timeout_zero",
+      "description": "webhook_timeout_seconds of 0 raises invalid_webhook_timeout",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "webhook_timeout_seconds=0",
+      "expected_output_description": "",
+      "expected_error": "invalid_webhook_timeout",
+      "assertions": []
+    },
+    {
+      "id": "validate_error_invalid_webhook_timeout_above_max",
+      "description": "webhook_timeout_seconds above 300 raises invalid_webhook_timeout",
+      "function": "validate_report_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "webhook_timeout_seconds=301",
+      "expected_output_description": "",
+      "expected_error": "invalid_webhook_timeout",
+      "assertions": []
+    },
+    {
+      "id": "generate_happy_path",
+      "description": "generate_report assembles a complete SystemReport from all three data sources",
+      "function": "generate_report",
+      "category": "happy_path",
+      "setup_description": "Mock ConfidenceDataSource with 2 task types, BudgetDataSource with cost data, AuditDataSource with correlation and alert data",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "SystemReport with all sections populated, unique UUID report_id, UTC generated_at",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "generate_report_id_is_uuid4",
+      "description": "Returned report_id is a valid UUID v4 string",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "report_id is a valid UUID v4"
+      ]
+    },
+    {
+      "id": "generate_generated_at_is_utc_iso8601",
+      "description": "generated_at is UTC ISO-8601 formatted",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "generated_at is a valid ISO-8601 UTC datetime string"
+      ]
+    },
+    {
+      "id": "generate_task_types_count_matches_reports",
+      "description": "task_types_count equals length of task_confidence_reports",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "task_types_count == len(task_confidence_reports)"
+      ]
+    },
+    {
+      "id": "generate_correlation_windows_requested_matches_config",
+      "description": "Each CorrelationHistory.windows_requested equals config.correlation_window_count",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "windows_requested == config.correlation_window_count for each history"
+      ]
+    },
+    {
+      "id": "generate_correlation_windows_available_lte_requested",
+      "description": "Each CorrelationHistory.windows_available <= windows_requested",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "windows_available <= windows_requested for each history"
+      ]
+    },
+    {
+      "id": "generate_budget_utilization_consistent",
+      "description": "budget_utilization_pct is consistent with total_remote_spend and budget_limit",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "budget_utilization_pct approximately equals (total_remote_spend / budget_limit) * 100"
+      ]
+    },
+    {
+      "id": "generate_one_report_per_task_type",
+      "description": "task_confidence_reports has exactly one entry per task type from ConfidenceDataSource",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(task_confidence_reports) == number of task types from source"
+      ]
+    },
+    {
+      "id": "generate_error_confidence_source_unavailable",
+      "description": "Raises confidence_source_unavailable when ConfidenceDataSource raises an exception",
+      "function": "generate_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "confidence_data_source": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "confidence_source_unavailable",
+      "assertions": []
+    },
+    {
+      "id": "generate_error_budget_source_unavailable",
+      "description": "Raises budget_source_unavailable when BudgetDataSource raises an exception",
+      "function": "generate_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "budget_data_source": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_source_unavailable",
+      "assertions": []
+    },
+    {
+      "id": "generate_error_audit_source_unavailable",
+      "description": "Raises audit_source_unavailable when AuditDataSource raises an exception",
+      "function": "generate_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "audit_data_source": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "audit_source_unavailable",
+      "assertions": []
+    },
+    {
+      "id": "generate_error_no_task_types_found",
+      "description": "Raises no_task_types_found when ConfidenceDataSource returns empty task types",
+      "function": "generate_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "confidence_data_source": "returns empty task_types list"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "no_task_types_found",
+      "assertions": []
+    },
+    {
+      "id": "generate_unique_report_ids",
+      "description": "Two consecutive generate_report calls produce different report_ids",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "report1.report_id != report2.report_id"
+      ]
+    },
+    {
+      "id": "generate_decimal_strings_valid",
+      "description": "All Decimal string fields in cost_breakdown are valid decimal representations",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Decimal(field) does not raise for each decimal string field"
+      ]
+    },
+    {
+      "id": "format_json_happy_path",
+      "description": "format_report with json format returns valid parseable JSON",
+      "function": "format_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid SystemReport, output_format='json'",
+      "expected_output_description": "FormattedReport with valid JSON content",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "format_cli_summary_happy_path",
+      "description": "format_report with cli_summary format returns human-readable multi-line string",
+      "function": "format_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid SystemReport, output_format='cli_summary'",
+      "expected_output_description": "FormattedReport with multi-line table-formatted content",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "format_report_id_preserved",
+      "description": "FormattedReport.report_id matches input SystemReport.report_id",
+      "function": "format_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "formatted.report_id == report.report_id"
+      ]
+    },
+    {
+      "id": "format_content_length_matches",
+      "description": "FormattedReport.content_length equals len(FormattedReport.content)",
+      "function": "format_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "formatted.content_length == len(formatted.content)"
+      ]
+    },
+    {
+      "id": "format_json_decimal_precision",
+      "description": "JSON output preserves Decimal string precision (not converted to float)",
+      "function": "format_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "SystemReport with cost_breakdown containing precise decimals like '123.456789'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Decimal strings in JSON output match original precision"
+      ]
+    },
+    {
+      "id": "format_format_field_matches_requested",
+      "description": "FormattedReport.format matches the requested output_format for all enum members",
+      "function": "format_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "formatted.format == requested_format"
+      ]
+    },
+    {
+      "id": "format_cli_summary_multiline",
+      "description": "CLI summary format produces multi-line content with sections",
+      "function": "format_report",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "content contains multiple lines",
+        "content contains section-like formatting"
+      ]
+    },
+    {
+      "id": "format_json_round_trip",
+      "description": "JSON output can be parsed back and contains all report fields",
+      "function": "format_report",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(content) succeeds",
+        "parsed content contains report_id"
+      ]
+    },
+    {
+      "id": "format_error_serialization_error",
+      "description": "Raises serialization_error when report contains unserializable data",
+      "function": "format_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "serialization_error",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_success",
+      "description": "Successful webhook delivery returns DeliveryResult with status=success and 2xx code",
+      "function": "deliver_webhook",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "returns 200 OK"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "DeliveryResult with status='success', http_status_code=200",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_url_preserved",
+      "description": "DeliveryResult.url matches the input webhook_url",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.url == webhook_url"
+      ]
+    },
+    {
+      "id": "deliver_webhook_duration_nonnegative",
+      "description": "DeliveryResult.duration_ms is always non-negative",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.duration_ms >= 0"
+      ]
+    },
+    {
+      "id": "deliver_webhook_never_raises",
+      "description": "deliver_webhook never raises an exception even on total failure",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "raises arbitrary Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception is raised",
+        "A DeliveryResult is returned"
+      ]
+    },
+    {
+      "id": "deliver_webhook_timestamp_utc",
+      "description": "DeliveryResult.attempt_timestamp is UTC ISO-8601 formatted",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "attempt_timestamp is a valid ISO-8601 UTC datetime string"
+      ]
+    },
+    {
+      "id": "deliver_webhook_error_connection_refused",
+      "description": "Connection refused returns failure DeliveryResult with non-empty error_message",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "raises httpx.ConnectError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "connection_refused",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_error_dns_resolution_failure",
+      "description": "DNS resolution failure returns failure DeliveryResult",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "raises httpx.ConnectError for DNS"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "dns_resolution_failure",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_error_timeout_exceeded",
+      "description": "Timeout returns DeliveryResult with status=timeout and descriptive error_message",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "raises httpx.TimeoutException"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "timeout_exceeded",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_error_non_2xx_response",
+      "description": "Non-2xx response returns failure DeliveryResult with the actual status code",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "returns 500 Internal Server Error"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "non_2xx_response",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_error_tls_error",
+      "description": "TLS handshake failure returns failure DeliveryResult",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "httpx_client": "raises SSL error"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "tls_error",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_error_serialization_failure",
+      "description": "Serialization failure returns failure DeliveryResult",
+      "function": "deliver_webhook",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "serialization_failure",
+      "assertions": []
+    },
+    {
+      "id": "deliver_webhook_success_status_code_range",
+      "description": "Success status implies http_status_code in [200, 299]",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "200 <= result.http_status_code <= 299 when status is success"
+      ]
+    },
+    {
+      "id": "deliver_webhook_failure_has_error_message",
+      "description": "Failure status always has non-empty error_message",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.error_message is non-empty when status is failure"
+      ]
+    },
+    {
+      "id": "deliver_webhook_timeout_has_error_message",
+      "description": "Timeout status always has error_message describing the timeout condition",
+      "function": "deliver_webhook",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.error_message is non-empty when status is timeout",
+        "error_message mentions timeout"
+      ]
+    },
+    {
+      "id": "invariant_report_generation_read_only",
+      "description": "generate_report does not mutate data source state",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Data sources are only read from, not written to"
+      ]
+    },
+    {
+      "id": "invariant_all_datetimes_utc_iso8601",
+      "description": "All datetime strings throughout a generated report are UTC ISO-8601 formatted",
+      "function": "generate_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All datetime fields parse as valid ISO-8601 UTC timestamps"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract test suite for the report_generator component.\n\nTests cover all 4 public functions:\n  - validate_report_config\n  - generate_report\n  - format_report\n  - deliver_webhook\n\nAll dependencies (confidence_engine, budget_manager, audit_log) are mocked via DI.\n\"\"\"\nimport json\nimport uuid\nimport asyncio\nfrom datetime import datetime, timezone\nfrom decimal import Decimal, InvalidOperation\nfrom unittest.mock import MagicMock, AsyncMock, patch, PropertyMock\n\nimport pytest\n\n# Attempt to import the component under test\nfrom src.report_generator import (\n    ReportGenerator,\n    ReportFormatter,\n    WebhookDelivery,\n    validate_report_config,\n    ReportConfig,\n    SystemReport,\n    TaskConfidenceReport,\n    CostBreakdown,\n    CorrelationHistory,\n    CorrelationWindow,\n    Alert,\n    FormattedReport,\n    DeliveryResult,\n)\n\n\n# ---------------------------------------------------------------------------\n# Helpers & Fixtures\n# ---------------------------------------------------------------------------\n\ndef make_report_config(**overrides):\n    \"\"\"Factory for ReportConfig with sensible defaults.\"\"\"\n    defaults = dict(\n        correlation_window_count=10,\n        alerts_lookback_hours=24,\n        webhook_url=\"https://hooks.example.com/report\",\n        webhook_timeout_seconds=30,\n    )\n    defaults.update(overrides)\n    return ReportConfig(**defaults)\n\n\ndef make_cost_breakdown(**overrides):\n    defaults = dict(\n        total_remote_spend=\"50.00\",\n        estimated_local_savings=\"120.00\",\n        cost_per_task={\"classification\": \"10.00\", \"extraction\": \"40.00\"},\n        budget_limit=\"200.00\",\n        budget_remaining=\"150.00\",\n        budget_utilization_pct=25.0,\n    )\n    defaults.update(overrides)\n    return CostBreakdown(**defaults)\n\n\ndef make_task_confidence_report(**overrides):\n    defaults = dict(\n        task_type=\"classification\",\n        phase=\"calibration\",\n        confidence_score=0.85,\n        trend=\"stable\",\n        sampling_frequency=0.1,\n    )\n    defaults.update(overrides)\n    return TaskConfidenceReport(**defaults)\n\n\ndef make_correlation_window(**overrides):\n    defaults = dict(\n        task_type=\"classification\",\n        window_start=\"2024-01-01T00:00:00Z\",\n        window_end=\"2024-01-01T01:00:00Z\",\n        sample_count=100,\n        correlation_score=0.92,\n        local_agreement_rate=0.88,\n    )\n    defaults.update(overrides)\n    return CorrelationWindow(**defaults)\n\n\ndef make_correlation_history(**overrides):\n    defaults = dict(\n        task_type=\"classification\",\n        windows_requested=10,\n        windows_available=5,\n        windows=[make_correlation_window()],\n    )\n    defaults.update(overrides)\n    return CorrelationHistory(**defaults)\n\n\ndef make_alert(**overrides):\n    defaults = dict(\n        alert_id=str(uuid.uuid4()),\n        alert_type=\"quality_degradation\",\n        severity=\"warning\",\n        message=\"Confidence below threshold\",\n        task_type=\"classification\",\n        timestamp=\"2024-01-15T12:00:00Z\",\n    )\n    defaults.update(overrides)\n    return Alert(**defaults)\n\n\ndef make_system_report(**overrides):\n    \"\"\"Factory for a fully-populated SystemReport.\"\"\"\n    task_reports = [\n        make_task_confidence_report(task_type=\"classification\"),\n        make_task_confidence_report(task_type=\"extraction\", confidence_score=0.72, trend=\"declining\"),\n    ]\n    defaults = dict(\n        report_id=str(uuid.uuid4()),\n        generated_at=\"2024-01-15T12:00:00Z\",\n        task_confidence_reports=task_reports,\n        cost_breakdown=make_cost_breakdown(),\n        correlation_histories=[\n            make_correlation_history(task_type=\"classification\"),\n            make_correlation_history(task_type=\"extraction\"),\n        ],\n        alerts=[make_alert()],\n        task_types_count=2,\n    )\n    defaults.update(overrides)\n    return SystemReport(**defaults)\n\n\ndef _is_valid_uuid4(s: str) -> bool:\n    try:\n        val = uuid.UUID(s, version=4)\n        return str(val) == s\n    except (ValueError, AttributeError):\n        return False\n\n\ndef _is_utc_iso8601(s: str) -> bool:\n    \"\"\"Check whether string is a valid ISO-8601 UTC datetime.\"\"\"\n    try:\n        dt = datetime.fromisoformat(s.replace(\"Z\", \"+00:00\"))\n        return dt.tzinfo is not None or s.endswith(\"Z\")\n    except (ValueError, AttributeError):\n        return False\n\n\ndef _is_valid_decimal_string(s: str) -> bool:\n    try:\n        Decimal(s)\n        return True\n    except (InvalidOperation, ValueError):\n        return False\n\n\n@pytest.fixture\ndef valid_config():\n    return make_report_config()\n\n\n@pytest.fixture\ndef mock_confidence_source():\n    source = MagicMock()\n    source.get_task_types.return_value = [\"classification\", \"extraction\"]\n    source.get_confidence_report.side_effect = lambda tt: make_task_confidence_report(task_type=tt)\n    return source\n\n\n@pytest.fixture\ndef mock_budget_source():\n    source = MagicMock()\n    source.get_cost_breakdown.return_value = make_cost_breakdown()\n    return source\n\n\n@pytest.fixture\ndef mock_audit_source():\n    source = MagicMock()\n    source.get_correlation_history.side_effect = lambda tt, count: make_correlation_history(\n        task_type=tt, windows_requested=count, windows_available=min(count, 5)\n    )\n    source.get_alerts.return_value = [make_alert()]\n    return source\n\n\n@pytest.fixture\ndef report_generator(mock_confidence_source, mock_budget_source, mock_audit_source):\n    return ReportGenerator(\n        confidence_source=mock_confidence_source,\n        budget_source=mock_budget_source,\n        audit_source=mock_audit_source,\n    )\n\n\n@pytest.fixture\ndef sample_report():\n    return make_system_report()\n\n\n@pytest.fixture\ndef mock_http_client():\n    client = AsyncMock()\n    return client\n\n\n@pytest.fixture\ndef webhook_delivery(mock_http_client):\n    return WebhookDelivery(client=mock_http_client)\n\n\n# ===========================================================================\n# validate_report_config tests\n# ===========================================================================\n\nclass TestValidateReportConfig:\n    \"\"\"Tests for validate_report_config.\"\"\"\n\n    def test_valid_config_passes(self, valid_config):\n        \"\"\"Valid ReportConfig passes validation and returns equivalent config.\"\"\"\n        result = validate_report_config(valid_config)\n        assert result is not None, \"validate_report_config should return a config\"\n        assert result.correlation_window_count == valid_config.correlation_window_count\n        assert result.alerts_lookback_hours == valid_config.alerts_lookback_hours\n        assert result.webhook_url == valid_config.webhook_url\n        assert result.webhook_timeout_seconds == valid_config.webhook_timeout_seconds\n\n    @pytest.mark.parametrize(\"window_count\", [1, 500, 1000])\n    def test_valid_correlation_window_count_boundaries(self, window_count):\n        \"\"\"correlation_window_count within [1, 1000] passes validation.\"\"\"\n        config = make_report_config(correlation_window_count=window_count)\n        result = validate_report_config(config)\n        assert result.correlation_window_count == window_count\n\n    @pytest.mark.parametrize(\"hours\", [1, 4380, 8760])\n    def test_valid_alerts_lookback_hours_boundaries(self, hours):\n        \"\"\"alerts_lookback_hours within [1, 8760] passes validation.\"\"\"\n        config = make_report_config(alerts_lookback_hours=hours)\n        result = validate_report_config(config)\n        assert result.alerts_lookback_hours == hours\n\n    @pytest.mark.parametrize(\"timeout\", [1, 150, 300])\n    def test_valid_webhook_timeout_boundaries(self, timeout):\n        \"\"\"webhook_timeout_seconds within [1, 300] passes validation.\"\"\"\n        config = make_report_config(webhook_timeout_seconds=timeout)\n        result = validate_report_config(config)\n        assert result.webhook_timeout_seconds == timeout\n\n    def test_empty_webhook_url_is_valid(self):\n        \"\"\"Empty webhook_url is acceptable (webhook delivery is optional).\"\"\"\n        config = make_report_config(webhook_url=\"\")\n        result = validate_report_config(config)\n        assert result.webhook_url == \"\"\n\n    @pytest.mark.parametrize(\"url\", [\n        \"https://hooks.example.com/report\",\n        \"http://localhost:8080/webhook\",\n        \"https://internal.corp.net/api/hook\",\n    ])\n    def test_valid_http_https_urls(self, url):\n        \"\"\"Valid HTTP and HTTPS URLs pass validation.\"\"\"\n        config = make_report_config(webhook_url=url)\n        result = validate_report_config(config)\n        assert result.webhook_url == url\n\n    # --- Error cases ---\n\n    @pytest.mark.parametrize(\"bad_count\", [0, -1, -100, 1001, 9999])\n    def test_error_invalid_correlation_window_count(self, bad_count):\n        \"\"\"correlation_window_count outside [1, 1000] raises invalid_correlation_window_count.\"\"\"\n        config = make_report_config(correlation_window_count=bad_count)\n        with pytest.raises(Exception) as exc_info:\n            validate_report_config(config)\n        exc_text = str(exc_info.value).lower()\n        assert \"correlation_window_count\" in exc_text or \"correlation\" in exc_text, (\n            f\"Error should mention correlation_window_count, got: {exc_info.value}\"\n        )\n\n    @pytest.mark.parametrize(\"bad_hours\", [0, -1, 8761, 99999])\n    def test_error_invalid_alerts_lookback_hours(self, bad_hours):\n        \"\"\"alerts_lookback_hours outside [1, 8760] raises invalid_alerts_lookback_hours.\"\"\"\n        config = make_report_config(alerts_lookback_hours=bad_hours)\n        with pytest.raises(Exception) as exc_info:\n            validate_report_config(config)\n        exc_text = str(exc_info.value).lower()\n        assert \"alerts_lookback\" in exc_text or \"lookback\" in exc_text or \"alerts\" in exc_text, (\n            f\"Error should mention alerts_lookback_hours, got: {exc_info.value}\"\n        )\n\n    @pytest.mark.parametrize(\"bad_url\", [\n        \"ftp://example.com/hook\",\n        \"not-a-url\",\n        \"tcp://example.com\",\n        \"file:///etc/passwd\",\n        \"://missing-scheme.com\",\n    ])\n    def test_error_invalid_webhook_url(self, bad_url):\n        \"\"\"Non-empty webhook_url that is not HTTP(S) raises invalid_webhook_url.\"\"\"\n        config = make_report_config(webhook_url=bad_url)\n        with pytest.raises(Exception) as exc_info:\n            validate_report_config(config)\n        exc_text = str(exc_info.value).lower()\n        assert \"webhook_url\" in exc_text or \"webhook\" in exc_text or \"url\" in exc_text, (\n            f\"Error should mention webhook_url, got: {exc_info.value}\"\n        )\n\n    @pytest.mark.parametrize(\"bad_timeout\", [0, -1, -50, 301, 1000])\n    def test_error_invalid_webhook_timeout(self, bad_timeout):\n        \"\"\"webhook_timeout_seconds outside [1, 300] raises invalid_webhook_timeout.\"\"\"\n        config = make_report_config(webhook_timeout_seconds=bad_timeout)\n        with pytest.raises(Exception) as exc_info:\n            validate_report_config(config)\n        exc_text = str(exc_info.value).lower()\n        assert \"timeout\" in exc_text or \"webhook_timeout\" in exc_text, (\n            f\"Error should mention webhook_timeout, got: {exc_info.value}\"\n        )\n\n    def test_idempotent_validation(self, valid_config):\n        \"\"\"Validating an already-valid config twice yields equivalent results.\"\"\"\n        result1 = validate_report_config(valid_config)\n        result2 = validate_report_config(result1)\n        assert result1.correlation_window_count == result2.correlation_window_count\n        assert result1.alerts_lookback_hours == result2.alerts_lookback_hours\n        assert result1.webhook_url == result2.webhook_url\n        assert result1.webhook_timeout_seconds == result2.webhook_timeout_seconds\n\n\n# ===========================================================================\n# generate_report tests\n# ===========================================================================\n\nclass TestGenerateReport:\n    \"\"\"Tests for generate_report.\"\"\"\n\n    def test_happy_path_assembles_complete_report(self, report_generator, valid_config):\n        \"\"\"generate_report returns a complete SystemReport from all three data sources.\"\"\"\n        report = report_generator.generate_report(valid_config)\n\n        assert report is not None, \"Should return a SystemReport\"\n        assert isinstance(report.report_id, str), \"report_id should be a string\"\n        assert len(report.task_confidence_reports) > 0, \"Should have task confidence reports\"\n        assert report.cost_breakdown is not None, \"Should have cost breakdown\"\n        assert report.correlation_histories is not None, \"Should have correlation histories\"\n        assert report.alerts is not None, \"Should have alerts list\"\n\n    def test_report_id_is_valid_uuid4(self, report_generator, valid_config):\n        \"\"\"Returned report_id is a valid UUID v4 string.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        assert _is_valid_uuid4(report.report_id), (\n            f\"report_id should be a valid UUID v4, got: {report.report_id}\"\n        )\n\n    def test_generated_at_is_utc_iso8601(self, report_generator, valid_config):\n        \"\"\"generated_at is set to current UTC time in ISO-8601 format.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        assert _is_utc_iso8601(report.generated_at), (\n            f\"generated_at should be UTC ISO-8601, got: {report.generated_at}\"\n        )\n\n    def test_task_types_count_matches_reports_length(self, report_generator, valid_config):\n        \"\"\"task_types_count equals the length of task_confidence_reports.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        assert report.task_types_count == len(report.task_confidence_reports), (\n            f\"task_types_count ({report.task_types_count}) should equal \"\n            f\"len(task_confidence_reports) ({len(report.task_confidence_reports)})\"\n        )\n\n    def test_one_report_per_task_type(self, report_generator, valid_config, mock_confidence_source):\n        \"\"\"task_confidence_reports has exactly one entry per task type from ConfidenceDataSource.\"\"\"\n        expected_task_types = mock_confidence_source.get_task_types.return_value\n        report = report_generator.generate_report(valid_config)\n\n        report_task_types = [r.task_type for r in report.task_confidence_reports]\n        assert sorted(report_task_types) == sorted(expected_task_types), (\n            f\"Expected task types {expected_task_types}, got {report_task_types}\"\n        )\n\n    def test_correlation_windows_requested_matches_config(self, report_generator, valid_config):\n        \"\"\"Each CorrelationHistory.windows_requested equals config.correlation_window_count.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        for history in report.correlation_histories:\n            assert history.windows_requested == valid_config.correlation_window_count, (\n                f\"windows_requested ({history.windows_requested}) should equal \"\n                f\"config.correlation_window_count ({valid_config.correlation_window_count}) \"\n                f\"for task_type={history.task_type}\"\n            )\n\n    def test_correlation_windows_available_lte_requested(self, report_generator, valid_config):\n        \"\"\"Each CorrelationHistory.windows_available <= windows_requested.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        for history in report.correlation_histories:\n            assert history.windows_available <= history.windows_requested, (\n                f\"windows_available ({history.windows_available}) should be <= \"\n                f\"windows_requested ({history.windows_requested}) \"\n                f\"for task_type={history.task_type}\"\n            )\n\n    def test_budget_utilization_consistent(self, report_generator, valid_config):\n        \"\"\"budget_utilization_pct is consistent with total_remote_spend and budget_limit.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        cb = report.cost_breakdown\n        total = Decimal(cb.total_remote_spend)\n        limit = Decimal(cb.budget_limit)\n        if limit > 0:\n            expected_pct = float((total / limit) * 100)\n            assert abs(cb.budget_utilization_pct - expected_pct) < 0.01, (\n                f\"budget_utilization_pct ({cb.budget_utilization_pct}) should be ~\"\n                f\"{expected_pct} based on spend={cb.total_remote_spend}/limit={cb.budget_limit}\"\n            )\n\n    def test_decimal_string_fields_are_valid(self, report_generator, valid_config):\n        \"\"\"All Decimal string fields in cost_breakdown are valid decimal representations.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        cb = report.cost_breakdown\n        decimal_fields = [\"total_remote_spend\", \"estimated_local_savings\", \"budget_limit\", \"budget_remaining\"]\n        for field_name in decimal_fields:\n            value = getattr(cb, field_name)\n            assert _is_valid_decimal_string(value), (\n                f\"cost_breakdown.{field_name} should be a valid Decimal string, got: {value}\"\n            )\n        for task_type, cost in cb.cost_per_task.items():\n            assert _is_valid_decimal_string(cost), (\n                f\"cost_per_task[{task_type}] should be a valid Decimal string, got: {cost}\"\n            )\n\n    def test_unique_report_ids_across_calls(self, report_generator, valid_config):\n        \"\"\"Two consecutive generate_report calls produce different report_ids.\"\"\"\n        report1 = report_generator.generate_report(valid_config)\n        report2 = report_generator.generate_report(valid_config)\n        assert report1.report_id != report2.report_id, (\n            \"Each report should have a unique report_id\"\n        )\n\n    def test_all_datetime_fields_utc_iso8601(self, report_generator, valid_config):\n        \"\"\"All datetime strings throughout a generated report are UTC ISO-8601 formatted.\"\"\"\n        report = report_generator.generate_report(valid_config)\n        assert _is_utc_iso8601(report.generated_at), f\"generated_at: {report.generated_at}\"\n        for alert in report.alerts:\n            assert _is_utc_iso8601(alert.timestamp), f\"alert.timestamp: {alert.timestamp}\"\n        for history in report.correlation_histories:\n            for window in history.windows:\n                assert _is_utc_iso8601(window.window_start), f\"window_start: {window.window_start}\"\n                assert _is_utc_iso8601(window.window_end), f\"window_end: {window.window_end}\"\n\n    def test_generation_is_read_only(self, report_generator, valid_config,\n                                      mock_confidence_source, mock_budget_source, mock_audit_source):\n        \"\"\"generate_report does not mutate data source state (only reads).\"\"\"\n        report_generator.generate_report(valid_config)\n        # Verify no write/mutate methods were called on sources\n        for source in [mock_confidence_source, mock_budget_source, mock_audit_source]:\n            for call in source.method_calls:\n                method_name = call[0]\n                # Only read-like methods should be called\n                assert not any(\n                    verb in method_name.lower()\n                    for verb in [\"set\", \"update\", \"delete\", \"write\", \"save\", \"put\", \"post\", \"remove\"]\n                ), f\"Data source should not be mutated, but '{method_name}' was called\"\n\n    # --- Error cases ---\n\n    def test_error_confidence_source_unavailable(self, mock_confidence_source, mock_budget_source,\n                                                   mock_audit_source, valid_config):\n        \"\"\"Raises confidence_source_unavailable when ConfidenceDataSource raises.\"\"\"\n        mock_confidence_source.get_task_types.side_effect = ConnectionError(\"source down\")\n        generator = ReportGenerator(\n            confidence_source=mock_confidence_source,\n            budget_source=mock_budget_source,\n            audit_source=mock_audit_source,\n        )\n        with pytest.raises(Exception) as exc_info:\n            generator.generate_report(valid_config)\n        exc_text = str(exc_info.value).lower()\n        assert \"confidence\" in exc_text or \"unavailable\" in exc_text, (\n            f\"Error should indicate confidence source unavailable, got: {exc_info.value}\"\n        )\n\n    def test_error_budget_source_unavailable(self, mock_confidence_source, mock_budget_source,\n                                               mock_audit_source, valid_config):\n        \"\"\"Raises budget_source_unavailable when BudgetDataSource raises.\"\"\"\n        mock_budget_source.get_cost_breakdown.side_effect = ConnectionError(\"budget source down\")\n        generator = ReportGenerator(\n            confidence_source=mock_confidence_source,\n            budget_source=mock_budget_source,\n            audit_source=mock_audit_source,\n        )\n        with pytest.raises(Exception) as exc_info:\n            generator.generate_report(valid_config)\n        exc_text = str(exc_info.value).lower()\n        assert \"budget\" in exc_text or \"unavailable\" in exc_text, (\n            f\"Error should indicate budget source unavailable, got: {exc_info.value}\"\n        )\n\n    def test_error_audit_source_unavailable(self, mock_confidence_source, mock_budget_source,\n                                              mock_audit_source, valid_config):\n        \"\"\"Raises audit_source_unavailable when AuditDataSource raises.\"\"\"\n        mock_audit_source.get_correlation_history.side_effect = ConnectionError(\"audit source down\")\n        generator = ReportGenerator(\n            confidence_source=mock_confidence_source,\n            budget_source=mock_budget_source,\n            audit_source=mock_audit_source,\n        )\n        with pytest.raises(Exception) as exc_info:\n            generator.generate_report(valid_config)\n        exc_text = str(exc_info.value).lower()\n        assert \"audit\" in exc_text or \"unavailable\" in exc_text, (\n            f\"Error should indicate audit source unavailable, got: {exc_info.value}\"\n        )\n\n    def test_error_no_task_types_found(self, mock_confidence_source, mock_budget_source,\n                                        mock_audit_source, valid_config):\n        \"\"\"Raises no_task_types_found when ConfidenceDataSource returns empty task types.\"\"\"\n        mock_confidence_source.get_task_types.return_value = []\n        generator = ReportGenerator(\n            confidence_source=mock_confidence_source,\n            budget_source=mock_budget_source,\n            audit_source=mock_audit_source,\n        )\n        with pytest.raises(Exception) as exc_info:\n            generator.generate_report(valid_config)\n        exc_text = str(exc_info.value).lower()\n        assert \"no_task_types\" in exc_text or \"no task\" in exc_text or \"empty\" in exc_text, (\n            f\"Error should indicate no task types found, got: {exc_info.value}\"\n        )\n\n\n# ===========================================================================\n# format_report tests\n# ===========================================================================\n\nclass TestFormatReport:\n    \"\"\"Tests for format_report.\"\"\"\n\n    @pytest.fixture\n    def formatter(self):\n        return ReportFormatter()\n\n    def test_json_format_happy_path(self, formatter, sample_report):\n        \"\"\"format_report with json format returns valid parseable JSON.\"\"\"\n        result = formatter.format_report(sample_report, \"json\")\n\n        assert isinstance(result, FormattedReport), \"Should return a FormattedReport\"\n        # Verify JSON is parseable\n        parsed = json.loads(result.content)\n        assert isinstance(parsed, dict), \"JSON content should parse to a dict\"\n\n    def test_cli_summary_format_happy_path(self, formatter, sample_report):\n        \"\"\"format_report with cli_summary format returns human-readable multi-line string.\"\"\"\n        result = formatter.format_report(sample_report, \"cli_summary\")\n\n        assert isinstance(result, FormattedReport), \"Should return a FormattedReport\"\n        assert \"\\n\" in result.content, \"CLI summary should be multi-line\"\n        assert len(result.content) > 0, \"CLI summary should not be empty\"\n\n    def test_report_id_preserved(self, formatter, sample_report):\n        \"\"\"FormattedReport.report_id matches input SystemReport.report_id.\"\"\"\n        result = formatter.format_report(sample_report, \"json\")\n        assert result.report_id == sample_report.report_id, (\n            f\"FormattedReport.report_id ({result.report_id}) should match \"\n            f\"input report.report_id ({sample_report.report_id})\"\n        )\n\n    @pytest.mark.parametrize(\"fmt\", [\"json\", \"cli_summary\"])\n    def test_content_length_matches_content(self, formatter, sample_report, fmt):\n        \"\"\"FormattedReport.content_length equals len(FormattedReport.content).\"\"\"\n        result = formatter.format_report(sample_report, fmt)\n        assert result.content_length == len(result.content), (\n            f\"content_length ({result.content_length}) should equal \"\n            f\"len(content) ({len(result.content)}) for format={fmt}\"\n        )\n\n    @pytest.mark.parametrize(\"fmt\", [\"json\", \"cli_summary\"])\n    def test_format_field_matches_requested(self, formatter, sample_report, fmt):\n        \"\"\"FormattedReport.format matches the requested output_format.\"\"\"\n        result = formatter.format_report(sample_report, fmt)\n        assert result.format == fmt, (\n            f\"FormattedReport.format ({result.format}) should equal requested format ({fmt})\"\n        )\n\n    def test_json_decimal_precision_preserved(self, formatter):\n        \"\"\"JSON output preserves Decimal string precision (not converted to float).\"\"\"\n        precise_cost = make_cost_breakdown(\n            total_remote_spend=\"123.456789012345\",\n            budget_limit=\"1000.000000000001\",\n            budget_remaining=\"876.543210987656\",\n            budget_utilization_pct=12.3456789,\n        )\n        report = make_system_report(cost_breakdown=precise_cost)\n        result = formatter.format_report(report, \"json\")\n        parsed = json.loads(result.content)\n\n        # Navigate to cost_breakdown in parsed JSON\n        cost_data = parsed.get(\"cost_breakdown\", parsed)\n        # The precise decimal strings should appear verbatim in the content\n        assert \"123.456789012345\" in result.content, (\n            \"JSON should preserve full decimal precision for total_remote_spend\"\n        )\n        assert \"1000.000000000001\" in result.content, (\n            \"JSON should preserve full decimal precision for budget_limit\"\n        )\n\n    def test_json_round_trip_contains_report_id(self, formatter, sample_report):\n        \"\"\"JSON output can be parsed back and contains report_id.\"\"\"\n        result = formatter.format_report(sample_report, \"json\")\n        parsed = json.loads(result.content)\n        assert \"report_id\" in parsed, \"JSON output should contain report_id field\"\n        assert parsed[\"report_id\"] == sample_report.report_id\n\n    def test_cli_summary_is_multiline_with_sections(self, formatter, sample_report):\n        \"\"\"CLI summary format produces multi-line content with sections.\"\"\"\n        result = formatter.format_report(sample_report, \"cli_summary\")\n        lines = result.content.strip().split(\"\\n\")\n        assert len(lines) > 5, (\n            f\"CLI summary should have multiple lines for sections, got {len(lines)} lines\"\n        )\n\n    def test_error_serialization_error(self, formatter):\n        \"\"\"Raises serialization_error when report contains unserializable data.\"\"\"\n        # Create a report with problematic data that can't be serialized\n        report = make_system_report()\n        # Monkey-patch a field to be unserializable (e.g., via mock)\n        bad_report = MagicMock(spec=SystemReport)\n        bad_report.report_id = sample_report_id = \"test-id\"\n        # Make model_dump or serialization raise\n        bad_report.model_dump.side_effect = ValueError(\"Cannot serialize\")\n        bad_report.dict.side_effect = ValueError(\"Cannot serialize\")\n\n        with pytest.raises(Exception) as exc_info:\n            formatter.format_report(bad_report, \"json\")\n        # Should raise some serialization-related error\n        assert exc_info.value is not None, \"Should raise on unserializable input\"\n\n\n# ===========================================================================\n# deliver_webhook tests (async)\n# ===========================================================================\n\nclass TestDeliverWebhook:\n    \"\"\"Tests for deliver_webhook (async).\"\"\"\n\n    @pytest.fixture\n    def mock_response_200(self):\n        resp = MagicMock()\n        resp.status_code = 200\n        resp.text = \"OK\"\n        return resp\n\n    @pytest.fixture\n    def mock_response_500(self):\n        resp = MagicMock()\n        resp.status_code = 500\n        resp.text = \"Internal Server Error\"\n        return resp\n\n    @pytest.mark.asyncio\n    async def test_successful_delivery(self, webhook_delivery, mock_http_client,\n                                        sample_report, mock_response_200):\n        \"\"\"Successful webhook delivery returns DeliveryResult with status=success.\"\"\"\n        mock_http_client.post.return_value = mock_response_200\n        url = \"https://hooks.example.com/report\"\n\n        result = await webhook_delivery.deliver_webhook(sample_report, url, timeout_seconds=30)\n\n        assert isinstance(result, DeliveryResult), \"Should return a DeliveryResult\"\n        assert result.status == \"success\", f\"Status should be success, got: {result.status}\"\n        assert 200 <= result.http_status_code <= 299, (\n            f\"Success should have 2xx status code, got: {result.http_status_code}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_url_preserved_in_result(self, webhook_delivery, mock_http_client,\n                                            sample_report, mock_response_200):\n        \"\"\"DeliveryResult.url matches the input webhook_url.\"\"\"\n        mock_http_client.post.return_value = mock_response_200\n        url = \"https://hooks.example.com/my-specific-endpoint\"\n\n        result = await webhook_delivery.deliver_webhook(sample_report, url, timeout_seconds=30)\n        assert result.url == url, f\"result.url ({result.url}) should equal input url ({url})\"\n\n    @pytest.mark.asyncio\n    async def test_duration_nonnegative(self, webhook_delivery, mock_http_client,\n                                         sample_report, mock_response_200):\n        \"\"\"DeliveryResult.duration_ms is always non-negative.\"\"\"\n        mock_http_client.post.return_value = mock_response_200\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert result.duration_ms >= 0, (\n            f\"duration_ms should be non-negative, got: {result.duration_ms}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_attempt_timestamp_utc_iso8601(self, webhook_delivery, mock_http_client,\n                                                   sample_report, mock_response_200):\n        \"\"\"DeliveryResult.attempt_timestamp is UTC ISO-8601 formatted.\"\"\"\n        mock_http_client.post.return_value = mock_response_200\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert _is_utc_iso8601(result.attempt_timestamp), (\n            f\"attempt_timestamp should be UTC ISO-8601, got: {result.attempt_timestamp}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_never_raises_on_failure(self, webhook_delivery, mock_http_client, sample_report):\n        \"\"\"deliver_webhook never raises an exception even on total failure.\"\"\"\n        mock_http_client.post.side_effect = Exception(\"Catastrophic failure\")\n\n        # Should NOT raise\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert isinstance(result, DeliveryResult), (\n            \"Should always return a DeliveryResult, even on catastrophic failure\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_success_status_code_in_2xx_range(self, webhook_delivery, mock_http_client,\n                                                      sample_report):\n        \"\"\"Success status implies http_status_code in [200, 299].\"\"\"\n        for status_code in [200, 201, 202, 204]:\n            resp = MagicMock()\n            resp.status_code = status_code\n            mock_http_client.post.return_value = resp\n\n            result = await webhook_delivery.deliver_webhook(\n                sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n            )\n            if result.status == \"success\":\n                assert 200 <= result.http_status_code <= 299, (\n                    f\"Success status should have 2xx code, got {result.http_status_code}\"\n                )\n\n    # --- Error cases (all captured in DeliveryResult, never raised) ---\n\n    @pytest.mark.asyncio\n    async def test_connection_refused_returns_failure(self, webhook_delivery, mock_http_client,\n                                                       sample_report):\n        \"\"\"Connection refused returns failure DeliveryResult with non-empty error_message.\"\"\"\n        try:\n            import httpx\n            mock_http_client.post.side_effect = httpx.ConnectError(\"Connection refused\")\n        except ImportError:\n            mock_http_client.post.side_effect = ConnectionRefusedError(\"Connection refused\")\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert result.status == \"failure\", f\"Expected failure status, got: {result.status}\"\n        assert result.error_message, \"Failure should have non-empty error_message\"\n\n    @pytest.mark.asyncio\n    async def test_dns_resolution_failure_returns_failure(self, webhook_delivery, mock_http_client,\n                                                           sample_report):\n        \"\"\"DNS resolution failure returns failure DeliveryResult.\"\"\"\n        try:\n            import httpx\n            mock_http_client.post.side_effect = httpx.ConnectError(\n                \"DNS resolution failed for nonexistent.invalid\"\n            )\n        except ImportError:\n            mock_http_client.post.side_effect = OSError(\"DNS resolution failed\")\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://nonexistent.invalid/hook\", timeout_seconds=30\n        )\n        assert result.status == \"failure\", f\"Expected failure status, got: {result.status}\"\n        assert result.error_message, \"DNS failure should have non-empty error_message\"\n\n    @pytest.mark.asyncio\n    async def test_timeout_exceeded_returns_timeout_status(self, webhook_delivery, mock_http_client,\n                                                            sample_report):\n        \"\"\"Timeout returns DeliveryResult with status=timeout and descriptive error_message.\"\"\"\n        try:\n            import httpx\n            mock_http_client.post.side_effect = httpx.TimeoutException(\"Request timed out\")\n        except ImportError:\n            mock_http_client.post.side_effect = TimeoutError(\"Request timed out\")\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=5\n        )\n        assert result.status == \"timeout\", f\"Expected timeout status, got: {result.status}\"\n        assert result.error_message, \"Timeout should have non-empty error_message\"\n        assert \"timeout\" in result.error_message.lower(), (\n            f\"Timeout error_message should mention timeout, got: {result.error_message}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_non_2xx_response_returns_failure(self, webhook_delivery, mock_http_client,\n                                                      sample_report, mock_response_500):\n        \"\"\"Non-2xx response returns failure DeliveryResult with the actual status code.\"\"\"\n        mock_http_client.post.return_value = mock_response_500\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert result.status == \"failure\", f\"Expected failure status, got: {result.status}\"\n        assert result.http_status_code == 500, (\n            f\"Should report actual status code 500, got: {result.http_status_code}\"\n        )\n        assert result.error_message, \"Non-2xx response should have non-empty error_message\"\n\n    @pytest.mark.asyncio\n    async def test_tls_error_returns_failure(self, webhook_delivery, mock_http_client,\n                                              sample_report):\n        \"\"\"TLS handshake failure returns failure DeliveryResult.\"\"\"\n        try:\n            import httpx\n            mock_http_client.post.side_effect = httpx.ConnectError(\"SSL: CERTIFICATE_VERIFY_FAILED\")\n        except ImportError:\n            import ssl\n            mock_http_client.post.side_effect = ssl.SSLError(\"CERTIFICATE_VERIFY_FAILED\")\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://bad-cert.example.com/hook\", timeout_seconds=30\n        )\n        assert result.status == \"failure\", f\"Expected failure status, got: {result.status}\"\n        assert result.error_message, \"TLS error should have non-empty error_message\"\n\n    @pytest.mark.asyncio\n    async def test_serialization_failure_returns_failure(self, webhook_delivery, mock_http_client):\n        \"\"\"Serialization failure returns failure DeliveryResult.\"\"\"\n        bad_report = MagicMock(spec=SystemReport)\n        bad_report.model_dump.side_effect = TypeError(\"Cannot serialize\")\n        bad_report.model_dump_json.side_effect = TypeError(\"Cannot serialize\")\n        bad_report.dict.side_effect = TypeError(\"Cannot serialize\")\n        bad_report.json.side_effect = TypeError(\"Cannot serialize\")\n\n        result = await webhook_delivery.deliver_webhook(\n            bad_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        assert isinstance(result, DeliveryResult), \"Should still return DeliveryResult\"\n        assert result.status == \"failure\", f\"Expected failure status, got: {result.status}\"\n        assert result.error_message, \"Serialization failure should have non-empty error_message\"\n\n    @pytest.mark.asyncio\n    async def test_failure_status_always_has_error_message(self, webhook_delivery, mock_http_client,\n                                                            sample_report, mock_response_500):\n        \"\"\"Failure status always has non-empty error_message.\"\"\"\n        mock_http_client.post.return_value = mock_response_500\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=30\n        )\n        if result.status == \"failure\":\n            assert result.error_message and len(result.error_message.strip()) > 0, (\n                \"Failure status must have non-empty error_message\"\n            )\n\n    @pytest.mark.asyncio\n    async def test_timeout_status_always_has_descriptive_error_message(\n        self, webhook_delivery, mock_http_client, sample_report\n    ):\n        \"\"\"Timeout status always has error_message describing the timeout condition.\"\"\"\n        try:\n            import httpx\n            mock_http_client.post.side_effect = httpx.TimeoutException(\"timed out\")\n        except ImportError:\n            mock_http_client.post.side_effect = TimeoutError(\"timed out\")\n\n        result = await webhook_delivery.deliver_webhook(\n            sample_report, \"https://hooks.example.com/report\", timeout_seconds=5\n        )\n        if result.status == \"timeout\":\n            assert result.error_message and len(result.error_message.strip()) > 0, (\n                \"Timeout status must have non-empty error_message\"\n            )\n\n\n# ===========================================================================\n# Cross-cutting invariant tests\n# ===========================================================================\n\nclass TestCrossCuttingInvariants:\n    \"\"\"Tests for invariants that span multiple functions.\"\"\"\n\n    def test_formatting_and_delivery_are_independent_of_generation(self):\n        \"\"\"Formatting and delivery are separate steps from generation.\n        A SystemReport can be formatted without a generator instance.\"\"\"\n        report = make_system_report()\n        formatter = ReportFormatter()\n        result = formatter.format_report(report, \"json\")\n        assert isinstance(result, FormattedReport), (\n            \"Formatting should work independently of report generation\"\n        )\n\n    def test_all_monetary_values_are_string_decimals_not_floats(self):\n        \"\"\"All Decimal/monetary values are string-serialized, not floating point.\"\"\"\n        report = make_system_report()\n        cb = report.cost_breakdown\n        # Verify types are strings\n        assert isinstance(cb.total_remote_spend, str), \"total_remote_spend should be a string\"\n        assert isinstance(cb.estimated_local_savings, str), \"estimated_local_savings should be a string\"\n        assert isinstance(cb.budget_limit, str), \"budget_limit should be a string\"\n        assert isinstance(cb.budget_remaining, str), \"budget_remaining should be a string\"\n        for task_type, cost in cb.cost_per_task.items():\n            assert isinstance(cost, str), f\"cost_per_task[{task_type}] should be a string\"\n\n    def test_frozen_models_are_immutable(self):\n        \"\"\"Frozen Pydantic v2 models should not allow attribute mutation.\"\"\"\n        report = make_system_report()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            report.report_id = \"modified-id\"\n\n    def test_system_report_task_types_count_invariant(self):\n        \"\"\"Number of TaskConfidenceReport entries equals task_types_count.\"\"\"\n        report = make_system_report()\n        assert report.task_types_count == len(report.task_confidence_reports), (\n            f\"task_types_count ({report.task_types_count}) must equal \"\n            f\"len(task_confidence_reports) ({len(report.task_confidence_reports)})\"\n        )\n\n    def test_correlation_history_windows_invariant(self):\n        \"\"\"Each CorrelationHistory has windows_available <= windows_requested.\"\"\"\n        report = make_system_report()\n        for history in report.correlation_histories:\n            assert history.windows_available <= history.windows_requested, (\n                f\"windows_available ({history.windows_available}) must be <= \"\n                f\"windows_requested ({history.windows_requested})\"\n            )\n"
+}

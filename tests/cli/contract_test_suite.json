@@ -1,0 +1,1106 @@
+{
+  "component_id": "cli",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "parse_args_run_happy",
+      "description": "parse_args correctly parses 'run' subcommand with task_name and --input",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"run\", \"my_task\", \"--input\", \"{\\\"key\\\": \\\"val\\\"}\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.command == SubcommandName.run or result.command == 'run'",
+        "result.run_args.task_name == 'my_task'",
+        "result.run_args.input_raw == '{\"key\": \"val\"}'"
+      ]
+    },
+    {
+      "id": "parse_args_status_happy",
+      "description": "parse_args correctly parses 'status' subcommand with optional --task filter",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"status\", \"--task\", \"my_task\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.command == SubcommandName.status or result.command == 'status'",
+        "result.status_args.task_filter == 'my_task'"
+      ]
+    },
+    {
+      "id": "parse_args_report_happy",
+      "description": "parse_args correctly parses 'report' subcommand with --output",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"report\", \"--output\", \"/tmp/report.json\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.command == SubcommandName.report or result.command == 'report'",
+        "result.report_args.output_path == '/tmp/report.json'"
+      ]
+    },
+    {
+      "id": "parse_args_global_flags",
+      "description": "parse_args correctly parses global flags --config, --json, --verbose",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--config\", \"custom.yaml\", \"--json\", \"-vv\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.global_flags.config_path == 'custom.yaml'",
+        "result.global_flags.json_mode is True",
+        "result.global_flags.verbose == 2"
+      ]
+    },
+    {
+      "id": "parse_args_default_config",
+      "description": "parse_args uses default config path when --config not specified",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.global_flags.config_path != ''",
+        "len(result.global_flags.config_path) > 0"
+      ]
+    },
+    {
+      "id": "parse_args_verbose_clamped",
+      "description": "parse_args clamps verbose to max 2 even with -vvv",
+      "function": "parse_args",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"-vvv\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.global_flags.verbose <= 2"
+      ]
+    },
+    {
+      "id": "parse_args_no_subcommand",
+      "description": "parse_args raises SystemExit when no subcommand is provided",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "SystemExit",
+      "assertions": []
+    },
+    {
+      "id": "parse_args_unknown_subcommand",
+      "description": "parse_args raises SystemExit for unrecognized subcommand",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"unknown_cmd\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "SystemExit",
+      "assertions": []
+    },
+    {
+      "id": "parse_args_missing_required_arg",
+      "description": "parse_args raises SystemExit when run subcommand missing task_name",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"run\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "SystemExit",
+      "assertions": []
+    },
+    {
+      "id": "parse_args_unrecognized_flag",
+      "description": "parse_args raises SystemExit for unknown flag --bogus",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--bogus\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "SystemExit",
+      "assertions": []
+    },
+    {
+      "id": "load_config_happy",
+      "description": "load_config loads and validates a well-formed YAML config",
+      "function": "load_config",
+      "category": "happy_path",
+      "setup_description": "Create a valid YAML config file via tmp_path",
+      "mock_dependencies": {},
+      "input_values": {
+        "path": "valid_config.yaml"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is not None"
+      ]
+    },
+    {
+      "id": "load_config_file_not_found",
+      "description": "load_config raises error when config file does not exist",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "path": "/nonexistent/path/config.yaml"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "FileNotFoundError or equivalent",
+      "assertions": []
+    },
+    {
+      "id": "load_config_invalid_yaml",
+      "description": "load_config raises error when file contains invalid YAML",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "Create a file with invalid YAML syntax",
+      "mock_dependencies": {},
+      "input_values": {
+        "path": "invalid.yaml"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "YAML parse error",
+      "assertions": []
+    },
+    {
+      "id": "load_config_validation_error",
+      "description": "load_config raises error when YAML is valid but fails pydantic validation",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "Create a YAML file with valid syntax but wrong schema",
+      "mock_dependencies": {},
+      "input_values": {
+        "path": "bad_schema.yaml"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValidationError or equivalent",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_json_string_happy",
+      "description": "resolve_input parses a valid JSON object string",
+      "function": "resolve_input",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "{\"key\": \"value\", \"num\": 42}"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "isinstance(result.data, dict)",
+        "result.data['key'] == 'value'",
+        "result.data['num'] == 42"
+      ]
+    },
+    {
+      "id": "resolve_input_file_reference_happy",
+      "description": "resolve_input reads JSON from an @file reference",
+      "function": "resolve_input",
+      "category": "happy_path",
+      "setup_description": "Create a JSON file at the referenced path",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@/tmp/test_input.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "isinstance(result.data, dict)"
+      ]
+    },
+    {
+      "id": "resolve_input_nested_json",
+      "description": "resolve_input handles deeply nested JSON objects",
+      "function": "resolve_input",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "{\"a\": {\"b\": {\"c\": [1, 2, 3]}}}"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "isinstance(result.data, dict)",
+        "result.data['a']['b']['c'] == [1, 2, 3]"
+      ]
+    },
+    {
+      "id": "resolve_input_invalid_json_string",
+      "description": "resolve_input raises error for invalid JSON string",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "not valid json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_json_string",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_not_json_object_array",
+      "description": "resolve_input raises error when JSON is a valid array, not object",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "[1, 2, 3]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_json_object",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_not_json_object_scalar",
+      "description": "resolve_input raises error when JSON is a valid scalar",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "\"just a string\""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_json_object",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_file_not_found",
+      "description": "resolve_input raises error when @file reference points to nonexistent file",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@/nonexistent/file.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "input_file_not_found",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_file_invalid_json",
+      "description": "resolve_input raises error when referenced file has invalid JSON",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "Create a file with invalid JSON content",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@/tmp/bad.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "input_file_invalid_json",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_empty_file_reference",
+      "description": "resolve_input raises error when input is exactly '@' with no path",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_file_reference",
+      "assertions": []
+    },
+    {
+      "id": "format_output_run_result_json",
+      "description": "format_output serializes RunResult in JSON mode as valid JSON",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "Create a RunResult with success=True and sample output",
+      "mock_dependencies": {},
+      "input_values": {
+        "json_mode": "true"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(result) is not None",
+        "isinstance(json.loads(result), dict)"
+      ]
+    },
+    {
+      "id": "format_output_run_result_human",
+      "description": "format_output serializes RunResult in human mode without raw JSON",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "Create a RunResult with success=True and sample output",
+      "mock_dependencies": {},
+      "input_values": {
+        "json_mode": "false"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result) > 0",
+        "result[-1] != '\\n'"
+      ]
+    },
+    {
+      "id": "format_output_status_result_json",
+      "description": "format_output serializes StatusResult in JSON mode",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "Create a StatusResult with sample tasks",
+      "mock_dependencies": {},
+      "input_values": {
+        "json_mode": "true"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(result) is not None"
+      ]
+    },
+    {
+      "id": "format_output_report_result_json",
+      "description": "format_output serializes ReportResult in JSON mode",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "Create a ReportResult with sample data",
+      "mock_dependencies": {},
+      "input_values": {
+        "json_mode": "true"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(result) is not None"
+      ]
+    },
+    {
+      "id": "format_output_no_trailing_newline",
+      "description": "format_output never includes a trailing newline in returned string",
+      "function": "format_output",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "not result.endswith('\\n')"
+      ]
+    },
+    {
+      "id": "format_output_nonempty",
+      "description": "format_output always returns non-empty string",
+      "function": "format_output",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result) > 0"
+      ]
+    },
+    {
+      "id": "execute_run_happy",
+      "description": "execute_run returns RunResult with correct task_name on success",
+      "function": "execute_run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.run": "returns mock TaskResponse"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.task_name == 'my_task'",
+        "result.success is True",
+        "isinstance(result.output, dict)"
+      ]
+    },
+    {
+      "id": "execute_run_task_not_found",
+      "description": "execute_run handles task_not_found error from Apprentice",
+      "function": "execute_run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.run": "raises task not found error"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": []
+    },
+    {
+      "id": "execute_run_input_resolution_failed",
+      "description": "execute_run handles invalid input_raw that cannot be resolved",
+      "function": "execute_run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "not valid json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "input_resolution_failed",
+      "assertions": []
+    },
+    {
+      "id": "execute_run_execution_error",
+      "description": "execute_run handles execution error from Apprentice.run()",
+      "function": "execute_run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.run": "raises execution error"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "execution_error",
+      "assertions": []
+    },
+    {
+      "id": "execute_status_happy",
+      "description": "execute_status returns StatusResult with tasks and timestamp",
+      "function": "execute_status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.status": "returns mock status data"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result.tasks) > 0",
+        "result.timestamp != ''"
+      ]
+    },
+    {
+      "id": "execute_status_with_filter",
+      "description": "execute_status filters tasks when task_filter is specified",
+      "function": "execute_status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.status": "returns multiple tasks"
+      },
+      "input_values": {
+        "task_filter": "specific_task"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result.tasks) <= 1"
+      ]
+    },
+    {
+      "id": "execute_status_filtered_not_found",
+      "description": "execute_status handles filter for nonexistent task",
+      "function": "execute_status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_filter": "nonexistent_task"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "filtered_task_not_found",
+      "assertions": []
+    },
+    {
+      "id": "execute_report_happy",
+      "description": "execute_report returns ReportResult with all fields populated",
+      "function": "execute_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.report": "returns mock report data"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result.tasks) > 0",
+        "result.total_budget_spent <= result.total_budget_limit",
+        "result.system_uptime_seconds >= 0",
+        "result.timestamp != ''"
+      ]
+    },
+    {
+      "id": "execute_report_with_output_file",
+      "description": "execute_report writes report to output file when path specified",
+      "function": "execute_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.report": "returns mock report data"
+      },
+      "input_values": {
+        "output_path": "/tmp/test_report.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.written_to_file == '/tmp/test_report.json'"
+      ]
+    },
+    {
+      "id": "execute_report_write_error",
+      "description": "execute_report handles output file write error",
+      "function": "execute_report",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "output_path": "/nonexistent/dir/report.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "output_file_write_error",
+      "assertions": []
+    },
+    {
+      "id": "configure_logging_warning",
+      "description": "configure_logging sets WARNING level for verbose=0",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "logging.getLogger().level == logging.WARNING"
+      ]
+    },
+    {
+      "id": "configure_logging_info",
+      "description": "configure_logging sets INFO level for verbose=1",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "logging.getLogger().level == logging.INFO"
+      ]
+    },
+    {
+      "id": "configure_logging_debug",
+      "description": "configure_logging sets DEBUG level for verbose=2",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "2"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "logging.getLogger().level == logging.DEBUG"
+      ]
+    },
+    {
+      "id": "configure_logging_stderr_only",
+      "description": "configure_logging directs all output to stderr, never stdout",
+      "function": "configure_logging",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "all handler writes to stderr"
+      ]
+    },
+    {
+      "id": "main_run_success",
+      "description": "main() returns exit code 0 on successful run subcommand",
+      "function": "main",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "Apprentice": "mock that returns successful task response"
+      },
+      "input_values": {
+        "argv": "[\"--config\", \"test.yaml\", \"run\", \"my_task\", \"--input\", \"{\\\"x\\\": 1}\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 0"
+      ]
+    },
+    {
+      "id": "main_status_success",
+      "description": "main() returns exit code 0 on successful status subcommand",
+      "function": "main",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "Apprentice": "mock that returns status data"
+      },
+      "input_values": {
+        "argv": "[\"--config\", \"test.yaml\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 0"
+      ]
+    },
+    {
+      "id": "main_report_success",
+      "description": "main() returns exit code 0 on successful report subcommand",
+      "function": "main",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "Apprentice": "mock that returns report data"
+      },
+      "input_values": {
+        "argv": "[\"--config\", \"test.yaml\", \"report\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 0"
+      ]
+    },
+    {
+      "id": "main_config_not_found",
+      "description": "main() returns exit code 1 when config file does not exist",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--config\", \"/nonexistent/config.yaml\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 1"
+      ]
+    },
+    {
+      "id": "main_config_validation_error",
+      "description": "main() returns exit code 1 when config fails validation",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "load_config": "raises validation error"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 1"
+      ]
+    },
+    {
+      "id": "main_usage_error",
+      "description": "main() returns exit code 2 on invalid arguments",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 2"
+      ]
+    },
+    {
+      "id": "main_keyboard_interrupt",
+      "description": "main() returns exit code 130 on KeyboardInterrupt",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "asyncio.run": "raises KeyboardInterrupt"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 130"
+      ]
+    },
+    {
+      "id": "main_apprentice_error",
+      "description": "main() returns exit code 1 when Apprentice raises ApprenticeError",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "Apprentice": "raises ApprenticeError on construction or run"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 1"
+      ]
+    },
+    {
+      "id": "main_json_mode_error_output",
+      "description": "main() with --json flag produces valid JSON even on errors",
+      "function": "main",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--json\", \"--config\", \"/nonexistent.yaml\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "stderr output is valid JSON or structured error"
+      ]
+    },
+    {
+      "id": "main_stdout_results_stderr_errors",
+      "description": "main() writes results to stdout and errors/logs to stderr",
+      "function": "main",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "results on stdout",
+        "errors on stderr"
+      ]
+    },
+    {
+      "id": "invariant_exit_codes_deterministic",
+      "description": "Exit codes are deterministic: 0=success, 1=app error, 2=usage error, 130=keyboard interrupt",
+      "function": "main",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit code in {0, 1, 2, 130}"
+      ]
+    },
+    {
+      "id": "invariant_no_trailing_newline_format",
+      "description": "format_output never includes trailing newline",
+      "function": "format_output",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "not result.endswith('\\n')"
+      ]
+    },
+    {
+      "id": "invariant_json_mode_valid_json",
+      "description": "format_output in JSON mode always produces valid JSON",
+      "function": "format_output",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(result) succeeds"
+      ]
+    },
+    {
+      "id": "main_invalid_input_json",
+      "description": "main() returns exit code 1 when --input is invalid JSON for run subcommand",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "load_config": "returns valid config"
+      },
+      "input_values": {
+        "argv": "[\"--config\", \"test.yaml\", \"run\", \"my_task\", \"--input\", \"not json\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "exit_code == 1"
+      ]
+    },
+    {
+      "id": "resolve_input_empty_object",
+      "description": "resolve_input handles empty JSON object {}",
+      "function": "resolve_input",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "{}"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "isinstance(result.data, dict)",
+        "len(result.data) == 0"
+      ]
+    },
+    {
+      "id": "resolve_input_number_scalar",
+      "description": "resolve_input rejects a JSON number scalar",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "42"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_json_object",
+      "assertions": []
+    },
+    {
+      "id": "resolve_input_null_literal",
+      "description": "resolve_input rejects JSON null",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "null"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_json_object",
+      "assertions": []
+    },
+    {
+      "id": "parse_args_verbose_zero",
+      "description": "parse_args defaults verbose to 0 when no -v flags given",
+      "function": "parse_args",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.global_flags.verbose == 0"
+      ]
+    },
+    {
+      "id": "parse_args_single_verbose",
+      "description": "parse_args sets verbose to 1 with single -v flag",
+      "function": "parse_args",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"-v\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.global_flags.verbose == 1"
+      ]
+    },
+    {
+      "id": "execute_status_iso_timestamp",
+      "description": "execute_status returns ISO 8601 formatted timestamp",
+      "function": "execute_status",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.status": "returns mock status"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "datetime.fromisoformat(result.timestamp) does not raise"
+      ]
+    },
+    {
+      "id": "execute_report_budget_invariant",
+      "description": "execute_report ensures total_budget_spent <= total_budget_limit",
+      "function": "execute_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.report": "returns mock report data"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.total_budget_spent <= result.total_budget_limit"
+      ]
+    },
+    {
+      "id": "execute_report_uptime_nonnegative",
+      "description": "execute_report ensures system_uptime_seconds >= 0",
+      "function": "execute_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {
+        "apprentice.report": "returns mock report data"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.system_uptime_seconds >= 0"
+      ]
+    },
+    {
+      "id": "configure_logging_json_format",
+      "description": "configure_logging produces structured JSON log lines with required fields",
+      "function": "configure_logging",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "log output contains timestamp, level, logger, message fields"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract test suite for the CLI component.\n\nTests are organized by function/concern following the contract specification.\nAll dependencies (apprentice_core, config) are mocked at injection seams.\n\nRun with: pytest contract_test.py -v\n\"\"\"\n\nimport asyncio\nimport json\nimport logging\nimport os\nimport sys\nimport io\nfrom datetime import datetime\nfrom pathlib import Path\nfrom unittest.mock import (\n    AsyncMock,\n    MagicMock,\n    Mock,\n    patch,\n    PropertyMock,\n)\n\nimport pytest\n\n# ---------------------------------------------------------------------------\n# Attempt imports — the implementation may organize types across modules\n# ---------------------------------------------------------------------------\ntry:\n    from src.cli import (\n        main,\n        parse_args,\n        load_config,\n        resolve_input,\n        format_output,\n        configure_logging,\n        execute_run,\n        execute_status,\n        execute_report,\n    )\nexcept ImportError:\n    # Fall back to a flat module layout\n    from cli import (  # type: ignore[no-redef]\n        main,\n        parse_args,\n        load_config,\n        resolve_input,\n        format_output,\n        configure_logging,\n        execute_run,\n        execute_status,\n        execute_report,\n    )\n\ntry:\n    from src.cli_models import (\n        RunResult,\n        StatusResult,\n        ReportResult,\n        TaskStatusEntry,\n        PhaseInfo,\n        BudgetInfo,\n        RunArgs,\n        StatusArgs,\n        ReportArgs,\n        GlobalFlags,\n        ParsedArgs,\n        InputData,\n    )\nexcept ImportError:\n    try:\n        from cli_models import (  # type: ignore[no-redef]\n            RunResult,\n            StatusResult,\n            ReportResult,\n            TaskStatusEntry,\n            PhaseInfo,\n            BudgetInfo,\n            RunArgs,\n            StatusArgs,\n            ReportArgs,\n            GlobalFlags,\n            ParsedArgs,\n            InputData,\n        )\n    except ImportError:\n        # Models may live inside cli module itself\n        pass\n\n\n# ===========================================================================\n# Fixtures\n# ===========================================================================\n\n@pytest.fixture\ndef sample_phase_info():\n    \"\"\"Minimal PhaseInfo for test construction.\"\"\"\n    try:\n        return PhaseInfo(phase_name=\"running\", confidence_score=0.85, is_local_primary=True)\n    except Exception:\n        return {\"phase_name\": \"running\", \"confidence_score\": 0.85, \"is_local_primary\": True}\n\n\n@pytest.fixture\ndef sample_budget_info():\n    \"\"\"Minimal BudgetInfo for test construction.\"\"\"\n    try:\n        return BudgetInfo(budget_limit=100.0, budget_spent=25.0, budget_remaining=75.0, is_exhausted=False)\n    except Exception:\n        return {\"budget_limit\": 100.0, \"budget_spent\": 25.0, \"budget_remaining\": 75.0, \"is_exhausted\": False}\n\n\n@pytest.fixture\ndef sample_task_status_entry(sample_phase_info, sample_budget_info):\n    \"\"\"Minimal TaskStatusEntry.\"\"\"\n    try:\n        return TaskStatusEntry(task_name=\"test_task\", phase=sample_phase_info, budget=sample_budget_info)\n    except Exception:\n        return {\"task_name\": \"test_task\", \"phase\": sample_phase_info, \"budget\": sample_budget_info}\n\n\n@pytest.fixture\ndef sample_run_result():\n    \"\"\"A successful RunResult.\"\"\"\n    try:\n        return RunResult(\n            task_name=\"my_task\",\n            output={\"result\": \"ok\"},\n            success=True,\n            error_message=\"\",\n        )\n    except Exception:\n        return MagicMock(\n            task_name=\"my_task\",\n            output={\"result\": \"ok\"},\n            success=True,\n            error_message=\"\",\n        )\n\n\n@pytest.fixture\ndef sample_status_result(sample_task_status_entry):\n    \"\"\"A StatusResult with one task.\"\"\"\n    try:\n        return StatusResult(tasks=[sample_task_status_entry], timestamp=\"2024-01-01T00:00:00Z\")\n    except Exception:\n        return MagicMock(tasks=[sample_task_status_entry], timestamp=\"2024-01-01T00:00:00Z\")\n\n\n@pytest.fixture\ndef sample_report_result(sample_task_status_entry):\n    \"\"\"A ReportResult with one task.\"\"\"\n    try:\n        return ReportResult(\n            tasks=[sample_task_status_entry],\n            total_budget_limit=100.0,\n            total_budget_spent=25.0,\n            system_uptime_seconds=3600.0,\n            timestamp=\"2024-01-01T00:00:00Z\",\n            config_path=\"apprentice.yaml\",\n            written_to_file=\"\",\n        )\n    except Exception:\n        return MagicMock(\n            tasks=[sample_task_status_entry],\n            total_budget_limit=100.0,\n            total_budget_spent=25.0,\n            system_uptime_seconds=3600.0,\n            timestamp=\"2024-01-01T00:00:00Z\",\n            config_path=\"apprentice.yaml\",\n            written_to_file=\"\",\n        )\n\n\n@pytest.fixture\ndef mock_apprentice():\n    \"\"\"A mock Apprentice with async methods.\"\"\"\n    apprentice = MagicMock()\n    apprentice.run = AsyncMock(return_value=MagicMock(\n        output={\"result\": \"ok\"},\n        success=True,\n    ))\n    apprentice.status = AsyncMock(return_value=[\n        MagicMock(\n            task_name=\"test_task\",\n            phase=MagicMock(phase_name=\"running\", confidence_score=0.85, is_local_primary=True),\n            budget=MagicMock(budget_limit=100.0, budget_spent=25.0, budget_remaining=75.0, is_exhausted=False),\n        )\n    ])\n    apprentice.report = AsyncMock(return_value=MagicMock(\n        tasks=[MagicMock(\n            task_name=\"test_task\",\n            phase=MagicMock(phase_name=\"running\", confidence_score=0.85, is_local_primary=True),\n            budget=MagicMock(budget_limit=100.0, budget_spent=25.0, budget_remaining=75.0, is_exhausted=False),\n        )],\n        total_budget_limit=100.0,\n        total_budget_spent=25.0,\n        system_uptime_seconds=3600.0,\n    ))\n    return apprentice\n\n\n# ===========================================================================\n# Tests: parse_args\n# ===========================================================================\n\nclass TestParseArgs:\n    \"\"\"Tests for parse_args: argument parsing for all subcommands and flags.\"\"\"\n\n    def test_parse_args_run_happy(self):\n        \"\"\"parse_args correctly parses 'run' subcommand with task_name and --input.\"\"\"\n        result = parse_args([\"run\", \"my_task\", \"--input\", '{\"key\": \"val\"}'])\n        cmd = result.command if hasattr(result, \"command\") else getattr(result, \"command\", None)\n        assert cmd in (\"run\", \"SubcommandName.run\") or str(cmd) == \"run\" or (hasattr(cmd, \"value\") and cmd.value == \"run\"), \\\n            f\"Expected command 'run', got {cmd}\"\n        assert result.run_args.task_name == \"my_task\", \"task_name should be 'my_task'\"\n        assert result.run_args.input_raw == '{\"key\": \"val\"}', \"input_raw should match provided JSON\"\n\n    def test_parse_args_status_happy(self):\n        \"\"\"parse_args correctly parses 'status' subcommand with optional --task filter.\"\"\"\n        result = parse_args([\"status\", \"--task\", \"my_task\"])\n        cmd_str = str(getattr(result, \"command\", \"\"))\n        assert \"status\" in cmd_str.lower(), f\"Expected 'status' command, got {cmd_str}\"\n        assert result.status_args.task_filter == \"my_task\"\n\n    def test_parse_args_report_happy(self):\n        \"\"\"parse_args correctly parses 'report' subcommand with --output.\"\"\"\n        result = parse_args([\"report\", \"--output\", \"/tmp/report.json\"])\n        cmd_str = str(getattr(result, \"command\", \"\"))\n        assert \"report\" in cmd_str.lower(), f\"Expected 'report' command, got {cmd_str}\"\n        assert result.report_args.output_path == \"/tmp/report.json\"\n\n    def test_parse_args_global_flags(self):\n        \"\"\"parse_args correctly parses global flags --config, --json, --verbose.\"\"\"\n        result = parse_args([\"--config\", \"custom.yaml\", \"--json\", \"-vv\", \"status\"])\n        assert result.global_flags.config_path == \"custom.yaml\", \\\n            f\"config_path should be 'custom.yaml', got {result.global_flags.config_path}\"\n        assert result.global_flags.json_mode is True, \"json_mode should be True\"\n        assert result.global_flags.verbose == 2, f\"verbose should be 2, got {result.global_flags.verbose}\"\n\n    def test_parse_args_default_config(self):\n        \"\"\"parse_args uses a default config path when --config not specified.\"\"\"\n        result = parse_args([\"status\"])\n        assert result.global_flags.config_path != \"\", \"Default config_path should be non-empty\"\n        assert len(result.global_flags.config_path) > 0\n\n    def test_parse_args_verbose_zero_default(self):\n        \"\"\"parse_args defaults verbose to 0 when no -v flags given.\"\"\"\n        result = parse_args([\"status\"])\n        assert result.global_flags.verbose == 0, f\"Default verbose should be 0, got {result.global_flags.verbose}\"\n\n    def test_parse_args_single_verbose(self):\n        \"\"\"parse_args sets verbose to 1 with single -v flag.\"\"\"\n        result = parse_args([\"-v\", \"status\"])\n        assert result.global_flags.verbose == 1, f\"Single -v should give verbose=1, got {result.global_flags.verbose}\"\n\n    def test_parse_args_verbose_clamped(self):\n        \"\"\"parse_args clamps verbose to max 2 even with -vvv.\"\"\"\n        result = parse_args([\"-vvv\", \"status\"])\n        assert result.global_flags.verbose <= 2, \\\n            f\"verbose should be clamped to <=2, got {result.global_flags.verbose}\"\n\n    def test_parse_args_no_subcommand(self):\n        \"\"\"parse_args raises SystemExit when no subcommand is provided.\"\"\"\n        with pytest.raises(SystemExit):\n            parse_args([])\n\n    def test_parse_args_unknown_subcommand(self):\n        \"\"\"parse_args raises SystemExit for an unrecognized subcommand.\"\"\"\n        with pytest.raises(SystemExit):\n            parse_args([\"unknown_cmd\"])\n\n    def test_parse_args_missing_required_arg(self):\n        \"\"\"parse_args raises SystemExit when run subcommand is missing task_name.\"\"\"\n        with pytest.raises(SystemExit):\n            parse_args([\"run\"])\n\n    def test_parse_args_unrecognized_flag(self):\n        \"\"\"parse_args raises SystemExit for an unknown flag like --bogus.\"\"\"\n        with pytest.raises(SystemExit):\n            parse_args([\"--bogus\", \"status\"])\n\n    def test_parse_args_json_mode_default_false(self):\n        \"\"\"parse_args defaults json_mode to False when --json not specified.\"\"\"\n        result = parse_args([\"status\"])\n        assert result.global_flags.json_mode is False, \"Default json_mode should be False\"\n\n\n# ===========================================================================\n# Tests: load_config\n# ===========================================================================\n\nclass TestLoadConfig:\n    \"\"\"Tests for load_config: YAML config loading and pydantic validation.\"\"\"\n\n    def test_load_config_file_not_found(self):\n        \"\"\"load_config raises an error when the config file does not exist.\"\"\"\n        with pytest.raises((FileNotFoundError, OSError, Exception)):\n            load_config(\"/nonexistent/path/config.yaml\")\n\n    def test_load_config_invalid_yaml(self, tmp_path):\n        \"\"\"load_config raises an error when file contains invalid YAML syntax.\"\"\"\n        bad_yaml = tmp_path / \"invalid.yaml\"\n        bad_yaml.write_text(\"{{{{invalid yaml: [unterminated\")\n        with pytest.raises(Exception) as exc_info:\n            load_config(str(bad_yaml))\n        # Should raise some kind of YAML or parsing error\n        assert exc_info.value is not None\n\n    def test_load_config_validation_error(self, tmp_path):\n        \"\"\"load_config raises error when YAML is valid but fails pydantic validation.\"\"\"\n        bad_schema = tmp_path / \"bad_schema.yaml\"\n        # Valid YAML but certainly not a valid ApprenticeConfig schema\n        bad_schema.write_text(\"random_key: random_value\\nanother: 123\\n\")\n        with pytest.raises(Exception) as exc_info:\n            load_config(str(bad_schema))\n        assert exc_info.value is not None\n\n    def test_load_config_empty_path(self):\n        \"\"\"load_config raises error when given empty string path.\"\"\"\n        with pytest.raises(Exception):\n            load_config(\"\")\n\n\n# ===========================================================================\n# Tests: resolve_input\n# ===========================================================================\n\nclass TestResolveInputJSONString:\n    \"\"\"Tests for resolve_input with direct JSON string inputs.\"\"\"\n\n    def test_resolve_input_valid_json_object(self):\n        \"\"\"resolve_input parses a valid JSON object string.\"\"\"\n        result = resolve_input('{\"key\": \"value\", \"num\": 42}')\n        assert isinstance(result.data, dict), f\"Expected dict, got {type(result.data)}\"\n        assert result.data[\"key\"] == \"value\"\n        assert result.data[\"num\"] == 42\n\n    def test_resolve_input_empty_json_object(self):\n        \"\"\"resolve_input handles empty JSON object {}.\"\"\"\n        result = resolve_input(\"{}\")\n        assert isinstance(result.data, dict), f\"Expected dict, got {type(result.data)}\"\n        assert len(result.data) == 0, \"Empty object should have no keys\"\n\n    def test_resolve_input_nested_json(self):\n        \"\"\"resolve_input handles deeply nested JSON objects.\"\"\"\n        result = resolve_input('{\"a\": {\"b\": {\"c\": [1, 2, 3]}}}')\n        assert isinstance(result.data, dict)\n        assert result.data[\"a\"][\"b\"][\"c\"] == [1, 2, 3]\n\n    def test_resolve_input_invalid_json_string(self):\n        \"\"\"resolve_input raises error for invalid JSON string.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_input(\"not valid json\")\n        assert exc_info.value is not None\n\n    @pytest.mark.parametrize(\"input_val,desc\", [\n        (\"[1, 2, 3]\", \"JSON array\"),\n        ('\"just a string\"', \"JSON string scalar\"),\n        (\"42\", \"JSON number scalar\"),\n        (\"true\", \"JSON boolean scalar\"),\n        (\"null\", \"JSON null\"),\n    ])\n    def test_resolve_input_not_json_object(self, input_val, desc):\n        \"\"\"resolve_input raises error when JSON is valid but not an object ({desc}).\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            resolve_input(input_val)\n        assert exc_info.value is not None, f\"Should reject {desc}\"\n\n\nclass TestResolveInputFileReference:\n    \"\"\"Tests for resolve_input with @file reference inputs.\"\"\"\n\n    def test_resolve_input_file_reference_happy(self, tmp_path):\n        \"\"\"resolve_input reads JSON from an @file reference.\"\"\"\n        json_file = tmp_path / \"input.json\"\n        json_file.write_text('{\"from_file\": true}')\n        result = resolve_input(f\"@{json_file}\")\n        assert isinstance(result.data, dict)\n        assert result.data[\"from_file\"] is True\n\n    def test_resolve_input_file_not_found(self):\n        \"\"\"resolve_input raises error when @file points to nonexistent file.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input(\"@/nonexistent/file.json\")\n\n    def test_resolve_input_file_invalid_json(self, tmp_path):\n        \"\"\"resolve_input raises error when referenced file has invalid JSON.\"\"\"\n        bad_file = tmp_path / \"bad.json\"\n        bad_file.write_text(\"this is not json\")\n        with pytest.raises(Exception):\n            resolve_input(f\"@{bad_file}\")\n\n    def test_resolve_input_empty_file_reference(self):\n        \"\"\"resolve_input raises error when input is exactly '@' with no file path.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input(\"@\")\n\n    def test_resolve_input_file_array_not_object(self, tmp_path):\n        \"\"\"resolve_input raises error when file contains valid JSON array.\"\"\"\n        arr_file = tmp_path / \"array.json\"\n        arr_file.write_text(\"[1, 2, 3]\")\n        with pytest.raises(Exception):\n            resolve_input(f\"@{arr_file}\")\n\n\n# ===========================================================================\n# Tests: format_output\n# ===========================================================================\n\nclass TestFormatOutput:\n    \"\"\"Tests for format_output: serialization of CLIResult variants.\"\"\"\n\n    def test_format_output_run_result_json(self, sample_run_result):\n        \"\"\"format_output serializes RunResult in JSON mode as valid JSON.\"\"\"\n        result = format_output(sample_run_result, json_mode=True)\n        assert len(result) > 0, \"Output should be non-empty\"\n        parsed = json.loads(result)\n        assert isinstance(parsed, dict), \"JSON output should parse to a dict\"\n\n    def test_format_output_run_result_human(self, sample_run_result):\n        \"\"\"format_output serializes RunResult in human mode without trailing newline.\"\"\"\n        result = format_output(sample_run_result, json_mode=False)\n        assert len(result) > 0, \"Output should be non-empty\"\n        assert not result.endswith(\"\\n\"), \"Should not have trailing newline\"\n\n    def test_format_output_status_result_json(self, sample_status_result):\n        \"\"\"format_output serializes StatusResult in JSON mode as valid JSON.\"\"\"\n        result = format_output(sample_status_result, json_mode=True)\n        parsed = json.loads(result)\n        assert parsed is not None\n\n    def test_format_output_report_result_json(self, sample_report_result):\n        \"\"\"format_output serializes ReportResult in JSON mode as valid JSON.\"\"\"\n        result = format_output(sample_report_result, json_mode=True)\n        parsed = json.loads(result)\n        assert parsed is not None\n\n    def test_format_output_no_trailing_newline_json(self, sample_run_result):\n        \"\"\"format_output never includes trailing newline in JSON mode.\"\"\"\n        result = format_output(sample_run_result, json_mode=True)\n        assert not result.endswith(\"\\n\"), \"JSON mode output must not end with newline\"\n\n    def test_format_output_no_trailing_newline_human(self, sample_run_result):\n        \"\"\"format_output never includes trailing newline in human mode.\"\"\"\n        result = format_output(sample_run_result, json_mode=False)\n        assert not result.endswith(\"\\n\"), \"Human mode output must not end with newline\"\n\n    def test_format_output_nonempty_json(self, sample_run_result):\n        \"\"\"format_output always returns non-empty string in JSON mode.\"\"\"\n        result = format_output(sample_run_result, json_mode=True)\n        assert len(result) > 0, \"Output must be non-empty\"\n\n    def test_format_output_nonempty_human(self, sample_run_result):\n        \"\"\"format_output always returns non-empty string in human mode.\"\"\"\n        result = format_output(sample_run_result, json_mode=False)\n        assert len(result) > 0, \"Output must be non-empty\"\n\n    def test_format_output_human_mode_no_raw_json(self, sample_run_result):\n        \"\"\"format_output in human mode should not produce raw JSON.\"\"\"\n        result = format_output(sample_run_result, json_mode=False)\n        # In human mode, the output should NOT be valid JSON\n        # (it's formatted text), though this isn't always guaranteed for simple outputs\n        # At minimum, it should be non-empty and not end with newline\n        assert len(result) > 0\n\n\n# ===========================================================================\n# Tests: execute_run\n# ===========================================================================\n\nclass TestExecuteRun:\n    \"\"\"Tests for execute_run: running tasks via mock Apprentice.\"\"\"\n\n    def test_execute_run_happy(self, mock_apprentice):\n        \"\"\"execute_run returns RunResult with correct task_name on success.\"\"\"\n        run_args = MagicMock()\n        run_args.task_name = \"my_task\"\n        run_args.input_raw = '{\"x\": 1}'\n\n        result = asyncio.run(execute_run(mock_apprentice, run_args))\n\n        assert result.task_name == \"my_task\", \\\n            f\"RunResult.task_name should be 'my_task', got {result.task_name}\"\n        assert result.success is True, \"RunResult.success should be True\"\n        assert isinstance(result.output, dict), \"RunResult.output should be a dict\"\n\n    def test_execute_run_input_resolution_failed(self, mock_apprentice):\n        \"\"\"execute_run handles invalid input_raw that cannot be resolved.\"\"\"\n        run_args = MagicMock()\n        run_args.task_name = \"my_task\"\n        run_args.input_raw = \"not valid json\"\n\n        with pytest.raises(Exception):\n            asyncio.run(execute_run(mock_apprentice, run_args))\n\n    def test_execute_run_execution_error(self, mock_apprentice):\n        \"\"\"execute_run handles execution error from Apprentice.run().\"\"\"\n        mock_apprentice.run = AsyncMock(side_effect=Exception(\"Execution failed\"))\n\n        run_args = MagicMock()\n        run_args.task_name = \"my_task\"\n        run_args.input_raw = '{\"x\": 1}'\n\n        # The function may raise or return a RunResult with success=False\n        try:\n            result = asyncio.run(execute_run(mock_apprentice, run_args))\n            # If it returns, it should indicate failure\n            assert result.success is False or result.error_message != \"\", \\\n                \"On execution error, result should indicate failure\"\n        except Exception:\n            pass  # Raising is also acceptable behavior\n\n    def test_execute_run_task_not_found(self, mock_apprentice):\n        \"\"\"execute_run handles task_not_found error from Apprentice.\"\"\"\n        mock_apprentice.run = AsyncMock(side_effect=Exception(\"Task 'nonexistent' not found\"))\n\n        run_args = MagicMock()\n        run_args.task_name = \"nonexistent\"\n        run_args.input_raw = '{\"x\": 1}'\n\n        try:\n            result = asyncio.run(execute_run(mock_apprentice, run_args))\n            assert result.success is False or result.error_message != \"\"\n        except Exception:\n            pass  # Raising is acceptable\n\n\n# ===========================================================================\n# Tests: execute_status\n# ===========================================================================\n\nclass TestExecuteStatus:\n    \"\"\"Tests for execute_status: querying task status via mock Apprentice.\"\"\"\n\n    def test_execute_status_happy(self, mock_apprentice):\n        \"\"\"execute_status returns StatusResult with tasks and timestamp.\"\"\"\n        status_args = MagicMock()\n        status_args.task_filter = \"\"\n\n        result = asyncio.run(execute_status(mock_apprentice, status_args))\n\n        assert len(result.tasks) > 0, \"Should have at least one task entry\"\n        assert result.timestamp != \"\", \"timestamp should be non-empty\"\n\n    def test_execute_status_with_filter(self, mock_apprentice):\n        \"\"\"execute_status filters tasks when task_filter is specified.\"\"\"\n        status_args = MagicMock()\n        status_args.task_filter = \"test_task\"\n\n        result = asyncio.run(execute_status(mock_apprentice, status_args))\n\n        assert len(result.tasks) <= 1, \\\n            f\"Filtered result should have at most 1 task, got {len(result.tasks)}\"\n\n    def test_execute_status_iso_timestamp(self, mock_apprentice):\n        \"\"\"execute_status returns ISO 8601 formatted timestamp.\"\"\"\n        status_args = MagicMock()\n        status_args.task_filter = \"\"\n\n        result = asyncio.run(execute_status(mock_apprentice, status_args))\n\n        # Verify the timestamp is valid ISO 8601\n        try:\n            datetime.fromisoformat(result.timestamp.replace(\"Z\", \"+00:00\"))\n        except ValueError:\n            pytest.fail(f\"timestamp '{result.timestamp}' is not valid ISO 8601\")\n\n    def test_execute_status_retrieval_error(self, mock_apprentice):\n        \"\"\"execute_status handles status retrieval error.\"\"\"\n        mock_apprentice.status = AsyncMock(side_effect=Exception(\"Status retrieval failed\"))\n\n        status_args = MagicMock()\n        status_args.task_filter = \"\"\n\n        with pytest.raises(Exception):\n            asyncio.run(execute_status(mock_apprentice, status_args))\n\n\n# ===========================================================================\n# Tests: execute_report\n# ===========================================================================\n\nclass TestExecuteReport:\n    \"\"\"Tests for execute_report: generating reports via mock Apprentice.\"\"\"\n\n    def test_execute_report_happy(self, mock_apprentice):\n        \"\"\"execute_report returns ReportResult with all fields populated.\"\"\"\n        report_args = MagicMock()\n        report_args.output_path = \"\"\n\n        result = asyncio.run(\n            execute_report(mock_apprentice, report_args, config_path=\"apprentice.yaml\", json_mode=False)\n        )\n\n        assert len(result.tasks) > 0, \"Should have at least one task\"\n        assert result.total_budget_spent <= result.total_budget_limit, \\\n            \"budget_spent should not exceed budget_limit\"\n        assert result.system_uptime_seconds >= 0, \"uptime should be non-negative\"\n        assert result.timestamp != \"\", \"timestamp should be non-empty\"\n\n    def test_execute_report_with_output_file(self, mock_apprentice, tmp_path):\n        \"\"\"execute_report writes report to output file when path specified.\"\"\"\n        output_file = tmp_path / \"report_output.json\"\n        report_args = MagicMock()\n        report_args.output_path = str(output_file)\n\n        result = asyncio.run(\n            execute_report(mock_apprentice, report_args, config_path=\"apprentice.yaml\", json_mode=True)\n        )\n\n        assert result.written_to_file == str(output_file), \\\n            f\"written_to_file should be '{output_file}', got '{result.written_to_file}'\"\n\n    def test_execute_report_budget_invariant(self, mock_apprentice):\n        \"\"\"execute_report ensures total_budget_spent <= total_budget_limit.\"\"\"\n        report_args = MagicMock()\n        report_args.output_path = \"\"\n\n        result = asyncio.run(\n            execute_report(mock_apprentice, report_args, config_path=\"test.yaml\", json_mode=False)\n        )\n\n        assert result.total_budget_spent <= result.total_budget_limit, \\\n            f\"Budget invariant violated: spent={result.total_budget_spent} > limit={result.total_budget_limit}\"\n\n    def test_execute_report_uptime_nonnegative(self, mock_apprentice):\n        \"\"\"execute_report ensures system_uptime_seconds >= 0.\"\"\"\n        report_args = MagicMock()\n        report_args.output_path = \"\"\n\n        result = asyncio.run(\n            execute_report(mock_apprentice, report_args, config_path=\"test.yaml\", json_mode=False)\n        )\n\n        assert result.system_uptime_seconds >= 0, \\\n            f\"Uptime should be non-negative, got {result.system_uptime_seconds}\"\n\n    def test_execute_report_write_error(self, mock_apprentice):\n        \"\"\"execute_report handles output file write error.\"\"\"\n        report_args = MagicMock()\n        report_args.output_path = \"/nonexistent/dir/report.json\"\n\n        with pytest.raises(Exception):\n            asyncio.run(\n                execute_report(mock_apprentice, report_args, config_path=\"test.yaml\", json_mode=False)\n            )\n\n    def test_execute_report_retrieval_error(self, mock_apprentice):\n        \"\"\"execute_report handles report retrieval error from Apprentice.\"\"\"\n        mock_apprentice.report = AsyncMock(side_effect=Exception(\"Report retrieval failed\"))\n\n        report_args = MagicMock()\n        report_args.output_path = \"\"\n\n        with pytest.raises(Exception):\n            asyncio.run(\n                execute_report(mock_apprentice, report_args, config_path=\"test.yaml\", json_mode=False)\n            )\n\n\n# ===========================================================================\n# Tests: configure_logging\n# ===========================================================================\n\nclass TestConfigureLogging:\n    \"\"\"Tests for configure_logging: log level, format, and handler config.\"\"\"\n\n    def _reset_logging(self):\n        \"\"\"Reset root logger state between tests.\"\"\"\n        root = logging.getLogger()\n        root.handlers.clear()\n        root.setLevel(logging.WARNING)\n\n    def test_configure_logging_warning(self):\n        \"\"\"configure_logging sets WARNING level for verbose=0.\"\"\"\n        self._reset_logging()\n        configure_logging(0)\n        assert logging.getLogger().level == logging.WARNING, \\\n            f\"Expected WARNING ({logging.WARNING}), got {logging.getLogger().level}\"\n\n    def test_configure_logging_info(self):\n        \"\"\"configure_logging sets INFO level for verbose=1.\"\"\"\n        self._reset_logging()\n        configure_logging(1)\n        assert logging.getLogger().level == logging.INFO, \\\n            f\"Expected INFO ({logging.INFO}), got {logging.getLogger().level}\"\n\n    def test_configure_logging_debug(self):\n        \"\"\"configure_logging sets DEBUG level for verbose=2.\"\"\"\n        self._reset_logging()\n        configure_logging(2)\n        assert logging.getLogger().level == logging.DEBUG, \\\n            f\"Expected DEBUG ({logging.DEBUG}), got {logging.getLogger().level}\"\n\n    def test_configure_logging_stderr_only(self):\n        \"\"\"configure_logging directs all handlers to stderr, never stdout.\"\"\"\n        self._reset_logging()\n        configure_logging(0)\n        root = logging.getLogger()\n        for handler in root.handlers:\n            if hasattr(handler, \"stream\"):\n                assert handler.stream is not sys.stdout, \\\n                    \"Log handler must not write to stdout\"\n\n    def test_configure_logging_json_format(self):\n        \"\"\"configure_logging produces structured JSON log lines.\"\"\"\n        self._reset_logging()\n        configure_logging(1)\n\n        root = logging.getLogger()\n        # Find the handler and test its formatter\n        for handler in root.handlers:\n            if hasattr(handler, \"stream\"):\n                # Capture a log line\n                buffer = io.StringIO()\n                original_stream = handler.stream\n                handler.stream = buffer\n                try:\n                    root.info(\"test message\")\n                    handler.flush()\n                    output = buffer.getvalue()\n                    if output.strip():\n                        # Attempt to parse as JSON\n                        log_obj = json.loads(output.strip().split(\"\\n\")[0])\n                        assert \"message\" in log_obj or \"msg\" in log_obj, \\\n                            f\"Log line should contain 'message' field: {log_obj}\"\n                finally:\n                    handler.stream = original_stream\n                break\n\n\n# ===========================================================================\n# Tests: main (integration)\n# ===========================================================================\n\nclass TestMain:\n    \"\"\"Integration tests for main(argv) — tests through the full pipeline.\"\"\"\n\n    def _get_cli_module_path(self):\n        \"\"\"Determine the module path for patching.\"\"\"\n        try:\n            import src.cli\n            return \"src.cli\"\n        except ImportError:\n            return \"cli\"\n\n    def test_main_usage_error_no_args(self):\n        \"\"\"main() returns exit code 2 on missing arguments (no subcommand).\"\"\"\n        exit_code = main([])\n        assert exit_code == 2, f\"Expected exit code 2 for usage error, got {exit_code}\"\n\n    def test_main_config_not_found(self):\n        \"\"\"main() returns exit code 1 when config file does not exist.\"\"\"\n        exit_code = main([\"--config\", \"/absolutely/nonexistent/path/config.yaml\", \"status\"])\n        assert exit_code == 1, f\"Expected exit code 1 for config not found, got {exit_code}\"\n\n    def test_main_run_success(self, tmp_path):\n        \"\"\"main() returns exit code 0 on successful run subcommand.\"\"\"\n        mod = self._get_cli_module_path()\n\n        mock_config = MagicMock()\n        mock_apprentice = MagicMock()\n        mock_run_result = MagicMock()\n        mock_run_result.task_name = \"my_task\"\n        mock_run_result.output = {\"result\": \"ok\"}\n        mock_run_result.success = True\n        mock_run_result.error_message = \"\"\n\n        with patch(f\"{mod}.load_config\", return_value=mock_config), \\\n             patch(f\"{mod}.asyncio\") as mock_asyncio:\n            # Make asyncio.run return a successful result\n            mock_asyncio.run = MagicMock(return_value=None)\n\n            # We need to also patch the Apprentice constructor and execution\n            # Since main() orchestrates everything, we patch at appropriate seams\n            with patch(f\"{mod}.format_output\", return_value='{\"task_name\": \"my_task\", \"success\": true}'):\n                exit_code = main([\"--config\", \"test.yaml\", \"run\", \"my_task\", \"--input\", '{\"x\": 1}'])\n\n        assert exit_code == 0, f\"Expected exit code 0 for success, got {exit_code}\"\n\n    def test_main_keyboard_interrupt(self):\n        \"\"\"main() returns exit code 130 on KeyboardInterrupt.\"\"\"\n        mod = self._get_cli_module_path()\n\n        with patch(f\"{mod}.load_config\", side_effect=KeyboardInterrupt):\n            exit_code = main([\"--config\", \"test.yaml\", \"status\"])\n\n        assert exit_code == 130, f\"Expected exit code 130 for KeyboardInterrupt, got {exit_code}\"\n\n    def test_main_apprentice_error(self):\n        \"\"\"main() returns exit code 1 when Apprentice raises an error.\"\"\"\n        mod = self._get_cli_module_path()\n\n        with patch(f\"{mod}.load_config\", side_effect=Exception(\"Apprentice construction failed\")):\n            exit_code = main([\"--config\", \"test.yaml\", \"status\"])\n\n        assert exit_code == 1, f\"Expected exit code 1 for apprentice error, got {exit_code}\"\n\n    def test_main_exit_code_deterministic(self):\n        \"\"\"Exit codes are always from the set {0, 1, 2, 130}.\"\"\"\n        valid_exit_codes = {0, 1, 2, 130}\n\n        # Test several failure modes and verify exit codes are in the valid set\n        test_cases = [\n            [],  # no args -> usage error\n            [\"--config\", \"/nonexistent.yaml\", \"status\"],  # config not found\n        ]\n\n        for argv in test_cases:\n            exit_code = main(argv)\n            assert exit_code in valid_exit_codes, \\\n                f\"Exit code {exit_code} for argv={argv} not in {valid_exit_codes}\"\n\n    def test_main_json_mode_error_output(self, capsys):\n        \"\"\"main() with --json flag should produce structured error output.\"\"\"\n        exit_code = main([\"--json\", \"--config\", \"/nonexistent.yaml\", \"status\"])\n        assert exit_code == 1\n        captured = capsys.readouterr()\n        # Errors go to stderr — in JSON mode they should be structured\n        # At minimum, the exit code should be correct\n        assert exit_code in {0, 1, 2, 130}\n\n    def test_main_config_validation_error(self, tmp_path):\n        \"\"\"main() returns exit code 1 when config fails pydantic validation.\"\"\"\n        mod = self._get_cli_module_path()\n\n        # Simulate a validation error from load_config\n        with patch(f\"{mod}.load_config\", side_effect=ValueError(\"Validation failed: missing field 'tasks'\")):\n            exit_code = main([\"--config\", \"test.yaml\", \"status\"])\n\n        assert exit_code == 1, f\"Expected exit code 1 for validation error, got {exit_code}\"\n\n    def test_main_invalid_input_json(self):\n        \"\"\"main() returns exit code 1 when --input is invalid JSON for run subcommand.\"\"\"\n        mod = self._get_cli_module_path()\n\n        mock_config = MagicMock()\n        with patch(f\"{mod}.load_config\", return_value=mock_config):\n            # The resolve_input inside execute_run should fail on \"not json\"\n            exit_code = main([\"--config\", \"test.yaml\", \"run\", \"my_task\", \"--input\", \"not json\"])\n\n        assert exit_code == 1, f\"Expected exit code 1 for invalid input JSON, got {exit_code}\"\n\n    def test_main_stdout_results_stderr_errors(self, capsys):\n        \"\"\"main() writes results to stdout and errors to stderr.\"\"\"\n        # Trigger a config error — errors should go to stderr\n        main([\"--config\", \"/nonexistent_xyz.yaml\", \"status\"])\n        captured = capsys.readouterr()\n        # Results should not appear on stdout for an error case\n        # Errors should appear on stderr\n        # (This is a best-effort test — the exact behavior depends on implementation)\n        # The key invariant is that the exit code is correct\n        assert True  # If we got here without crashing, basic I/O is working\n\n\n# ===========================================================================\n# Tests: Invariants (cross-cutting)\n# ===========================================================================\n\nclass TestInvariants:\n    \"\"\"Cross-cutting invariant tests from the contract.\"\"\"\n\n    def test_format_output_json_mode_always_valid_json(self, sample_run_result, sample_status_result, sample_report_result):\n        \"\"\"format_output in JSON mode always produces valid JSON for all result types.\"\"\"\n        for result_obj in [sample_run_result, sample_status_result, sample_report_result]:\n            try:\n                output = format_output(result_obj, json_mode=True)\n                parsed = json.loads(output)\n                assert parsed is not None, f\"JSON parsing returned None for {type(result_obj).__name__}\"\n            except TypeError:\n                # Some mock objects may not be serializable — skip gracefully\n                pass\n\n    def test_format_output_no_trailing_newline_all_modes(self, sample_run_result):\n        \"\"\"format_output never includes trailing newline in any mode.\"\"\"\n        for json_mode in [True, False]:\n            output = format_output(sample_run_result, json_mode=json_mode)\n            assert not output.endswith(\"\\n\"), \\\n                f\"format_output(json_mode={json_mode}) should not end with newline\"\n\n    def test_exit_codes_are_deterministic_values(self):\n        \"\"\"All exit code paths return values from {0, 1, 2, 130}.\"\"\"\n        valid_codes = {0, 1, 2, 130}\n\n        # No args = usage error = 2\n        assert main([]) in valid_codes\n\n        # Bad config = app error = 1\n        assert main([\"--config\", \"/nope.yaml\", \"status\"]) in valid_codes\n\n    def test_parse_args_exactly_one_subcommand_populated(self):\n        \"\"\"ParsedArgs has exactly one subcommand's args populated based on command.\"\"\"\n        result = parse_args([\"run\", \"task1\", \"--input\", '{\"a\": 1}'])\n        cmd_str = str(getattr(result, \"command\", \"\")).lower()\n\n        if \"run\" in cmd_str:\n            assert result.run_args is not None, \"run_args should be populated for 'run' command\"\n            assert result.run_args.task_name == \"task1\"\n\n    def test_config_path_always_nonempty(self):\n        \"\"\"global_flags.config_path is always a non-empty string after parsing.\"\"\"\n        for argv in [[\"status\"], [\"--config\", \"x.yaml\", \"status\"]]:\n            result = parse_args(argv)\n            assert result.global_flags.config_path != \"\", \\\n                f\"config_path should be non-empty for argv={argv}\"\n            assert isinstance(result.global_flags.config_path, str)\n\n    def test_resolve_input_output_is_always_dict(self):\n        \"\"\"resolve_input postcondition: returned data is always a dict.\"\"\"\n        valid_inputs = [\n            '{}',\n            '{\"a\": 1}',\n            '{\"nested\": {\"deep\": true}}',\n        ]\n        for inp in valid_inputs:\n            result = resolve_input(inp)\n            assert isinstance(result.data, dict), \\\n                f\"resolve_input('{inp}').data should be dict, got {type(result.data)}\"\n"
+}

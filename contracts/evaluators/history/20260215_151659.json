@@ -1,0 +1,766 @@
+{
+  "component_id": "evaluators",
+  "name": "Response Evaluators",
+  "description": "Pluggable evaluator implementations behind a runtime-checkable Evaluator Protocol. Each evaluator takes a local TaskResponse and a remote TaskResponse (ground truth) plus task-specific EvaluatorConfig, and returns an EvaluationResult (score 0.0–1.0, per-field breakdown, evaluator type used, arbitrary metadata). Implementations: StructuredMatchEvaluator (per-field exact match rate averaged across configured match_fields), ExactMatchEvaluator (full output string equality, binary 0.0 or 1.0), SemanticSimilarityEvaluator (cosine similarity of sentence embeddings, lazy-loads sentence-transformers model, caches by model name, configurable model_name). Custom evaluator support via Python dotted import path resolved at startup. All evaluators are stateless, independently testable, and require no inheritance — only Protocol conformance. The evaluator registry is a plain dict[str, Evaluator] built in the composition root with no global state.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The full textual output of the task response.",
+          "validators": []
+        },
+        {
+          "name": "fields",
+          "type_ref": "dict",
+          "required": true,
+          "default": "{}",
+          "description": "Structured key-value field breakdown of the response. Keys are field names, values are string representations. Empty dict for unstructured responses.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Represents a single task response (local or remote). Imported from config_and_registry at runtime but defined here for contract completeness. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "EvaluationResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Overall evaluation score. 0.0 = no match, 1.0 = perfect match.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=0.0, le=1.0",
+              "error_message": "score must be between 0.0 and 1.0 inclusive"
+            }
+          ]
+        },
+        {
+          "name": "field_scores",
+          "type_ref": "dict",
+          "required": true,
+          "default": "{}",
+          "description": "Per-field score breakdown. Keys are field names, values are float scores in [0.0, 1.0]. Empty dict for non-structured evaluators (ExactMatch, SemanticSimilarity).",
+          "validators": []
+        },
+        {
+          "name": "evaluator_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the evaluator that produced this result. One of: 'structured_match', 'exact_match', 'semantic_similarity', or a custom evaluator identifier.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "evaluator_type must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": true,
+          "default": "{}",
+          "description": "Arbitrary metadata about the evaluation. Values restricted to str, int, float, bool, or None. Used for diagnostics, auditing, and debugging.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model representing the outcome of a single evaluation. Immutable after construction."
+    },
+    {
+      "name": "EvaluatorConfigType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "structured_match",
+        "exact_match",
+        "semantic_similarity",
+        "custom"
+      ],
+      "inner_types": [],
+      "description": "Discriminator values for the EvaluatorConfig union. Determines which evaluator implementation is used."
+    },
+    {
+      "name": "StructuredMatchConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorConfigType",
+          "required": true,
+          "default": "structured_match",
+          "description": "Discriminator. Always 'structured_match'.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of field names to compare between local and remote responses. Each field is compared via exact string equality. Score is the average match rate across all listed fields.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "match_fields must contain at least one field name"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for StructuredMatchEvaluator. Specifies which fields to compare via exact equality."
+    },
+    {
+      "name": "ExactMatchConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorConfigType",
+          "required": true,
+          "default": "exact_match",
+          "description": "Discriminator. Always 'exact_match'.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for ExactMatchEvaluator. No additional parameters needed."
+    },
+    {
+      "name": "SemanticSimilarityConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorConfigType",
+          "required": true,
+          "default": "semantic_similarity",
+          "description": "Discriminator. Always 'semantic_similarity'.",
+          "validators": []
+        },
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": false,
+          "default": "all-MiniLM-L6-v2",
+          "description": "Name or path of the sentence-transformers model used for encoding. Loaded lazily on first evaluation. Cached by name in a module-level dict.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model_name must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for SemanticSimilarityEvaluator. Specifies the sentence-transformers model to use for embedding generation."
+    },
+    {
+      "name": "CustomEvaluatorConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorConfigType",
+          "required": true,
+          "default": "custom",
+          "description": "Discriminator. Always 'custom'.",
+          "validators": []
+        },
+        {
+          "name": "import_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Python dotted path to the custom evaluator class or function. Example: 'mypackage.evaluators.my_evaluator'. Resolved at startup via importlib.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)+$",
+              "error_message": "import_path must be a valid Python dotted path with at least two segments"
+            }
+          ]
+        },
+        {
+          "name": "params",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional keyword arguments passed to the custom evaluator constructor (if class) or ignored (if bare function). Keys are strings, values are any JSON-serializable type.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for loading a custom evaluator via a Python dotted import path. The import_path must point to either a class satisfying the Evaluator protocol or a bare callable with the evaluate signature, which will be wrapped."
+    },
+    {
+      "name": "EvaluatorConfig",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "StructuredMatchConfig",
+        "ExactMatchConfig",
+        "SemanticSimilarityConfig",
+        "CustomEvaluatorConfig"
+      ],
+      "description": "Pydantic discriminated union over evaluator configurations. Discriminated on the 'type' field. Exactly one subtype is active per config instance."
+    },
+    {
+      "name": "EvaluatorRegistry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "evaluators",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from evaluator type string (e.g. 'structured_match', 'exact_match', 'semantic_similarity', or custom name) to an object satisfying the Evaluator protocol.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A plain mapping from evaluator type name to an evaluator instance. Built in the composition root at startup. Not a singleton — passed explicitly via dependency injection."
+    }
+  ],
+  "functions": [
+    {
+      "name": "evaluate",
+      "description": "Core protocol method. Compares a local TaskResponse against a remote TaskResponse (ground truth) using the evaluator's strategy and the provided config. Returns an EvaluationResult with a score in [0.0, 1.0]. This is the single method defined by the @runtime_checkable Evaluator Protocol. All evaluator implementations must satisfy this signature.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the local (fine-tuned) model. The candidate being evaluated.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the remote (ground truth) model. The reference standard for comparison.",
+          "validators": []
+        },
+        {
+          "name": "config",
+          "type_ref": "EvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "Evaluator-specific configuration. The concrete subtype must match the evaluator implementation being invoked.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "missing_match_field_in_local",
+          "condition": "StructuredMatchConfig specifies a field name not present in local.fields",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "A required match_field is missing from the local TaskResponse fields dict"
+          }
+        },
+        {
+          "name": "missing_match_field_in_remote",
+          "condition": "StructuredMatchConfig specifies a field name not present in remote.fields",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "A required match_field is missing from the remote TaskResponse fields dict"
+          }
+        },
+        {
+          "name": "sentence_transformers_not_installed",
+          "condition": "SemanticSimilarityEvaluator is invoked but 'sentence-transformers' package is not importable",
+          "error_type": "EvaluatorDependencyError",
+          "error_data": {
+            "detail": "sentence-transformers package is required for SemanticSimilarityEvaluator but is not installed"
+          }
+        },
+        {
+          "name": "model_load_failure",
+          "condition": "SemanticSimilarityEvaluator cannot load the specified model_name",
+          "error_type": "EvaluatorDependencyError",
+          "error_data": {
+            "detail": "Failed to load sentence-transformers model by the given model_name"
+          }
+        },
+        {
+          "name": "config_type_mismatch",
+          "condition": "The config type discriminator does not match the evaluator implementation being called",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "EvaluatorConfig type does not match the evaluator implementation"
+          }
+        },
+        {
+          "name": "empty_output_local",
+          "condition": "local.output is None or empty string",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "local TaskResponse output must be non-null and non-empty"
+          }
+        },
+        {
+          "name": "empty_output_remote",
+          "condition": "remote.output is None or empty string",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "remote TaskResponse output must be non-null and non-empty"
+          }
+        }
+      ],
+      "preconditions": [
+        "local is a valid TaskResponse with non-null output",
+        "remote is a valid TaskResponse with non-null output",
+        "config type discriminator matches the evaluator implementation being called",
+        "For StructuredMatchConfig: all match_fields must exist as keys in both local.fields and remote.fields",
+        "For SemanticSimilarityConfig: sentence-transformers package must be importable (or EvaluatorDependencyError is raised)"
+      ],
+      "postconditions": [
+        "Returned EvaluationResult.score is in [0.0, 1.0]",
+        "Returned EvaluationResult.evaluator_type matches the config type discriminator",
+        "For StructuredMatchEvaluator: field_scores contains exactly one entry per match_field, each in [0.0, 1.0]",
+        "For StructuredMatchEvaluator: score equals the arithmetic mean of all field_scores values",
+        "For ExactMatchEvaluator: score is exactly 0.0 or exactly 1.0",
+        "For ExactMatchEvaluator: field_scores is empty dict",
+        "For SemanticSimilarityEvaluator: field_scores is empty dict",
+        "For SemanticSimilarityEvaluator: score is the cosine similarity of the embeddings of local.output and remote.output",
+        "EvaluationResult is frozen (immutable) after construction"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Evaluators are stateless and produce no side effects. SemanticSimilarityEvaluator may lazy-load and cache a model on first call but this is idempotent."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_custom_evaluator",
+      "description": "Resolves a custom evaluator from a Python dotted import path. Imports the object via importlib, validates it against the @runtime_checkable Evaluator Protocol, and wraps bare callables into a Protocol-conforming wrapper. Called at startup during composition root wiring. Fails fast if the path is unresolvable or the object does not satisfy the protocol.",
+      "inputs": [
+        {
+          "name": "import_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Python dotted path to a class or callable. Must have at least two segments (e.g. 'pkg.module.name').",
+          "validators": []
+        },
+        {
+          "name": "params",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional keyword arguments to pass to the constructor if the resolved object is a class. Ignored if the resolved object is a bare function.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "import_path_not_found",
+          "condition": "The module or attribute specified by import_path cannot be found",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "Could not resolve import_path: module or attribute not found"
+          }
+        },
+        {
+          "name": "object_not_protocol_conformant",
+          "condition": "The resolved object is neither a class with an evaluate method nor a callable with the correct signature",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "Resolved object does not satisfy the Evaluator protocol and cannot be wrapped as a callable"
+          }
+        },
+        {
+          "name": "constructor_params_invalid",
+          "condition": "The resolved class constructor rejects the provided params",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "Custom evaluator class constructor rejected the provided params"
+          }
+        }
+      ],
+      "preconditions": [
+        "import_path is a valid Python dotted path with at least two segments",
+        "The module referenced by import_path is importable in the current Python environment",
+        "The resolved object is either a class satisfying the Evaluator protocol or a callable with signature (TaskResponse, TaskResponse, EvaluatorConfig) -> EvaluationResult"
+      ],
+      "postconditions": [
+        "Returned object satisfies the @runtime_checkable Evaluator Protocol",
+        "If the resolved object was a bare callable, it is wrapped in a Protocol-conforming adapter",
+        "If the resolved object was a class, it is instantiated with the provided params"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure import and validation logic. No persistent side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "build_evaluator_registry",
+      "description": "Builds the evaluator registry dict from a list of EvaluatorConfig entries. Instantiates each built-in evaluator and resolves each custom evaluator via resolve_custom_evaluator. Returns a plain dict[str, Evaluator] mapping evaluator type names to instances. Called once at startup in the composition root. Fails fast on any resolution error.",
+      "inputs": [
+        {
+          "name": "configs",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of EvaluatorConfig instances (the union type) to register. Each config's type discriminator becomes the registry key.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluatorRegistry",
+      "error_cases": [
+        {
+          "name": "empty_configs",
+          "condition": "configs list is empty",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "At least one evaluator config must be provided"
+          }
+        },
+        {
+          "name": "duplicate_evaluator_type",
+          "condition": "Two or more configs share the same type discriminator value",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "Duplicate evaluator type in config list"
+          }
+        },
+        {
+          "name": "custom_evaluator_resolution_failed",
+          "condition": "A CustomEvaluatorConfig's import_path cannot be resolved or does not satisfy the protocol",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "Failed to resolve or validate custom evaluator at the specified import_path"
+          }
+        }
+      ],
+      "preconditions": [
+        "configs is a non-empty list of valid EvaluatorConfig instances",
+        "No duplicate type discriminators in configs list",
+        "All custom evaluator import_paths are resolvable in the current environment"
+      ],
+      "postconditions": [
+        "Returned EvaluatorRegistry.evaluators has exactly one entry per config in the input list",
+        "Each registry entry key matches the config type discriminator",
+        "Each registry entry value satisfies the @runtime_checkable Evaluator Protocol",
+        "StructuredMatchEvaluator is registered for 'structured_match' type",
+        "ExactMatchEvaluator is registered for 'exact_match' type",
+        "SemanticSimilarityEvaluator is registered for 'semantic_similarity' type",
+        "Custom evaluators are registered under their 'custom' type or a derived name"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Registry construction is pure instantiation logic with no persistent side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "structured_match_evaluate",
+      "description": "StructuredMatchEvaluator implementation of the evaluate protocol method. Compares each field in config.match_fields between local.fields and remote.fields via exact string equality. Returns the arithmetic mean of per-field scores (1.0 for match, 0.0 for mismatch). Populates field_scores with individual field results.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response containing structured fields.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) model's response containing structured fields.",
+          "validators": []
+        },
+        {
+          "name": "config",
+          "type_ref": "StructuredMatchConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration specifying which fields to compare.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "missing_field_in_local",
+          "condition": "A match_field is not present in local.fields",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "match_field not found in local TaskResponse fields"
+          }
+        },
+        {
+          "name": "missing_field_in_remote",
+          "condition": "A match_field is not present in remote.fields",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "match_field not found in remote TaskResponse fields"
+          }
+        }
+      ],
+      "preconditions": [
+        "config.type == 'structured_match'",
+        "config.match_fields is non-empty",
+        "All field names in config.match_fields exist in both local.fields and remote.fields"
+      ],
+      "postconditions": [
+        "result.evaluator_type == 'structured_match'",
+        "result.field_scores has exactly len(config.match_fields) entries",
+        "Each value in result.field_scores is exactly 0.0 or 1.0",
+        "result.score == sum(result.field_scores.values()) / len(result.field_scores)",
+        "result.score is in [0.0, 1.0]"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Stateless comparison logic."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "exact_match_evaluate",
+      "description": "ExactMatchEvaluator implementation of the evaluate protocol method. Performs exact string equality comparison of local.output and remote.output. Returns 1.0 if identical, 0.0 otherwise. No field-level breakdown.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) model's response.",
+          "validators": []
+        },
+        {
+          "name": "config",
+          "type_ref": "ExactMatchConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration for exact match evaluation.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "empty_local_output",
+          "condition": "local.output is None or empty",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "local.output must be non-null and non-empty for exact match evaluation"
+          }
+        },
+        {
+          "name": "empty_remote_output",
+          "condition": "remote.output is None or empty",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "remote.output must be non-null and non-empty for exact match evaluation"
+          }
+        }
+      ],
+      "preconditions": [
+        "config.type == 'exact_match'",
+        "local.output is a non-empty string",
+        "remote.output is a non-empty string"
+      ],
+      "postconditions": [
+        "result.evaluator_type == 'exact_match'",
+        "result.score is exactly 0.0 or exactly 1.0",
+        "result.score == 1.0 if and only if local.output == remote.output",
+        "result.field_scores == {}"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Stateless comparison logic."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "semantic_similarity_evaluate",
+      "description": "SemanticSimilarityEvaluator implementation of the evaluate protocol method. Encodes local.output and remote.output using a sentence-transformers model, then computes cosine similarity. The model is lazy-loaded on first invocation and cached by model_name in a module-level dict. Accepts an optional encode_fn constructor parameter for test injection.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) model's response.",
+          "validators": []
+        },
+        {
+          "name": "config",
+          "type_ref": "SemanticSimilarityConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration specifying the sentence-transformers model name.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "sentence_transformers_missing",
+          "condition": "sentence-transformers is not installed and no encode_fn was injected",
+          "error_type": "EvaluatorDependencyError",
+          "error_data": {
+            "detail": "sentence-transformers package is required but not installed. Install with: pip install sentence-transformers"
+          }
+        },
+        {
+          "name": "model_load_error",
+          "condition": "The specified model_name cannot be loaded by sentence-transformers",
+          "error_type": "EvaluatorDependencyError",
+          "error_data": {
+            "detail": "Failed to load sentence-transformers model with the specified model_name"
+          }
+        },
+        {
+          "name": "encoding_error",
+          "condition": "Model encoding raises an unexpected error during embedding generation",
+          "error_type": "EvaluatorDependencyError",
+          "error_data": {
+            "detail": "Encoding failed during embedding generation"
+          }
+        },
+        {
+          "name": "empty_local_output",
+          "condition": "local.output is None or empty",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "local.output must be non-null and non-empty for semantic similarity evaluation"
+          }
+        },
+        {
+          "name": "empty_remote_output",
+          "condition": "remote.output is None or empty",
+          "error_type": "EvaluatorInputError",
+          "error_data": {
+            "detail": "remote.output must be non-null and non-empty for semantic similarity evaluation"
+          }
+        }
+      ],
+      "preconditions": [
+        "config.type == 'semantic_similarity'",
+        "local.output is a non-empty string",
+        "remote.output is a non-empty string",
+        "sentence-transformers package is importable OR an encode_fn was injected via constructor"
+      ],
+      "postconditions": [
+        "result.evaluator_type == 'semantic_similarity'",
+        "result.score is in [0.0, 1.0] (cosine similarity clamped to non-negative range)",
+        "result.field_scores == {}",
+        "result.metadata contains 'model_name' key with the model used"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Stateless evaluation. Model caching is idempotent and has no observable external side effect."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All evaluator implementations are stateless: calling evaluate with the same inputs always produces the same EvaluationResult",
+    "No evaluator implementation maintains mutable state between calls (SemanticSimilarity model cache is append-only and idempotent)",
+    "EvaluationResult is a frozen Pydantic model — immutable after construction",
+    "EvaluationResult.score is always in the closed interval [0.0, 1.0]",
+    "Each value in EvaluationResult.field_scores is in the closed interval [0.0, 1.0]",
+    "EvaluationResult.evaluator_type always matches the config type discriminator used to produce it",
+    "For StructuredMatchEvaluator: score is exactly the arithmetic mean of field_scores values",
+    "For ExactMatchEvaluator: score is exactly 0.0 or 1.0 — no intermediate values",
+    "For SemanticSimilarityEvaluator: score is clamped to [0.0, 1.0] even if raw cosine similarity is negative",
+    "The evaluator registry contains no global state — it is built explicitly and passed via dependency injection",
+    "Custom evaluators are validated against the @runtime_checkable Evaluator Protocol at startup, never at evaluation time",
+    "All EvaluatorError subtypes carry a human-readable message suitable for structured logging",
+    "Config validation is strict and fails fast at startup — invalid configs never reach evaluation time",
+    "No evaluator depends on GPU, network access, or API keys at test time when encode_fn is injected"
+  ],
+  "requires": [
+    "TaskResponse type must be a Pydantic v2 model with at least 'output: str' and 'fields: dict[str, str]' attributes, provided by the config_and_registry component at composition-root wiring time"
+  ]
+}

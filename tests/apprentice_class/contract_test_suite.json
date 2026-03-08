@@ -1,0 +1,519 @@
+{
+  "component_id": "apprentice_class",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_happy_path_with_config_object",
+      "description": "Constructor accepts a valid ApprenticeConfig object and wires all 10 default components",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid ApprenticeConfig object with all required fields",
+      "expected_output_description": "Instance with _config set, all 10 components non-None, _running=False",
+      "expected_error": "",
+      "assertions": [
+        "self._config is a validated ApprenticeConfig",
+        "All 10 internal components are non-None",
+        "self._running is False"
+      ]
+    },
+    {
+      "id": "init_happy_path_with_overrides",
+      "description": "Constructor accepts component overrides that replace default-constructed components",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config + injected mock components",
+      "expected_output_description": "Injected mocks stored as internal components",
+      "expected_error": "",
+      "assertions": [
+        "Injected override is stored as the internal component",
+        "No default construction attempted for overridden components"
+      ]
+    },
+    {
+      "id": "init_error_config_file_not_found",
+      "description": "Constructor raises error when config file path does not exist",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Non-existent file path string",
+      "expected_output_description": "",
+      "expected_error": "config_file_not_found",
+      "assertions": [
+        "Raises FileNotFoundError or ApprenticeError with config_file_not_found"
+      ]
+    },
+    {
+      "id": "init_error_config_validation",
+      "description": "Constructor raises error when config has invalid values (e.g., negative budget)",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with invalid field values",
+      "expected_output_description": "",
+      "expected_error": "config_validation_error",
+      "assertions": [
+        "Raises validation error with clear message"
+      ]
+    },
+    {
+      "id": "init_error_config_unknown_fields",
+      "description": "Constructor raises error when config contains unknown fields (strict parsing)",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with extra unknown fields",
+      "expected_output_description": "",
+      "expected_error": "config_validation_error",
+      "assertions": [
+        "Raises validation error rejecting unknown fields"
+      ]
+    },
+    {
+      "id": "create_happy_path",
+      "description": "Async factory creates a fully ready instance with _running=True",
+      "function": "create",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config with all mocked dependencies",
+      "expected_output_description": "Apprentice instance with _running=True, ready for run() calls",
+      "expected_error": "",
+      "assertions": [
+        "Returned instance has _running == True",
+        "Instance is ready to accept run() calls"
+      ]
+    },
+    {
+      "id": "aenter_happy_path",
+      "description": "Async context manager entry sets _running=True and initializes resources",
+      "function": "__aenter__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Properly constructed Apprentice with _running=False",
+      "expected_output_description": "Same instance with _running=True",
+      "expected_error": "",
+      "assertions": [
+        "self._running is True after __aenter__",
+        "Returns self"
+      ]
+    },
+    {
+      "id": "aenter_error_double_entry",
+      "description": "Double-entering async context raises error",
+      "function": "__aenter__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Apprentice that is already running",
+      "expected_output_description": "",
+      "expected_error": "already_running",
+      "assertions": [
+        "Raises RuntimeError on double __aenter__"
+      ]
+    },
+    {
+      "id": "aexit_happy_path",
+      "description": "Async context manager exit sets _running=False and releases resources",
+      "function": "__aexit__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Running Apprentice instance",
+      "expected_output_description": "_running=False, resources released, returns False",
+      "expected_error": "",
+      "assertions": [
+        "self._running is False after __aexit__",
+        "Returns False (does not suppress exceptions)",
+        "Audit log flush is called"
+      ]
+    },
+    {
+      "id": "close_idempotent",
+      "description": "close() is idempotent — safe to call multiple times",
+      "function": "close",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Running Apprentice, call close() twice",
+      "expected_output_description": "No error on second call, _running=False",
+      "expected_error": "",
+      "assertions": [
+        "First close() sets _running=False",
+        "Second close() does not raise",
+        "_running remains False"
+      ]
+    },
+    {
+      "id": "run_happy_path_local_model",
+      "description": "run() returns TaskResponse with source=local when routed to local model",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name, input_data, router returns local",
+      "expected_output_description": "TaskResponse with source=ModelSource.local, status=success",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source is 'local'",
+        "TaskResponse.status is 'success'",
+        "TaskResponse.task_name matches input",
+        "TaskResponse.request_id is non-empty"
+      ]
+    },
+    {
+      "id": "run_happy_path_remote_model",
+      "description": "run() returns TaskResponse with source=remote when routed to remote model",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name, input_data, router returns remote",
+      "expected_output_description": "TaskResponse with source=ModelSource.remote, status=success",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source is 'remote'",
+        "TaskResponse.status is 'success'",
+        "Budget spend is recorded"
+      ]
+    },
+    {
+      "id": "run_budget_exhausted_local_available",
+      "description": "When budget exhausted but local available, run() degrades gracefully to local-only with status=degraded",
+      "function": "run",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Budget exhausted, local model available",
+      "expected_output_description": "TaskResponse with source=local, status=degraded",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.status is 'degraded'",
+        "TaskResponse.source is 'local'",
+        "No remote API call made",
+        "No exception raised"
+      ]
+    },
+    {
+      "id": "run_local_unavailable_budget_available",
+      "description": "When local model unavailable but budget available, run() falls back to remote",
+      "function": "run",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Local model unavailable, budget available",
+      "expected_output_description": "TaskResponse with source=remote, fallback_used=True",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source is 'remote'",
+        "TaskResponse.metadata.fallback_used is True",
+        "No exception raised"
+      ]
+    },
+    {
+      "id": "run_error_both_unavailable_budget_exhausted",
+      "description": "When both local unavailable AND budget exhausted, raises BudgetExhaustedError",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Local unavailable, budget exhausted",
+      "expected_output_description": "",
+      "expected_error": "budget_exhausted_no_local",
+      "assertions": [
+        "Raises BudgetExhaustedError",
+        "Error contains task_name and budget info"
+      ]
+    },
+    {
+      "id": "run_error_local_unavailable_no_budget",
+      "description": "When local model fails and budget exhausted, raises LocalModelUnavailableError",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Local model fails during execution, budget exhausted",
+      "expected_output_description": "",
+      "expected_error": "local_unavailable_no_budget",
+      "assertions": [
+        "Raises LocalModelUnavailableError",
+        "Error has budget_exhausted=True"
+      ]
+    },
+    {
+      "id": "run_error_not_running",
+      "description": "run() raises RuntimeError when called outside async context",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Apprentice with _running=False",
+      "expected_output_description": "",
+      "expected_error": "not_running",
+      "assertions": [
+        "Raises RuntimeError with clear message"
+      ]
+    },
+    {
+      "id": "run_error_task_not_found",
+      "description": "run() raises TaskNotFoundError for unregistered task_name",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_name not in registry",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "Raises TaskNotFoundError",
+        "Error contains available_tasks list"
+      ]
+    },
+    {
+      "id": "run_error_empty_task_name",
+      "description": "run() raises error when task_name is empty or whitespace",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_name is empty string or whitespace",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name",
+      "assertions": [
+        "Raises ValueError or ApprenticeError for empty task_name"
+      ]
+    },
+    {
+      "id": "run_error_invalid_input_data",
+      "description": "run() raises error when input_data is not a dict",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "input_data is a string instead of dict",
+      "expected_output_description": "",
+      "expected_error": "invalid_input_data",
+      "assertions": [
+        "Raises TypeError or ApprenticeError for non-dict input"
+      ]
+    },
+    {
+      "id": "run_audit_log_always_flushed",
+      "description": "Audit log receives a RunContext entry on every run() invocation, even on failure",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Run that raises an error",
+      "expected_output_description": "Audit log still receives the RunContext",
+      "expected_error": "",
+      "assertions": [
+        "audit_log.log() called exactly once",
+        "RunContext contains error information"
+      ]
+    },
+    {
+      "id": "run_budget_enforcement_hard",
+      "description": "When budget_manager.can_spend() returns False, no remote API call is made",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "budget_manager.can_spend() returns False, local available",
+      "expected_output_description": "No remote_client call, local used instead",
+      "expected_error": "",
+      "assertions": [
+        "remote_client call not invoked",
+        "local_client call invoked"
+      ]
+    },
+    {
+      "id": "status_happy_path",
+      "description": "status() returns a valid ConfidenceSnapshot for a registered task",
+      "function": "status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name for a running Apprentice",
+      "expected_output_description": "ConfidenceSnapshot with matching task_name, consistent phase and budget",
+      "expected_error": "",
+      "assertions": [
+        "ConfidenceSnapshot.task_name matches input",
+        "budget_remaining + budget_used == budget_limit",
+        "Phase is consistent with confidence_score"
+      ]
+    },
+    {
+      "id": "status_error_not_running",
+      "description": "status() raises RuntimeError when called outside async context",
+      "function": "status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Apprentice with _running=False",
+      "expected_output_description": "",
+      "expected_error": "not_running",
+      "assertions": [
+        "Raises RuntimeError"
+      ]
+    },
+    {
+      "id": "status_error_task_not_found",
+      "description": "status() raises TaskNotFoundError for unregistered task",
+      "function": "status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_name not in registry",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "Raises TaskNotFoundError"
+      ]
+    },
+    {
+      "id": "status_error_empty_task_name",
+      "description": "status() raises error when task_name is empty",
+      "function": "status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty string task_name",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name",
+      "assertions": [
+        "Raises ValueError or ApprenticeError"
+      ]
+    },
+    {
+      "id": "report_happy_path",
+      "description": "report() returns SystemReport with correct aggregates and one snapshot per task",
+      "function": "report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Apprentice with 2 registered tasks and some runs completed",
+      "expected_output_description": "SystemReport with 2 task_snapshots, correct totals",
+      "expected_error": "",
+      "assertions": [
+        "len(task_snapshots) == number of registered tasks",
+        "total_runs == total_local_runs + total_remote_runs",
+        "global_budget_used == sum of per-task budget_used"
+      ]
+    },
+    {
+      "id": "report_uptime_zero_before_context",
+      "description": "report() returns uptime_seconds=0.0 when async context has not been entered",
+      "function": "report",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Apprentice not yet entered async context",
+      "expected_output_description": "SystemReport.uptime_seconds == 0.0",
+      "expected_error": "",
+      "assertions": [
+        "uptime_seconds == 0.0"
+      ]
+    },
+    {
+      "id": "invariant_running_flag_lifecycle",
+      "description": "_running is True iff async context entered and not exited",
+      "function": "__aenter__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Observe _running through full lifecycle",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "_running is False after __init__",
+        "_running is True after __aenter__",
+        "_running is False after __aexit__"
+      ]
+    },
+    {
+      "id": "invariant_total_runs_equals_local_plus_remote",
+      "description": "SystemReport.total_runs always equals total_local_runs + total_remote_runs",
+      "function": "report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple runs with mixed routing",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_runs == total_local_runs + total_remote_runs"
+      ]
+    },
+    {
+      "id": "invariant_source_accuracy",
+      "description": "TaskResponse.source accurately reflects which backend produced the output",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Runs routed to local and remote",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "When local_client produced output, source is 'local'",
+        "When remote_client produced output, source is 'remote'"
+      ]
+    },
+    {
+      "id": "invariant_all_components_non_none",
+      "description": "All 10 internal components are non-None after __init__",
+      "function": "__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Properly constructed Apprentice",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All 10 components are non-None"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the Apprentice class.\n\nTests verify behavior at boundaries (inputs/outputs), not internals.\nAll 10 dependencies are mocked — tests verify the Apprentice component in isolation.\n\nRun with: pytest tests/contract_test.py -v\n\"\"\"\nimport pytest\nimport asyncio\nfrom unittest.mock import (\n    AsyncMock, MagicMock, patch, PropertyMock, ANY, call\n)\nfrom datetime import datetime, timezone\n\n# Import the component under test\nfrom src.apprentice_class import (\n    Apprentice,\n    ApprenticeConfig,\n    TaskConfig,\n    ConfidenceThresholds,\n    BudgetEnforcementConfig,\n    TaskResponse,\n    ResponseMetadata,\n    ConfidenceSnapshot,\n    SystemReport,\n    RunContext,\n    ModelSource,\n    PhaseLabel,\n    RunStatus,\n    ErrorKind,\n    ApprenticeError,\n    BudgetExhaustedError,\n    TaskNotFoundError,\n    LocalModelUnavailableError,\n)\n\n\n# ---------------------------------------------------------------------------\n# Helpers / Builders\n# ---------------------------------------------------------------------------\n\ndef make_confidence_thresholds(**overrides):\n    defaults = dict(\n        bootstrapping_upper=0.25,\n        active_learning_upper=0.50,\n        supervised_upper=0.75,\n        autonomous_lower=0.90,\n    )\n    defaults.update(overrides)\n    return ConfidenceThresholds(**defaults)\n\n\ndef make_task_config(task_name=\"test_task\", **overrides):\n    defaults = dict(\n        task_name=task_name,\n        remote_model_id=\"gpt-4\",\n        local_model_id=\"local-llama\",\n        budget_limit_usd=10.0,\n        budget_period_days=30,\n        confidence_thresholds=make_confidence_thresholds(),\n    )\n    defaults.update(overrides)\n    return TaskConfig(**defaults)\n\n\ndef make_budget_enforcement_config(**overrides):\n    defaults = dict(\n        hard_limit=True,\n        warning_threshold_pct=80.0,\n        log_every_spend=True,\n    )\n    defaults.update(overrides)\n    return BudgetEnforcementConfig(**defaults)\n\n\ndef make_config(tasks=None, **overrides):\n    if tasks is None:\n        tasks = [make_task_config()]\n    defaults = dict(\n        tasks=tasks,\n        remote_api_base_url=\"https://api.example.com\",\n        local_model_endpoint=\"http://localhost:8080\",\n        budget_enforcement=make_budget_enforcement_config(),\n        audit_log_path=\"/tmp/test_audit.jsonl\",\n        retry_max_attempts=3,\n        retry_backoff_base_seconds=1.0,\n    )\n    defaults.update(overrides)\n    return ApprenticeConfig(**defaults)\n\n\ndef make_all_mocks():\n    \"\"\"Create all 10 dependency mocks with sensible defaults.\"\"\"\n    mocks = dict(\n        config_loader=MagicMock(),\n        task_registry=MagicMock(),\n        remote_client=AsyncMock(),\n        local_client=AsyncMock(),\n        confidence_engine=MagicMock(),\n        sampling_scheduler=MagicMock(),\n        budget_manager=MagicMock(),\n        training_data_store=AsyncMock(),\n        router=MagicMock(),\n        audit_log=AsyncMock(),\n    )\n    # Sensible defaults for task_registry\n    mocks[\"task_registry\"].get.return_value = make_task_config()\n    mocks[\"task_registry\"].list_tasks.return_value = [\"test_task\"]\n    mocks[\"task_registry\"].contains.return_value = True\n    mocks[\"task_registry\"].__contains__ = MagicMock(return_value=True)\n\n    # Budget manager defaults: budget available\n    mocks[\"budget_manager\"].can_spend.return_value = True\n    mocks[\"budget_manager\"].get_remaining.return_value = 8.0\n    mocks[\"budget_manager\"].get_used.return_value = 2.0\n    mocks[\"budget_manager\"].record_spend = MagicMock()\n\n    # Confidence engine defaults\n    mocks[\"confidence_engine\"].get_score.return_value = 0.6\n    mocks[\"confidence_engine\"].get_phase.return_value = PhaseLabel.supervised\n    mocks[\"confidence_engine\"].update = MagicMock()\n\n    # Sampling scheduler\n    mocks[\"sampling_scheduler\"].get_rate.return_value = 0.5\n\n    # Router: route to local by default\n    mocks[\"router\"].route.return_value = ModelSource.local\n\n    # Local client returns a valid output\n    mocks[\"local_client\"].predict.return_value = {\"result\": \"local_output\"}\n    mocks[\"local_client\"].is_available.return_value = True\n\n    # Remote client returns a valid output\n    mocks[\"remote_client\"].predict.return_value = {\"result\": \"remote_output\"}\n    mocks[\"remote_client\"].get_cost.return_value = 0.01\n\n    # Audit log\n    mocks[\"audit_log\"].log = AsyncMock()\n    mocks[\"audit_log\"].flush = AsyncMock()\n    mocks[\"audit_log\"].open = AsyncMock()\n    mocks[\"audit_log\"].close = AsyncMock()\n\n    return mocks\n\n\ndef build_apprentice(config=None, **mock_overrides):\n    \"\"\"Build an Apprentice with full mock injection.\"\"\"\n    if config is None:\n        config = make_config()\n    mocks = make_all_mocks()\n    mocks.update(mock_overrides)\n    return Apprentice(\n        config=config,\n        config_loader=mocks[\"config_loader\"],\n        task_registry=mocks[\"task_registry\"],\n        remote_client=mocks[\"remote_client\"],\n        local_client=mocks[\"local_client\"],\n        confidence_engine=mocks[\"confidence_engine\"],\n        sampling_scheduler=mocks[\"sampling_scheduler\"],\n        budget_manager=mocks[\"budget_manager\"],\n        training_data_store=mocks[\"training_data_store\"],\n        router=mocks[\"router\"],\n        audit_log=mocks[\"audit_log\"],\n    ), mocks\n\n\n# ---------------------------------------------------------------------------\n# Fixtures\n# ---------------------------------------------------------------------------\n\n@pytest.fixture\ndef apprentice_and_mocks():\n    \"\"\"Returns (apprentice_instance, mocks_dict) with _running=False.\"\"\"\n    return build_apprentice()\n\n\n@pytest.fixture\nasync def running_apprentice_and_mocks(apprentice_and_mocks):\n    \"\"\"Yields (apprentice_instance, mocks_dict) with _running=True.\"\"\"\n    apprentice, mocks = apprentice_and_mocks\n    await apprentice.__aenter__()\n    yield apprentice, mocks\n    # Cleanup — best effort\n    try:\n        await apprentice.__aexit__(None, None, None)\n    except Exception:\n        pass\n\n\n# ---------------------------------------------------------------------------\n# TestInit\n# ---------------------------------------------------------------------------\n\nclass TestInit:\n    \"\"\"Tests for Apprentice.__init__\"\"\"\n\n    def test_init_happy_path_with_config_object(self):\n        \"\"\"Constructor accepts a valid ApprenticeConfig and wires all components.\"\"\"\n        apprentice, mocks = build_apprentice()\n\n        # _config is set (we don't peek at internals directly, but verify\n        # the instance was created without error)\n        assert apprentice is not None\n        # _running should be False — verified via observable behavior:\n        # calling run() should fail\n        # We verify this in lifecycle tests; here we just confirm construction.\n\n    def test_init_happy_path_with_overrides(self):\n        \"\"\"Component overrides completely replace default-constructed components.\"\"\"\n        custom_router = MagicMock()\n        custom_router.route.return_value = ModelSource.remote\n        apprentice, mocks = build_apprentice(router=custom_router)\n        # The injected router should be the one used later — verified\n        # indirectly through behavior tests.\n        assert apprentice is not None\n\n    def test_init_error_config_file_not_found(self):\n        \"\"\"Constructor raises error when config file path does not exist.\"\"\"\n        mocks = make_all_mocks()\n        with pytest.raises((FileNotFoundError, OSError, ApprenticeError)):\n            Apprentice(\n                config=\"/nonexistent/path/config.yaml\",\n                **{k: v for k, v in mocks.items()},\n            )\n\n    def test_init_error_config_validation_missing_field(self):\n        \"\"\"Constructor raises validation error for missing required fields.\"\"\"\n        with pytest.raises((ValueError, TypeError, ApprenticeError)):\n            # Attempt to create ApprenticeConfig missing required fields\n            bad_config = {\"tasks\": []}  # Missing most required fields\n            ApprenticeConfig(**bad_config)\n\n    def test_init_error_config_unknown_fields_strict(self):\n        \"\"\"Strict parsing rejects unknown fields.\"\"\"\n        with pytest.raises((ValueError, TypeError, ApprenticeError)):\n            ApprenticeConfig(\n                tasks=[make_task_config()],\n                remote_api_base_url=\"https://api.example.com\",\n                local_model_endpoint=\"http://localhost:8080\",\n                budget_enforcement=make_budget_enforcement_config(),\n                audit_log_path=\"/tmp/test.jsonl\",\n                retry_max_attempts=3,\n                retry_backoff_base_seconds=1.0,\n                unknown_field=\"should_be_rejected\",\n            )\n\n    def test_invariant_all_10_components_non_none(self):\n        \"\"\"After __init__, all 10 internal components are non-None.\"\"\"\n        apprentice, _ = build_apprentice()\n        component_names = [\n            \"_config_loader\", \"_task_registry\", \"_remote_client\",\n            \"_local_client\", \"_confidence_engine\", \"_sampling_scheduler\",\n            \"_budget_manager\", \"_training_data_store\", \"_router\", \"_audit_log\",\n        ]\n        for name in component_names:\n            assert getattr(apprentice, name, None) is not None, (\n                f\"Component {name} should be non-None after __init__\"\n            )\n\n\n# ---------------------------------------------------------------------------\n# TestCreate\n# ---------------------------------------------------------------------------\n\nclass TestCreate:\n    \"\"\"Tests for Apprentice.create() async factory.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_create_happy_path(self):\n        \"\"\"create() returns a fully ready instance with _running=True.\"\"\"\n        mocks = make_all_mocks()\n        config = make_config()\n        apprentice = await Apprentice.create(\n            config=config, **mocks,\n        )\n        try:\n            # Observable: _running should be True, meaning run() won't raise not_running\n            assert hasattr(apprentice, \"_running\")\n            assert apprentice._running is True\n        finally:\n            await apprentice.close()\n\n\n# ---------------------------------------------------------------------------\n# TestLifecycle\n# ---------------------------------------------------------------------------\n\nclass TestLifecycle:\n    \"\"\"Tests for __aenter__, __aexit__, close() lifecycle.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_aenter_sets_running_true(self):\n        \"\"\"__aenter__ transitions _running from False to True.\"\"\"\n        apprentice, mocks = build_apprentice()\n        assert apprentice._running is False, \"_running should be False before __aenter__\"\n\n        result = await apprentice.__aenter__()\n\n        assert apprentice._running is True, \"_running should be True after __aenter__\"\n        assert result is apprentice, \"__aenter__ should return self\"\n\n        await apprentice.__aexit__(None, None, None)\n\n    @pytest.mark.asyncio\n    async def test_aenter_error_double_entry(self):\n        \"\"\"Double-entering async context raises error.\"\"\"\n        apprentice, mocks = build_apprentice()\n        await apprentice.__aenter__()\n\n        with pytest.raises((RuntimeError, ApprenticeError)):\n            await apprentice.__aenter__()\n\n        await apprentice.__aexit__(None, None, None)\n\n    @pytest.mark.asyncio\n    async def test_aexit_sets_running_false(self):\n        \"\"\"__aexit__ sets _running to False and returns False.\"\"\"\n        apprentice, mocks = build_apprentice()\n        await apprentice.__aenter__()\n\n        result = await apprentice.__aexit__(None, None, None)\n\n        assert apprentice._running is False, \"_running should be False after __aexit__\"\n        assert result is False, \"__aexit__ should return False (don't suppress exceptions)\"\n\n    @pytest.mark.asyncio\n    async def test_aexit_flushes_audit_log(self):\n        \"\"\"__aexit__ flushes the audit log during cleanup.\"\"\"\n        apprentice, mocks = build_apprentice()\n        await apprentice.__aenter__()\n\n        await apprentice.__aexit__(None, None, None)\n\n        # Verify audit log was flushed/closed\n        audit_mock = mocks[\"audit_log\"]\n        assert (\n            audit_mock.flush.called or audit_mock.close.called\n        ), \"Audit log should be flushed or closed during __aexit__\"\n\n    @pytest.mark.asyncio\n    async def test_close_idempotent(self):\n        \"\"\"close() is safe to call multiple times.\"\"\"\n        apprentice, mocks = build_apprentice()\n        await apprentice.__aenter__()\n\n        await apprentice.close()\n        assert apprentice._running is False, \"_running should be False after first close()\"\n\n        # Second call should not raise\n        await apprentice.close()\n        assert apprentice._running is False, \"_running should remain False after second close()\"\n\n    @pytest.mark.asyncio\n    async def test_invariant_running_flag_lifecycle(self):\n        \"\"\"_running is True iff async context is entered and not yet exited.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        assert apprentice._running is False, \"False after __init__\"\n\n        await apprentice.__aenter__()\n        assert apprentice._running is True, \"True after __aenter__\"\n\n        await apprentice.__aexit__(None, None, None)\n        assert apprentice._running is False, \"False after __aexit__\"\n\n\n# ---------------------------------------------------------------------------\n# TestRun\n# ---------------------------------------------------------------------------\n\nclass TestRun:\n    \"\"\"Tests for Apprentice.run().\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_run_happy_path_local_model(self, running_apprentice_and_mocks):\n        \"\"\"run() returns TaskResponse with source=local when routed locally.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.local\n        mocks[\"local_client\"].is_available.return_value = True\n        mocks[\"budget_manager\"].can_spend.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert isinstance(response, TaskResponse), \"Should return a TaskResponse\"\n        assert response.task_name == \"test_task\", \"task_name should match input\"\n        assert response.source == ModelSource.local, \"source should be 'local'\"\n        assert response.status == RunStatus.success, \"status should be 'success'\"\n        assert response.request_id, \"request_id should be non-empty\"\n        assert response.duration_ms >= 0, \"duration_ms should be non-negative\"\n\n    @pytest.mark.asyncio\n    async def test_run_happy_path_remote_model(self, running_apprentice_and_mocks):\n        \"\"\"run() returns TaskResponse with source=remote when routed remotely.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.remote\n        mocks[\"local_client\"].is_available.return_value = True\n        mocks[\"budget_manager\"].can_spend.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert isinstance(response, TaskResponse), \"Should return a TaskResponse\"\n        assert response.source == ModelSource.remote, \"source should be 'remote'\"\n        assert response.status == RunStatus.success, \"status should be 'success'\"\n\n    @pytest.mark.asyncio\n    async def test_run_budget_exhausted_local_available_degrades_gracefully(\n        self, running_apprentice_and_mocks\n    ):\n        \"\"\"Budget exhausted + local available → degraded status, no exception.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = False\n        mocks[\"local_client\"].is_available.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert response.status == RunStatus.degraded, (\n            \"Should be 'degraded' when budget exhausted but local available\"\n        )\n        assert response.source == ModelSource.local, (\n            \"Should use local model when budget exhausted\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_local_unavailable_budget_available_falls_back_to_remote(\n        self, running_apprentice_and_mocks\n    ):\n        \"\"\"Local unavailable + budget available → fallback to remote, no exception.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.local\n        mocks[\"local_client\"].is_available.return_value = False\n        mocks[\"budget_manager\"].can_spend.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert response.source == ModelSource.remote, (\n            \"Should fallback to remote when local is unavailable\"\n        )\n        assert response.metadata.fallback_used is True, (\n            \"fallback_used should be True\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_error_both_unavailable_raises_budget_exhausted(\n        self, running_apprentice_and_mocks\n    ):\n        \"\"\"Local unavailable + budget exhausted → BudgetExhaustedError.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = False\n        mocks[\"local_client\"].is_available.return_value = False\n        mocks[\"budget_manager\"].get_remaining.return_value = 0.0\n        mocks[\"budget_manager\"].get_used.return_value = 10.0\n\n        with pytest.raises((BudgetExhaustedError, LocalModelUnavailableError, ApprenticeError)) as exc_info:\n            await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        exc = exc_info.value\n        assert hasattr(exc, \"task_name\"), \"Error should contain task_name\"\n\n    @pytest.mark.asyncio\n    async def test_run_error_not_running(self):\n        \"\"\"run() raises RuntimeError when called outside async context.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        with pytest.raises((RuntimeError, ApprenticeError)):\n            await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n    @pytest.mark.asyncio\n    async def test_run_error_task_not_found(self, running_apprentice_and_mocks):\n        \"\"\"run() raises TaskNotFoundError for unregistered task_name.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"task_registry\"].get.side_effect = TaskNotFoundError(\n            error_kind=ErrorKind.task_not_found,\n            message=\"Task 'unknown_task' not found\",\n            task_name=\"unknown_task\",\n            available_tasks=[\"test_task\"],\n        )\n        mocks[\"task_registry\"].contains.return_value = False\n        mocks[\"task_registry\"].__contains__ = MagicMock(return_value=False)\n\n        with pytest.raises((TaskNotFoundError, ApprenticeError)) as exc_info:\n            await apprentice.run(\"unknown_task\", {\"prompt\": \"hello\"})\n\n        exc = exc_info.value\n        assert \"unknown_task\" in str(exc) or (\n            hasattr(exc, \"task_name\") and exc.task_name == \"unknown_task\"\n        ), \"Error should reference the unknown task name\"\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"empty_name\", [\"\", \"  \", \"\\t\", \"\\n\"])\n    async def test_run_error_empty_task_name(\n        self, running_apprentice_and_mocks, empty_name\n    ):\n        \"\"\"run() raises error when task_name is empty or whitespace.\"\"\"\n        apprentice, _ = running_apprentice_and_mocks\n\n        with pytest.raises((ValueError, TypeError, ApprenticeError)):\n            await apprentice.run(empty_name, {\"prompt\": \"hello\"})\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"bad_input\", [\"not_a_dict\", 42, None, [1, 2]])\n    async def test_run_error_invalid_input_data(\n        self, running_apprentice_and_mocks, bad_input\n    ):\n        \"\"\"run() raises error when input_data is not a dict.\"\"\"\n        apprentice, _ = running_apprentice_and_mocks\n\n        with pytest.raises((ValueError, TypeError, ApprenticeError)):\n            await apprentice.run(\"test_task\", bad_input)\n\n    @pytest.mark.asyncio\n    async def test_run_audit_log_flushed_on_success(self, running_apprentice_and_mocks):\n        \"\"\"Audit log receives a RunContext entry on successful run.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = True\n        mocks[\"local_client\"].is_available.return_value = True\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        mocks[\"audit_log\"].log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_run_audit_log_flushed_on_error(self, running_apprentice_and_mocks):\n        \"\"\"Audit log receives a RunContext entry even when run() fails.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = False\n        mocks[\"local_client\"].is_available.return_value = False\n\n        with pytest.raises((BudgetExhaustedError, LocalModelUnavailableError, ApprenticeError)):\n            await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        # Audit log should still have been called\n        assert mocks[\"audit_log\"].log.called, (\n            \"Audit log must be flushed even on error\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_budget_enforcement_hard_no_remote_call(\n        self, running_apprentice_and_mocks\n    ):\n        \"\"\"When budget_manager.can_spend()=False, remote_client is never called.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = False\n        mocks[\"local_client\"].is_available.return_value = True\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        # remote_client.predict should NOT have been called\n        mocks[\"remote_client\"].predict.assert_not_called()\n\n    @pytest.mark.asyncio\n    async def test_run_remote_records_spend(self, running_apprentice_and_mocks):\n        \"\"\"When remote model is used, spend is recorded in budget_manager.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.remote\n        mocks[\"budget_manager\"].can_spend.return_value = True\n        mocks[\"local_client\"].is_available.return_value = True\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        mocks[\"budget_manager\"].record_spend.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_run_stores_training_data(self, running_apprentice_and_mocks):\n        \"\"\"Successful run stores training data.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = True\n        mocks[\"local_client\"].is_available.return_value = True\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert mocks[\"training_data_store\"].store.called or \\\n               mocks[\"training_data_store\"].save.called or \\\n               mocks[\"training_data_store\"].add.called, (\n            \"Training data should be stored after successful run\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_updates_confidence_engine(self, running_apprentice_and_mocks):\n        \"\"\"Confidence engine is updated after a run.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = True\n        mocks[\"local_client\"].is_available.return_value = True\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        mocks[\"confidence_engine\"].update.assert_called()\n\n    @pytest.mark.asyncio\n    async def test_invariant_source_accuracy_local(self, running_apprentice_and_mocks):\n        \"\"\"TaskResponse.source accurately reflects local backend.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.local\n        mocks[\"local_client\"].is_available.return_value = True\n        mocks[\"budget_manager\"].can_spend.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert response.source == ModelSource.local, (\n            \"source must accurately reflect that local backend produced the output\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_invariant_source_accuracy_remote(self, running_apprentice_and_mocks):\n        \"\"\"TaskResponse.source accurately reflects remote backend.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"router\"].route.return_value = ModelSource.remote\n        mocks[\"local_client\"].is_available.return_value = True\n        mocks[\"budget_manager\"].can_spend.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert response.source == ModelSource.remote, (\n            \"source must accurately reflect that remote backend produced the output\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_response_is_frozen(self, running_apprentice_and_mocks):\n        \"\"\"TaskResponse is a frozen Pydantic model — immutable after construction.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"budget_manager\"].can_spend.return_value = True\n        mocks[\"local_client\"].is_available.return_value = True\n\n        response = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            response.task_name = \"mutated\"\n\n\n# ---------------------------------------------------------------------------\n# TestStatus\n# ---------------------------------------------------------------------------\n\nclass TestStatus:\n    \"\"\"Tests for Apprentice.status().\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_status_happy_path(self, running_apprentice_and_mocks):\n        \"\"\"status() returns a valid ConfidenceSnapshot for a registered task.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"confidence_engine\"].get_score.return_value = 0.6\n        mocks[\"confidence_engine\"].get_phase.return_value = PhaseLabel.supervised\n        mocks[\"budget_manager\"].get_remaining.return_value = 8.0\n        mocks[\"budget_manager\"].get_used.return_value = 2.0\n\n        snapshot = await apprentice.status(\"test_task\")\n\n        assert isinstance(snapshot, ConfidenceSnapshot), \"Should return ConfidenceSnapshot\"\n        assert snapshot.task_name == \"test_task\", \"task_name should match input\"\n        assert 0.0 <= snapshot.confidence_score <= 1.0, \"confidence_score in [0,1]\"\n        assert snapshot.phase in list(PhaseLabel), \"phase should be a valid PhaseLabel\"\n\n        # Budget invariant: remaining + used == limit\n        task_cfg = make_task_config()\n        expected_budget = task_cfg.budget_limit_usd\n        actual_sum = snapshot.budget_remaining_usd + snapshot.budget_used_usd\n        assert abs(actual_sum - expected_budget) < 0.01, (\n            f\"budget_remaining ({snapshot.budget_remaining_usd}) + \"\n            f\"budget_used ({snapshot.budget_used_usd}) should equal \"\n            f\"budget_limit ({expected_budget}), got {actual_sum}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_status_error_not_running(self):\n        \"\"\"status() raises RuntimeError when called outside async context.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        with pytest.raises((RuntimeError, ApprenticeError)):\n            await apprentice.status(\"test_task\")\n\n    @pytest.mark.asyncio\n    async def test_status_error_task_not_found(self, running_apprentice_and_mocks):\n        \"\"\"status() raises TaskNotFoundError for unregistered task.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"task_registry\"].get.side_effect = TaskNotFoundError(\n            error_kind=ErrorKind.task_not_found,\n            message=\"Task 'unknown' not found\",\n            task_name=\"unknown\",\n            available_tasks=[\"test_task\"],\n        )\n        mocks[\"task_registry\"].contains.return_value = False\n\n        with pytest.raises((TaskNotFoundError, ApprenticeError)):\n            await apprentice.status(\"unknown\")\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"empty_name\", [\"\", \"  \"])\n    async def test_status_error_empty_task_name(\n        self, running_apprentice_and_mocks, empty_name\n    ):\n        \"\"\"status() raises error when task_name is empty.\"\"\"\n        apprentice, _ = running_apprentice_and_mocks\n\n        with pytest.raises((ValueError, ApprenticeError)):\n            await apprentice.status(empty_name)\n\n    @pytest.mark.asyncio\n    async def test_status_snapshot_is_frozen(self, running_apprentice_and_mocks):\n        \"\"\"ConfidenceSnapshot is frozen — immutable after construction.\"\"\"\n        apprentice, _ = running_apprentice_and_mocks\n\n        snapshot = await apprentice.status(\"test_task\")\n\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            snapshot.confidence_score = 999.0\n\n\n# ---------------------------------------------------------------------------\n# TestReport\n# ---------------------------------------------------------------------------\n\nclass TestReport:\n    \"\"\"Tests for Apprentice.report().\"\"\"\n\n    def test_report_happy_path(self):\n        \"\"\"report() returns SystemReport with correct structure.\"\"\"\n        config = make_config(tasks=[make_task_config(\"task_a\"), make_task_config(\"task_b\")])\n        mocks = make_all_mocks()\n        mocks[\"task_registry\"].list_tasks.return_value = [\"task_a\", \"task_b\"]\n        mocks[\"task_registry\"].get.side_effect = lambda name: make_task_config(name)\n\n        apprentice, _ = build_apprentice(config=config, **mocks)\n\n        report = apprentice.report()\n\n        assert isinstance(report, SystemReport), \"Should return SystemReport\"\n        assert len(report.task_snapshots) == 2, (\n            \"Should have one snapshot per registered task\"\n        )\n        assert report.total_runs == report.total_local_runs + report.total_remote_runs, (\n            \"total_runs must equal total_local_runs + total_remote_runs\"\n        )\n\n    def test_report_uptime_zero_before_context(self):\n        \"\"\"report() returns uptime_seconds=0.0 before async context is entered.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        report = apprentice.report()\n\n        assert report.uptime_seconds == 0.0, (\n            \"uptime_seconds should be 0.0 before async context entry\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_report_uptime_positive_after_context(self):\n        \"\"\"report() returns positive uptime_seconds after async context entry.\"\"\"\n        apprentice, mocks = build_apprentice()\n        await apprentice.__aenter__()\n\n        # Small sleep to ensure measurable uptime\n        await asyncio.sleep(0.01)\n\n        report = apprentice.report()\n\n        assert report.uptime_seconds > 0.0, (\n            \"uptime_seconds should be > 0 after async context entry\"\n        )\n\n        await apprentice.__aexit__(None, None, None)\n\n    def test_report_global_budget_aggregation(self):\n        \"\"\"global_budget_used_usd equals sum of per-task budget_used.\"\"\"\n        apprentice, mocks = build_apprentice()\n\n        report = apprentice.report()\n\n        # The sum of per-task budget_used should equal global_budget_used\n        per_task_sum = sum(s.budget_used_usd for s in report.task_snapshots)\n        assert abs(report.global_budget_used_usd - per_task_sum) < 0.001, (\n            f\"global_budget_used ({report.global_budget_used_usd}) should equal \"\n            f\"sum of per-task budget_used ({per_task_sum})\"\n        )\n\n    def test_report_is_frozen(self):\n        \"\"\"SystemReport is a frozen Pydantic model — immutable.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        report = apprentice.report()\n\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            report.total_runs = 999\n\n    def test_invariant_total_runs_equals_sum(self):\n        \"\"\"total_runs always equals total_local_runs + total_remote_runs.\"\"\"\n        apprentice, _ = build_apprentice()\n\n        report = apprentice.report()\n\n        assert report.total_runs == report.total_local_runs + report.total_remote_runs, (\n            \"Invariant: total_runs == total_local_runs + total_remote_runs\"\n        )\n\n\n# ---------------------------------------------------------------------------\n# TestConfidenceThresholds validation\n# ---------------------------------------------------------------------------\n\nclass TestConfidenceThresholds:\n    \"\"\"Tests for ConfidenceThresholds struct validation.\"\"\"\n\n    def test_valid_thresholds(self):\n        \"\"\"Valid thresholds satisfy bootstrapping < active_learning < supervised < autonomous.\"\"\"\n        ct = make_confidence_thresholds()\n        assert ct.bootstrapping_upper < ct.active_learning_upper\n        assert ct.active_learning_upper < ct.supervised_upper\n        assert ct.supervised_upper < ct.autonomous_lower\n\n    def test_invalid_thresholds_order(self):\n        \"\"\"Thresholds that violate ordering constraint are rejected.\"\"\"\n        with pytest.raises((ValueError, ApprenticeError)):\n            ConfidenceThresholds(\n                bootstrapping_upper=0.8,  # > active_learning_upper\n                active_learning_upper=0.5,\n                supervised_upper=0.3,\n                autonomous_lower=0.1,\n            )\n\n    def test_thresholds_out_of_range(self):\n        \"\"\"Threshold values outside [0.0, 1.0] are rejected.\"\"\"\n        with pytest.raises((ValueError, ApprenticeError)):\n            ConfidenceThresholds(\n                bootstrapping_upper=-0.1,\n                active_learning_upper=0.5,\n                supervised_upper=0.75,\n                autonomous_lower=1.5,\n            )\n\n\n# ---------------------------------------------------------------------------\n# TestPhaseDerivation (Invariant)\n# ---------------------------------------------------------------------------\n\nclass TestPhaseDerivation:\n    \"\"\"Phase labels are always derived from confidence scores — never manually set.\"\"\"\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\n        \"confidence,expected_phase\",\n        [\n            (0.1, PhaseLabel.bootstrapping),\n            (0.3, PhaseLabel.active_learning),\n            (0.6, PhaseLabel.supervised),\n            (0.95, PhaseLabel.autonomous),\n        ],\n    )\n    async def test_phase_consistent_with_confidence(\n        self, running_apprentice_and_mocks, confidence, expected_phase\n    ):\n        \"\"\"Phase label is consistent with the confidence score and thresholds.\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"confidence_engine\"].get_score.return_value = confidence\n        mocks[\"confidence_engine\"].get_phase.return_value = expected_phase\n\n        snapshot = await apprentice.status(\"test_task\")\n\n        assert snapshot.phase == expected_phase, (\n            f\"With confidence {confidence}, phase should be {expected_phase}, \"\n            f\"got {snapshot.phase}\"\n        )\n\n\n# ---------------------------------------------------------------------------\n# TestSamplingRate (Invariant)\n# ---------------------------------------------------------------------------\n\nclass TestSamplingRate:\n    \"\"\"Sampling rate is continuous float in [0.0, 1.0].\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_sampling_rate_is_float_in_range(self, running_apprentice_and_mocks):\n        \"\"\"Sampling rate returned in status is a float in [0.0, 1.0].\"\"\"\n        apprentice, mocks = running_apprentice_and_mocks\n        mocks[\"sampling_scheduler\"].get_rate.return_value = 0.42\n\n        snapshot = await apprentice.status(\"test_task\")\n\n        assert isinstance(snapshot.sampling_rate, float), \"sampling_rate should be float\"\n        assert 0.0 <= snapshot.sampling_rate <= 1.0, (\n            f\"sampling_rate should be in [0.0, 1.0], got {snapshot.sampling_rate}\"\n        )\n\n\n# ---------------------------------------------------------------------------\n# TestErrorTypes\n# ---------------------------------------------------------------------------\n\nclass TestErrorTypes:\n    \"\"\"Verify error type structure and inheritance.\"\"\"\n\n    def test_budget_exhausted_error_is_apprentice_error(self):\n        \"\"\"BudgetExhaustedError derives from ApprenticeError.\"\"\"\n        err = BudgetExhaustedError(\n            error_kind=ErrorKind.budget_exhausted,\n            message=\"Budget exhausted\",\n            task_name=\"test_task\",\n            budget_limit_usd=10.0,\n            budget_used_usd=10.0,\n            request_id=\"req-123\",\n        )\n        assert isinstance(err, ApprenticeError)\n        assert err.error_kind == ErrorKind.budget_exhausted\n\n    def test_task_not_found_error_is_apprentice_error(self):\n        \"\"\"TaskNotFoundError derives from ApprenticeError.\"\"\"\n        err = TaskNotFoundError(\n            error_kind=ErrorKind.task_not_found,\n            message=\"Not found\",\n            task_name=\"unknown\",\n            available_tasks=[\"task_a\"],\n        )\n        assert isinstance(err, ApprenticeError)\n        assert err.available_tasks == [\"task_a\"]\n\n    def test_local_model_unavailable_error_is_apprentice_error(self):\n        \"\"\"LocalModelUnavailableError derives from ApprenticeError.\"\"\"\n        err = LocalModelUnavailableError(\n            error_kind=ErrorKind.local_model_unavailable,\n            message=\"Local unavailable\",\n            task_name=\"test_task\",\n            request_id=\"req-456\",\n            budget_exhausted=True,\n        )\n        assert isinstance(err, ApprenticeError)\n        assert err.budget_exhausted is True\n"
+}

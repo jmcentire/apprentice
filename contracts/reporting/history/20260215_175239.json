@@ -1,0 +1,1919 @@
+{
+  "component_id": "reporting",
+  "name": "Reporting, Observability & Audit Log",
+  "description": "Reporting and audit trail for the entire system. Provides visibility into system behavior without affecting it. Composes an append-only structured audit log (JSONL) with on-demand report generation, formatting, and webhook delivery. All types are frozen Pydantic v2 models. Enums are StrEnum. Monetary values use Decimal (serialized as string). Timestamps are UTC ISO-8601. No global state — all state flows through explicit constructor parameters and function arguments. File organization: audit_log.py (~200 lines), report_generator.py (~250 lines), __init__.py (re-exports).",
+  "version": 1,
+  "types": [
+    {
+      "name": "EventType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REQUEST_ROUTED",
+        "TRAINING_EXAMPLE_STORED",
+        "FINE_TUNE_STARTED",
+        "FINE_TUNE_COMPLETED",
+        "MODEL_VALIDATED",
+        "MODEL_PROMOTED",
+        "PHASE_TRANSITION",
+        "BUDGET_WARNING",
+        "CONFIDENCE_ALERT"
+      ],
+      "inner_types": [],
+      "description": "Closed StrEnum of the 9 auditable system event types. Each variant's value is its snake_case name. No catch-all variant; unrecognized event strings are rejected at validation time (fail-fast)."
+    },
+    {
+      "name": "TrendDirection",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "IMPROVING",
+        "STABLE",
+        "DECLINING"
+      ],
+      "inner_types": [],
+      "description": "Direction of confidence score trend over recent correlation windows. StrEnum with lowercase values."
+    },
+    {
+      "name": "AlertSeverity",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "INFO",
+        "WARNING",
+        "CRITICAL"
+      ],
+      "inner_types": [],
+      "description": "Severity level for system alerts. StrEnum with lowercase values."
+    },
+    {
+      "name": "AlertType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "QUALITY_DEGRADATION",
+        "BUDGET_WARNING",
+        "BUDGET_EXHAUSTED",
+        "STALENESS",
+        "LOCAL_MODEL_FAILURE",
+        "FINE_TUNING_FAILURE"
+      ],
+      "inner_types": [],
+      "description": "Typed category of system alert. StrEnum with snake_case values."
+    },
+    {
+      "name": "ReportFormat",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "JSON",
+        "CLI_SUMMARY"
+      ],
+      "inner_types": [],
+      "description": "Supported output format for report rendering. StrEnum."
+    },
+    {
+      "name": "DeliveryStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SUCCESS",
+        "FAILURE",
+        "TIMEOUT"
+      ],
+      "inner_types": [],
+      "description": "Outcome status of a webhook delivery attempt. StrEnum."
+    },
+    {
+      "name": "AuditEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": false,
+          "default": "datetime.now(UTC)",
+          "description": "ISO 8601 UTC datetime string of when the event occurred. Internal representation is datetime; serialized as string at the contract boundary. Defaults to current UTC time via default_factory.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "Timestamp must be a UTC ISO 8601 datetime string with +00:00 timezone suffix"
+            }
+          ]
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task this event pertains to. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_name must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "event_type",
+          "type_ref": "EventType",
+          "required": true,
+          "default": "",
+          "description": "The category of system event. Must be one of the 9 defined EventType variants.",
+          "validators": []
+        },
+        {
+          "name": "details",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Arbitrary key-value map of event-specific metadata. All values must be JSON-serializable (str, int, float, bool, None, list, dict). Common keys: model_used, routing_reason, confidence_score, cost, phase_from, phase_to, budget_remaining, error_message.",
+          "validators": []
+        },
+        {
+          "name": "correlation_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional correlation ID for tracing related events across the system. Empty string if not set. When provided, must be a non-empty string (typically UUID v4).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic v2 BaseModel representing a single auditable system decision. ConfigDict(frozen=True). The timestamp defaults to datetime.now(UTC) via default_factory. Provides .to_json_line() -> str for JSONL serialization (compact JSON, no trailing newline). Deterministic key ordering."
+    },
+    {
+      "name": "AuditConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the JSONL audit log file. Parent directory must exist and be writable at config validation time. The file itself will be created if it does not exist. Relative paths are resolved from the working directory.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "log_path must be a non-empty string"
+            },
+            {
+              "kind": "custom",
+              "expression": "Path(log_path).parent.exists() and os.access(Path(log_path).parent, os.W_OK)",
+              "error_message": "Parent directory of log_path must exist and be writable"
+            }
+          ]
+        },
+        {
+          "name": "max_file_size_mb",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum size of the audit log file in megabytes before rotation is triggered. Must be at least 1 MB.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "max_file_size_mb must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "rotation_backup_count",
+          "type_ref": "int",
+          "required": false,
+          "default": "5",
+          "description": "Number of rotated backup log files to retain. Must be at least 0 (0 means no rotation backups kept).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 100",
+              "error_message": "rotation_backup_count must be between 0 and 100"
+            }
+          ]
+        },
+        {
+          "name": "enabled_event_types",
+          "type_ref": "EventTypeList",
+          "required": false,
+          "default": "all",
+          "description": "List of EventType variants to log. If empty or set to all, every EventType is logged. Acts as a filter — events not in this list are silently dropped by log().",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic v2 BaseModel (frozen) for audit logger configuration. Validated at startup — fail fast on invalid config. Typically loaded from the YAML config file's 'audit' section."
+    },
+    {
+      "name": "EventTypeList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "EventType",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[EventType]. Used for event type filter configuration."
+    },
+    {
+      "name": "AuditEntryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "AuditEntry",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[AuditEntry]. Returned by audit log query methods."
+    },
+    {
+      "name": "TaskConfidenceReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier for the task type being reported on.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Current phase label derived from confidence score (e.g., 'exploration', 'transition', 'delegation'). Emergent from confidence, not manually set.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "phase must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "confidence_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score for this task type, in [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_score must be between 0.0 and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "trend",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Direction the confidence score is trending over recent correlation windows.",
+          "validators": []
+        },
+        {
+          "name": "sampling_frequency",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current sampling frequency for this task type, in [0.0, 1.0]. Continuous, not discrete tiers.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "sampling_frequency must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence and phase data for a single task type. Frozen Pydantic v2 model (ConfigDict(frozen=True)). Phase is emergent from confidence score, not manually set."
+    },
+    {
+      "name": "CostBreakdown",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "total_remote_spend",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Total cost of remote API calls as a Decimal string representation (e.g., '12.50'). Must be a valid non-negative decimal.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "Decimal(value) >= 0",
+              "error_message": "total_remote_spend must be a non-negative Decimal string"
+            }
+          ]
+        },
+        {
+          "name": "estimated_local_savings",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost savings from local model serving, as a Decimal string. Must be a valid non-negative decimal.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "Decimal(value) >= 0",
+              "error_message": "estimated_local_savings must be a non-negative Decimal string"
+            }
+          ]
+        },
+        {
+          "name": "cost_per_task",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping of task_type (str) to per-task cost (Decimal string). Keys are task type identifiers, values are Decimal string representations.",
+          "validators": []
+        },
+        {
+          "name": "budget_limit",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Configured total budget limit as a Decimal string. Must be a valid non-negative decimal.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "Decimal(value) >= 0",
+              "error_message": "budget_limit must be a non-negative Decimal string"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget as a Decimal string. May be zero but not negative (hard budget enforcement).",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "Decimal(value) >= 0",
+              "error_message": "budget_remaining must be a non-negative Decimal string"
+            }
+          ]
+        },
+        {
+          "name": "budget_utilization_pct",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Percentage of budget consumed, in [0.0, 100.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 100.0",
+              "error_message": "budget_utilization_pct must be between 0.0 and 100.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Cost accounting data. All monetary values are Decimal serialized as string for precision. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "CorrelationWindow",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type this window pertains to.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "window_start",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for window start.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "window_start must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "window_end",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for window end.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "window_end must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of samples in this window.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "correlation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation score computed for this window, in [-1.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "-1.0 <= value <= 1.0",
+              "error_message": "correlation_score must be between -1.0 and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "local_agreement_rate",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Rate at which local model agreed with remote oracle in this window, in [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "local_agreement_rate must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single correlation measurement window with time bounds and scored data. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "CorrelationWindowList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "CorrelationWindow",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[CorrelationWindow]. Ordered most-recent-first within a CorrelationHistory."
+    },
+    {
+      "name": "CorrelationHistory",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type this history pertains to.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "windows_requested",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of correlation windows requested from the data source.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "windows_requested must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "windows_available",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of correlation windows actually available and returned. Always <= windows_requested.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "windows_available must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "windows",
+          "type_ref": "CorrelationWindowList",
+          "required": true,
+          "default": "",
+          "description": "The actual correlation window data, ordered most recent first.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Correlation window history for a task type, including metadata about request vs availability. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "Alert",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "alert_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this alert (UUID v4 string).",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "alert_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "alert_type",
+          "type_ref": "AlertType",
+          "required": true,
+          "default": "",
+          "description": "Categorized type of the alert.",
+          "validators": []
+        },
+        {
+          "name": "severity",
+          "type_ref": "AlertSeverity",
+          "required": true,
+          "default": "",
+          "description": "Severity level of this alert.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of the alert condition.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "message must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Task type this alert pertains to, or empty string if system-wide.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string when alert was generated.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "timestamp must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A typed system alert with severity. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "TaskConfidenceReportList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskConfidenceReport",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[TaskConfidenceReport]. One entry per task type."
+    },
+    {
+      "name": "CorrelationHistoryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "CorrelationHistory",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[CorrelationHistory]. One entry per task type."
+    },
+    {
+      "name": "AlertList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "Alert",
+      "variants": [],
+      "inner_types": [],
+      "description": "TypeAlias for list[Alert]. Active alerts sorted by timestamp descending."
+    },
+    {
+      "name": "SystemReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "report_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this report (UUID v4 string).",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "report_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "generated_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string when this report was generated.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "generated_at must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "task_confidence_reports",
+          "type_ref": "TaskConfidenceReportList",
+          "required": true,
+          "default": "",
+          "description": "Confidence, phase, trend, and sampling frequency data per task type.",
+          "validators": []
+        },
+        {
+          "name": "cost_breakdown",
+          "type_ref": "CostBreakdown",
+          "required": true,
+          "default": "",
+          "description": "System-wide cost accounting data.",
+          "validators": []
+        },
+        {
+          "name": "correlation_histories",
+          "type_ref": "CorrelationHistoryList",
+          "required": true,
+          "default": "",
+          "description": "Correlation window history per task type.",
+          "validators": []
+        },
+        {
+          "name": "alerts",
+          "type_ref": "AlertList",
+          "required": true,
+          "default": "",
+          "description": "Active alerts (quality degradation, budget warnings, staleness, etc.).",
+          "validators": []
+        },
+        {
+          "name": "task_types_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of distinct task types included in this report. Equals len(task_confidence_reports).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "task_types_count must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Top-level aggregated system report. Frozen Pydantic v2 model (ConfigDict(frozen=True)). Composes all sub-report models. All datetime fields are UTC. Generated on-demand, never in background."
+    },
+    {
+      "name": "ReportConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "correlation_window_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of recent correlation windows to include per task type.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 1000",
+              "error_message": "correlation_window_count must be between 1 and 1000"
+            }
+          ]
+        },
+        {
+          "name": "alerts_lookback_hours",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of hours to look back for alerts.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 8760",
+              "error_message": "alerts_lookback_hours must be between 1 and 8760"
+            }
+          ]
+        },
+        {
+          "name": "webhook_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional webhook URL to POST report JSON to. Empty string if not configured.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^(https?://.+)?$",
+              "error_message": "webhook_url must be a valid http:// or https:// URL, or empty string"
+            }
+          ]
+        },
+        {
+          "name": "webhook_timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "30",
+          "description": "Timeout in seconds for webhook HTTP POST.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 300",
+              "error_message": "webhook_timeout_seconds must be between 1 and 300"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for report generation, parsed and validated from YAML config at startup. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "DeliveryResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "DeliveryStatus",
+          "required": true,
+          "default": "",
+          "description": "Outcome status of the delivery attempt.",
+          "validators": []
+        },
+        {
+          "name": "http_status_code",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "HTTP response status code, or 0 if no response was received (timeout/connection error).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 599",
+              "error_message": "http_status_code must be between 0 and 599"
+            }
+          ]
+        },
+        {
+          "name": "url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The URL the report was delivered to.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "url must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "attempt_timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string of the delivery attempt.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "attempt_timestamp must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error details if delivery failed, empty string on success.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Duration of the delivery attempt in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "duration_ms must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Outcome of a webhook delivery attempt. Never raises — always returns this result object. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "FormattedReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The formatted report content string (JSON string or CLI table text).",
+          "validators": []
+        },
+        {
+          "name": "format",
+          "type_ref": "ReportFormat",
+          "required": true,
+          "default": "",
+          "description": "The format used to render this report.",
+          "validators": []
+        },
+        {
+          "name": "report_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The report_id of the SystemReport that was formatted.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "report_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "content_length",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Length of the content string in characters. Must equal len(content).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "content_length must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A rendered report with metadata about the format used. Frozen Pydantic v2 model (ConfigDict(frozen=True))."
+    },
+    {
+      "name": "TimeRange",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "start",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for the range start (inclusive).",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "start must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for the range end (inclusive).",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "end must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A time range for querying audit entries. Both bounds are inclusive. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "ConfidenceDataSource",
+      "kind": "struct",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol (typing.Protocol) for read-only access to the confidence engine's state. Injected into the report generator. Methods: get_task_types() -> list[str], get_confidence(task_type) -> float, get_phase(task_type) -> str, get_trend(task_type) -> TrendDirection, get_sampling_frequency(task_type) -> float, get_correlation_windows(task_type, count) -> CorrelationWindowList."
+    },
+    {
+      "name": "BudgetDataSource",
+      "kind": "struct",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol (typing.Protocol) for read-only access to the budget manager's state. Injected into the report generator. Methods: get_total_remote_spend() -> str, get_estimated_local_savings() -> str, get_cost_per_task() -> dict[str, str], get_budget_limit() -> str, get_budget_remaining() -> str, get_budget_utilization_pct() -> float."
+    },
+    {
+      "name": "AuditDataSource",
+      "kind": "struct",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol (typing.Protocol) for read-only access to audit log queries. Injected into the report generator. Wraps AuditLogger query methods. Methods: entries_in_range(start, end) -> AuditEntryList, entries_by_task(task_name) -> AuditEntryList, entries_by_type(event_type) -> AuditEntryList."
+    }
+  ],
+  "functions": [
+    {
+      "name": "AuditConfig.__init__",
+      "description": "Construct and validate an AuditConfig. Pydantic v2 validation runs on construction. Fails fast if log_path is empty, if the parent directory does not exist, or if the parent directory is not writable. Consistent with the project's fail-fast config philosophy.",
+      "inputs": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the JSONL audit log file.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "log_path must be a non-empty string"
+            },
+            {
+              "kind": "custom",
+              "expression": "Path(log_path).parent.exists() and os.access(Path(log_path).parent, os.W_OK)",
+              "error_message": "Parent directory of log_path must exist and be writable"
+            }
+          ]
+        },
+        {
+          "name": "max_file_size_mb",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum audit log file size in MB before rotation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "max_file_size_mb must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "rotation_backup_count",
+          "type_ref": "int",
+          "required": false,
+          "default": "5",
+          "description": "Number of rotated backup files to retain.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 100",
+              "error_message": "rotation_backup_count must be between 0 and 100"
+            }
+          ]
+        },
+        {
+          "name": "enabled_event_types",
+          "type_ref": "EventTypeList",
+          "required": false,
+          "default": "all",
+          "description": "Event types to log. Empty or all means log everything.",
+          "validators": []
+        }
+      ],
+      "output_type": "AuditConfig",
+      "error_cases": [
+        {
+          "name": "empty_log_path",
+          "condition": "log_path is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "log_path must be a non-empty string"
+          }
+        },
+        {
+          "name": "parent_not_exists",
+          "condition": "The parent directory of log_path does not exist on the filesystem",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Parent directory does not exist: {parent_path}"
+          }
+        },
+        {
+          "name": "parent_not_writable",
+          "condition": "The parent directory of log_path exists but is not writable by the current process",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Parent directory is not writable: {parent_path}"
+          }
+        },
+        {
+          "name": "invalid_max_file_size",
+          "condition": "max_file_size_mb is outside [1, 10000]",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "max_file_size_mb must be between 1 and 10000"
+          }
+        },
+        {
+          "name": "invalid_rotation_count",
+          "condition": "rotation_backup_count is outside [0, 100]",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "rotation_backup_count must be between 0 and 100"
+          }
+        }
+      ],
+      "preconditions": [
+        "log_path is a non-empty string",
+        "Parent directory of log_path exists on the filesystem",
+        "Parent directory of log_path is writable by the current process"
+      ],
+      "postconditions": [
+        "Returned AuditConfig has a valid, non-empty log_path",
+        "The parent directory of log_path exists and is writable",
+        "All fields have passed Pydantic v2 validation",
+        "The returned instance is frozen (immutable)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "AuditEntry.to_json_line",
+      "description": "Serialize this AuditEntry to a single-line compact JSON string suitable for appending to a JSONL file. Uses Pydantic's model_dump_json() with no indentation. Does not include a trailing newline character. Output is deterministic for a given entry (sorted keys).",
+      "inputs": [],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "serialization_failure",
+          "condition": "The details dict contains a value that is not JSON-serializable",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Details dict contains non-JSON-serializable value"
+          }
+        }
+      ],
+      "preconditions": [
+        "The AuditEntry instance is valid (all fields passed Pydantic validation)"
+      ],
+      "postconditions": [
+        "Returned string is valid JSON",
+        "Returned string contains no newline characters",
+        "json.loads(result) produces a dict with keys: timestamp, task_name, event_type, details",
+        "Returned string is non-empty"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.__init__",
+      "description": "Construct a JsonLinesAuditLogger from an AuditConfig. Validates that log_path's parent directory exists and is writable. Creates the log file if it does not exist. Configures a dedicated stdlib logging.Logger named 'apprentice.audit' with a FileHandler in append mode and a custom JSON formatter. The logger is isolated (propagate=False). Initializes an asyncio.Lock for concurrent write safety.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "AuditConfig",
+          "required": true,
+          "default": "",
+          "description": "Injected audit configuration. Validated and used to set up the file handler on construction.",
+          "validators": []
+        }
+      ],
+      "output_type": "JsonLinesAuditLogger",
+      "error_cases": [
+        {
+          "name": "parent_directory_not_found",
+          "condition": "The parent directory of config.log_path does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Parent directory does not exist: {parent_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The parent directory of config.log_path is not writable, or the file exists but is not writable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot write to audit log path: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_config",
+          "condition": "config is not a valid AuditConfig (e.g., log_path is empty)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid AuditConfig: {validation_errors}"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid AuditConfig instance",
+        "config.log_path parent directory exists",
+        "config.log_path parent directory is writable by the current process"
+      ],
+      "postconditions": [
+        "A FileHandler is opened in append mode on config.log_path",
+        "The 'apprentice.audit' logger is configured with the JSON formatter and file handler",
+        "The logger has propagate=False",
+        "If the log file did not exist, it has been created (possibly empty)",
+        "No existing log file content has been modified or truncated",
+        "An asyncio.Lock is initialized for concurrent write safety"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "config.log_path",
+          "description": "Creates the JSONL log file if it does not exist"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "logging.getLogger('apprentice.audit')",
+          "description": "Registers a FileHandler on the 'apprentice.audit' stdlib logger"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.log",
+      "description": "Append a single AuditEntry to the audit log. Acquires the asyncio.Lock, serializes the entry via to_json_line(), and emits it through the stdlib 'apprentice.audit' logger to the configured JSONL file handler. If the entry's event_type is not in the configured enabled_event_types filter, the entry is silently dropped. This is the only write path; all mutations go through this method. Audit write failures raise immediately — audit integrity is non-negotiable.",
+      "inputs": [
+        {
+          "name": "entry",
+          "type_ref": "AuditEntry",
+          "required": true,
+          "default": "",
+          "description": "The audit entry to append to the log.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "io_error",
+          "condition": "The log file has become inaccessible (e.g., disk full, file deleted, permissions changed) after initialization",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Failed to write audit entry: {os_error_detail}"
+          }
+        },
+        {
+          "name": "serialization_failure",
+          "condition": "The entry's details dict contains a non-JSON-serializable value",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Cannot serialize audit entry: {serialization_error}"
+          }
+        }
+      ],
+      "preconditions": [
+        "entry is a valid AuditEntry instance",
+        "The JsonLinesAuditLogger has been successfully initialized (file handler is active)"
+      ],
+      "postconditions": [
+        "If entry.event_type is in enabled_event_types (or filter is 'all'), the JSONL file contains one additional line at the end",
+        "The new line is the JSON serialization of the entry",
+        "All previously existing lines in the file are unchanged",
+        "The entry is flushed to disk before the method returns",
+        "If entry.event_type is not in enabled_event_types, no write occurs"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "config.log_path",
+          "description": "Appends one JSON line to the audit log file"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_by_task",
+      "description": "Query the audit log for all entries matching the given task_name. Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by task_name equality (case-sensitive exact match). Corrupted or unparseable lines are skipped with a warning logged to the application logger (not the audit logger). Returns entries in chronological order (file order). Read-only — never modifies the log file.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name to filter by (case-sensitive exact match).",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_name must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be non-empty"
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "task_name is a non-empty string"
+      ],
+      "postconditions": [
+        "All returned entries have entry.task_name == task_name",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file matching task_name are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit log file"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_by_type",
+      "description": "Query the audit log for all entries matching the given event_type. Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by event_type equality. Corrupted or unparseable lines are skipped with a warning. Returns entries in chronological order (file order). Read-only.",
+      "inputs": [
+        {
+          "name": "event_type",
+          "type_ref": "EventType",
+          "required": true,
+          "default": "",
+          "description": "The EventType variant to filter by.",
+          "validators": []
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_event_type",
+          "condition": "event_type is not a valid EventType variant",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid event type: {event_type}. Must be one of the 9 defined EventType variants."
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "event_type is a valid EventType variant"
+      ],
+      "postconditions": [
+        "All returned entries have entry.event_type == event_type",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file matching event_type are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit log file"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_in_range",
+      "description": "Query the audit log for all entries with timestamps in the range [start, end] (inclusive on both bounds). Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by timestamp comparison. Both start and end must be timezone-aware UTC datetimes in ISO-8601 format. Corrupted or unparseable lines are skipped with a warning. Returns entries in chronological order (file order). Read-only.",
+      "inputs": [
+        {
+          "name": "start",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for range start (inclusive).",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "start must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UTC ISO-8601 datetime string for range end (inclusive).",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "end must be a UTC ISO-8601 datetime string"
+            }
+          ]
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_start",
+          "condition": "start is not a valid ISO 8601 UTC datetime string or is not timezone-aware",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "start must be a timezone-aware UTC datetime in ISO 8601 format"
+          }
+        },
+        {
+          "name": "invalid_end",
+          "condition": "end is not a valid ISO 8601 UTC datetime string or is not timezone-aware",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "end must be a timezone-aware UTC datetime in ISO 8601 format"
+          }
+        },
+        {
+          "name": "start_after_end",
+          "condition": "start datetime is strictly after end datetime",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "start must be <= end; got start={start}, end={end}"
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "start is a valid timezone-aware UTC datetime in ISO-8601 format",
+        "end is a valid timezone-aware UTC datetime in ISO-8601 format",
+        "start <= end"
+      ],
+      "postconditions": [
+        "All returned entries have start <= entry.timestamp <= end",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file within the range are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit log file"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "generate_report",
+      "description": "Generates a complete SystemReport by reading data from all three data sources (ConfidenceDataSource, BudgetDataSource, AuditDataSource). This is a synchronous, pure aggregation step with no side effects beyond reading from injected data sources. Triggered on-demand by CLI or library call. The report generator must be initialized with valid data source instances before calling this function.",
+      "inputs": [
+        {
+          "name": "confidence_source",
+          "type_ref": "ConfidenceDataSource",
+          "required": true,
+          "default": "",
+          "description": "Injected read-only interface to the confidence engine's state.",
+          "validators": []
+        },
+        {
+          "name": "budget_source",
+          "type_ref": "BudgetDataSource",
+          "required": true,
+          "default": "",
+          "description": "Injected read-only interface to the budget manager's state.",
+          "validators": []
+        },
+        {
+          "name": "audit_source",
+          "type_ref": "AuditDataSource",
+          "required": true,
+          "default": "",
+          "description": "Injected read-only interface to audit log queries.",
+          "validators": []
+        },
+        {
+          "name": "config",
+          "type_ref": "ReportConfig",
+          "required": true,
+          "default": "",
+          "description": "Validated report configuration controlling window count, lookback hours, etc.",
+          "validators": []
+        }
+      ],
+      "output_type": "SystemReport",
+      "error_cases": [
+        {
+          "name": "confidence_source_unavailable",
+          "condition": "The injected ConfidenceDataSource raises an exception or is unreachable when queried",
+          "error_type": "DataSourceError",
+          "error_data": {
+            "source": "confidence_engine",
+            "detail": "Description of the underlying failure"
+          }
+        },
+        {
+          "name": "budget_source_unavailable",
+          "condition": "The injected BudgetDataSource raises an exception or is unreachable when queried",
+          "error_type": "DataSourceError",
+          "error_data": {
+            "source": "budget_manager",
+            "detail": "Description of the underlying failure"
+          }
+        },
+        {
+          "name": "audit_source_unavailable",
+          "condition": "The injected AuditDataSource raises an exception or is unreachable when queried",
+          "error_type": "DataSourceError",
+          "error_data": {
+            "source": "audit_log",
+            "detail": "Description of the underlying failure"
+          }
+        },
+        {
+          "name": "no_task_types_found",
+          "condition": "The ConfidenceDataSource returns an empty list of task types, meaning no data exists to report on",
+          "error_type": "EmptyReportError",
+          "error_data": {
+            "detail": "No task types registered in the system. Report generation requires at least one task type."
+          }
+        }
+      ],
+      "preconditions": [
+        "config has been validated via validate_report_config (all fields within declared ranges)",
+        "All injected data sources are available and responsive",
+        "confidence_source, budget_source, and audit_source are valid Protocol implementations"
+      ],
+      "postconditions": [
+        "Returned SystemReport has a unique report_id (UUID v4)",
+        "generated_at is set to the current UTC time at report creation",
+        "task_confidence_reports contains exactly one entry per task type known to the ConfidenceDataSource",
+        "task_types_count equals the length of task_confidence_reports",
+        "Each CorrelationHistory has windows_requested equal to config.correlation_window_count",
+        "Each CorrelationHistory has windows_available <= windows_requested",
+        "cost_breakdown.budget_utilization_pct is consistent with total_remote_spend and budget_limit",
+        "All datetime strings in the report are UTC ISO-8601 formatted",
+        "All Decimal string fields are valid decimal representations"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "format_report",
+      "description": "Formats a SystemReport into a string representation using the specified output format. JSON format produces a complete JSON serialization with full Decimal precision. CLI summary format produces a human-readable multi-line table with sections for confidence, costs, correlation, and alerts. This is a pure function with no side effects.",
+      "inputs": [
+        {
+          "name": "report",
+          "type_ref": "SystemReport",
+          "required": true,
+          "default": "",
+          "description": "A valid, fully-populated SystemReport instance to format.",
+          "validators": []
+        },
+        {
+          "name": "output_format",
+          "type_ref": "ReportFormat",
+          "required": true,
+          "default": "",
+          "description": "The desired output format (JSON or CLI_SUMMARY).",
+          "validators": []
+        }
+      ],
+      "output_type": "FormattedReport",
+      "error_cases": [
+        {
+          "name": "serialization_error",
+          "condition": "The SystemReport contains data that cannot be serialized into the requested format (e.g., non-UTF-8 characters, circular references)",
+          "error_type": "FormattingError",
+          "error_data": {
+            "format": "The requested format",
+            "detail": "Description of the serialization failure"
+          }
+        }
+      ],
+      "preconditions": [
+        "report is a valid, fully-populated SystemReport instance",
+        "output_format is a recognized ReportFormat variant"
+      ],
+      "postconditions": [
+        "Returned FormattedReport.report_id matches the input report.report_id",
+        "Returned FormattedReport.format matches the requested output_format",
+        "FormattedReport.content_length equals len(FormattedReport.content)",
+        "If output_format is JSON, content is valid parseable JSON",
+        "If output_format is CLI_SUMMARY, content is a human-readable multi-line string with table formatting",
+        "All Decimal string values in JSON output preserve full precision (not converted to float)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "deliver_webhook",
+      "description": "Delivers a SystemReport as JSON via async HTTP POST to the configured webhook URL using an injected httpx.AsyncClient. Never raises an exception — all failure modes are captured in the returned DeliveryResult. The POST body is the JSON-serialized SystemReport with Content-Type application/json.",
+      "inputs": [
+        {
+          "name": "report",
+          "type_ref": "SystemReport",
+          "required": true,
+          "default": "",
+          "description": "A valid, fully-populated SystemReport instance to deliver.",
+          "validators": []
+        },
+        {
+          "name": "webhook_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The HTTP(S) URL to POST the report to.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "webhook_url must be a valid http:// or https:// URL"
+            }
+          ]
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Timeout in seconds for the HTTP POST request.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 300",
+              "error_message": "timeout_seconds must be between 1 and 300"
+            }
+          ]
+        },
+        {
+          "name": "http_client",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Injected httpx.AsyncClient instance for making the HTTP POST. Dependency-injected for testability.",
+          "validators": []
+        }
+      ],
+      "output_type": "DeliveryResult",
+      "error_cases": [
+        {
+          "name": "connection_refused",
+          "condition": "The webhook endpoint refuses the TCP connection",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "failure",
+            "detail": "Connection refused by the target host"
+          }
+        },
+        {
+          "name": "dns_resolution_failure",
+          "condition": "The webhook URL hostname cannot be resolved via DNS",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "failure",
+            "detail": "DNS resolution failed for the webhook URL hostname"
+          }
+        },
+        {
+          "name": "timeout_exceeded",
+          "condition": "The HTTP POST does not complete within timeout_seconds",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "timeout",
+            "detail": "Request exceeded the configured timeout"
+          }
+        },
+        {
+          "name": "non_2xx_response",
+          "condition": "The webhook endpoint responds with a non-2xx HTTP status code",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "failure",
+            "detail": "Webhook returned non-2xx status code"
+          }
+        },
+        {
+          "name": "tls_error",
+          "condition": "TLS handshake fails for an HTTPS webhook URL (certificate errors, protocol mismatch)",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "failure",
+            "detail": "TLS handshake failure"
+          }
+        },
+        {
+          "name": "serialization_failure",
+          "condition": "The SystemReport cannot be serialized to JSON for the POST body",
+          "error_type": "DeliveryResult",
+          "error_data": {
+            "status": "failure",
+            "detail": "Failed to serialize report to JSON"
+          }
+        }
+      ],
+      "preconditions": [
+        "report is a valid, fully-populated SystemReport instance",
+        "webhook_url is a syntactically valid HTTP or HTTPS URL",
+        "timeout_seconds is within the valid range [1, 300]",
+        "http_client is a valid httpx.AsyncClient instance (or compatible mock)"
+      ],
+      "postconditions": [
+        "A DeliveryResult is always returned — this function never raises",
+        "DeliveryResult.url matches the input webhook_url",
+        "DeliveryResult.attempt_timestamp is set to the UTC time of the attempt",
+        "DeliveryResult.duration_ms reflects actual elapsed time of the attempt",
+        "If status is SUCCESS, http_status_code is in [200, 299]",
+        "If status is FAILURE, error_message is non-empty",
+        "If status is TIMEOUT, error_message describes the timeout condition",
+        "The POST body is the JSON-serialized SystemReport with Content-Type application/json"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "webhook_url",
+          "description": "Sends an HTTP POST request to the configured webhook URL with the JSON-serialized report"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_report_config",
+      "description": "Validates a ReportConfig instance, ensuring all fields are within their declared constraints. Called at startup to fail fast on invalid configuration. Pure function — no side effects.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "ReportConfig",
+          "required": true,
+          "default": "",
+          "description": "The ReportConfig instance to validate (may have invalid field values).",
+          "validators": []
+        }
+      ],
+      "output_type": "ReportConfig",
+      "error_cases": [
+        {
+          "name": "invalid_correlation_window_count",
+          "condition": "correlation_window_count is outside [1, 1000]",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "field": "correlation_window_count",
+            "detail": "Must be between 1 and 1000"
+          }
+        },
+        {
+          "name": "invalid_alerts_lookback_hours",
+          "condition": "alerts_lookback_hours is outside [1, 8760]",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "field": "alerts_lookback_hours",
+            "detail": "Must be between 1 and 8760"
+          }
+        },
+        {
+          "name": "invalid_webhook_url",
+          "condition": "webhook_url is non-empty but does not match a valid HTTP(S) URL pattern",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "field": "webhook_url",
+            "detail": "Must be a valid http:// or https:// URL, or empty string"
+          }
+        },
+        {
+          "name": "invalid_webhook_timeout",
+          "condition": "webhook_timeout_seconds is outside [1, 300]",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "field": "webhook_timeout_seconds",
+            "detail": "Must be between 1 and 300 seconds"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a ReportConfig instance (may have invalid field values)"
+      ],
+      "postconditions": [
+        "If no error is raised, the returned ReportConfig is valid and safe to use for report generation",
+        "All field-level validators have passed",
+        "If webhook_url is non-empty, it is a valid HTTP(S) URL",
+        "Returned config is the same instance or an equivalent validated copy"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "audit_log",
+    "report_generator"
+  ],
+  "dependency_contracts": {
+    "audit_log": [
+      "AuditLogger",
+      "JsonLinesAuditLogger",
+      "AuditEntry",
+      "AuditConfig",
+      "EventType",
+      "AuditEntryList"
+    ],
+    "report_generator": [
+      "SystemReport",
+      "TaskConfidenceReport",
+      "CostBreakdown",
+      "CorrelationHistory",
+      "CorrelationWindow",
+      "Alert",
+      "ReportConfig",
+      "FormattedReport",
+      "DeliveryResult",
+      "TrendDirection",
+      "AlertSeverity",
+      "AlertType",
+      "ReportFormat",
+      "DeliveryStatus"
+    ]
+  },
+  "invariants": [
+    "The audit log file is append-only: no entry, once written, is ever modified or deleted",
+    "All timestamps in audit entries and reports are timezone-aware UTC datetimes serialized as ISO-8601 strings",
+    "Every AuditEntry has a valid EventType from the closed 9-variant enum; no catch-all or unknown variant exists",
+    "The AuditEntry model is frozen (immutable) after construction",
+    "The 'apprentice.audit' logger is isolated (propagate=False) and does not emit to root or application loggers",
+    "Query methods never modify the audit log file",
+    "Corrupted lines in the JSONL file are skipped during queries with a warning — they do not cause query failures",
+    "The details dict accepts dict[str, Any] values but all values must be JSON-serializable",
+    "Config validation occurs at construction time (fail-fast), never deferred to runtime",
+    "No global state: all state is held in injected instances and explicit parameters",
+    "All public functions have full type annotations",
+    "All SystemReport instances have a unique report_id (UUID v4) and a generated_at timestamp in UTC",
+    "Report generation is read-only — it never mutates the state of any data source",
+    "All monetary/cost values are represented as string-serialized Decimals, never floating point, to preserve precision",
+    "Formatting and delivery are separate steps from generation — generate_report returns a pure data model",
+    "Webhook delivery never raises exceptions — all failure modes are captured in a DeliveryResult object",
+    "The number of TaskConfidenceReport entries in a SystemReport equals the number of task types known to the ConfidenceDataSource at generation time",
+    "Each CorrelationHistory in the report has windows_available <= windows_requested",
+    "Audit write failures raise immediately — audit integrity is non-negotiable",
+    "Files implementing this component must be under 300 lines each"
+  ],
+  "requires": [
+    "confidence_engine",
+    "budget_manager"
+  ]
+}

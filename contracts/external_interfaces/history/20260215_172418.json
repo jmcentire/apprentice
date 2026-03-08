@@ -1,0 +1,1594 @@
+{
+  "component_id": "external_interfaces",
+  "name": "External Model Interfaces",
+  "description": "Abstract interfaces and implementations for communicating with remote APIs and local model servers. Provides a consistent contract for sending prompts and receiving structured responses from any model source. All external I/O is behind abstract base classes for testability via dependency injection. This is a pure contract layer: the ModelClient ABC defines the consumer-facing interface, unified Pydantic v2 types normalize responses from heterogeneous backends, a three-category error hierarchy enables routing decisions, and thin adapter implementations bridge dependency contracts (remote_api_client, local_model_server) to the unified interface. No retry, budget, or routing logic lives here — just the contract and translation.",
+  "version": 1,
+  "types": [
+    {
+      "name": "SourceType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "LOCAL",
+        "REMOTE"
+      ],
+      "inner_types": [],
+      "description": "Discriminator for the origin of a model response. Used by the Router and audit trail to distinguish local from remote completions."
+    },
+    {
+      "name": "Role",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SYSTEM",
+        "USER",
+        "ASSISTANT"
+      ],
+      "inner_types": [],
+      "description": "Role of a message in a conversation prompt. Aligned with remote_api_client's MessageRole for zero-cost mapping."
+    },
+    {
+      "name": "UnavailableReason",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SERVER_NOT_RUNNING",
+        "NO_MODEL_LOADED",
+        "MODEL_LOADING",
+        "INFERENCE_TIMEOUT",
+        "INFERENCE_ERROR",
+        "RATE_LIMITED",
+        "REMOTE_UNAVAILABLE",
+        "AUTH_FAILURE"
+      ],
+      "inner_types": [],
+      "description": "Categorized reason why a model source cannot fulfill a request. Used by SourceUnavailableError to communicate structured fallback context to the Router."
+    },
+    {
+      "name": "SourceInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "source_type",
+          "type_ref": "SourceType",
+          "required": true,
+          "default": "",
+          "description": "Whether this source is a local inference server or a remote API provider.",
+          "validators": []
+        },
+        {
+          "name": "provider_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable provider or backend name. For remote: 'anthropic', 'openai', 'google'. For local: 'ollama', 'vllm', 'llamacpp'.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "provider_name must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier as recognized by the backend. E.g., 'claude-sonnet-4-20250514', 'gpt-4o', 'llama3:8b-instruct-q4_K_M'.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "backend_type",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional backend discriminator for local sources. One of 'ollama', 'vllm', 'llamacpp', or empty string for remote sources.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model identifying the origin of a completion. Carried on every CompletionResponse and every error for audit correlation. Provides enough context to reconstruct which exact backend produced or failed to produce a result."
+    },
+    {
+      "name": "Message",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "role",
+          "type_ref": "Role",
+          "required": true,
+          "default": "",
+          "description": "The role of this message in the conversation.",
+          "validators": []
+        },
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The text content of the message.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "Message content must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single message in a conversation prompt. Aligned with remote_api_client's PromptMessage for zero-cost adapter translation."
+    },
+    {
+      "name": "GenerationConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_tokens",
+          "type_ref": "int",
+          "required": false,
+          "default": "4096",
+          "description": "Maximum number of tokens to generate in the response.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=1",
+              "error_message": "max_tokens must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "temperature",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Sampling temperature. 0.0 = deterministic, higher = more random. Adapters clamp to backend-specific max if needed.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0 AND <=2.0",
+              "error_message": "temperature must be between 0.0 and 2.0"
+            }
+          ]
+        },
+        {
+          "name": "top_p",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Nucleus sampling parameter. 1.0 = no filtering.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0 AND <=1.0",
+              "error_message": "top_p must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "stop_sequences",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "Optional list of strings that, when generated, cause the model to stop. Empty list means no stop sequences.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Canonical generation parameters that control model output behavior. Adapters are responsible for clamping or converting values to backend-specific ranges (e.g., some providers cap temperature at 1.0). Frozen Pydantic v2 model."
+    },
+    {
+      "name": "UnifiedTokenUsage",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "prompt_tokens",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Number of tokens in the prompt/input. 0 if not reported by the backend.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "prompt_tokens must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "completion_tokens",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Number of tokens in the generated completion. 0 if not reported by the backend.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "completion_tokens must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_tokens",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total tokens consumed (prompt + completion). Always populated — computed from components or from backend's total if breakdown is unavailable.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "total_tokens must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "is_estimated",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "True if any token count is estimated rather than reported by the backend. Local backends that don't report prompt tokens set this to true.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Normalized token usage across all backends. Some backends (especially local) may not report exact prompt/completion breakdowns, so those fields are optional. The is_estimated flag signals when values are approximated rather than reported by the backend. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "CompletionRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "messages",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of Message objects forming the conversation prompt. Must be non-empty and contain at least one message with role USER.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "messages must contain at least one message"
+            }
+          ]
+        },
+        {
+          "name": "generation_config",
+          "type_ref": "GenerationConfig",
+          "required": false,
+          "default": "GenerationConfig()",
+          "description": "Optional generation parameters. Defaults are deterministic (temperature=0.0) for reproducibility.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Caller-supplied request identifier for audit trail correlation. If empty, the adapter generates a UUID4 internally. Flows through to the underlying backend for end-to-end tracing.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Unified request for model completion, consumed by ModelClient.complete(). Pydantic v2 model carrying the conversation, generation parameters, and a request_id for end-to-end audit trail correlation. Consumer-driven: contains exactly what Apprentice core needs to send, nothing backend-specific."
+    },
+    {
+      "name": "CompletionResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The text content of the model's completion.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance information identifying which backend and model produced this response.",
+          "validators": []
+        },
+        {
+          "name": "token_usage",
+          "type_ref": "UnifiedTokenUsage",
+          "required": true,
+          "default": "",
+          "description": "Normalized token usage for this completion.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Computed cost in USD for this completion. For remote sources, directly from TaskResponse.cost_usd. For local sources, always 0.0 (local inference has no per-request API cost).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "cost_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock latency in milliseconds for the completion (successful attempt only, excludes retry wait time for remote).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "latency_ms must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "response_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this response. Derived from the backend's request_id. Used for audit trail correlation.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "response_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Unified response from any model source. Frozen Pydantic v2 model. Normalizes remote TaskResponse and local InferenceSuccess into a single shape that Apprentice core consumes. Carries provenance (source_info), usage, latency, and cost for budget accounting and audit."
+    },
+    {
+      "name": "HealthReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this model source is available and ready to serve completions. For remote: always true unless auth fails at health-check time. For local: maps from HealthStatus.is_ready.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance information identifying which backend and model this health report covers.",
+          "validators": []
+        },
+        {
+          "name": "detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable detail message. Populated on unavailability with diagnostic information.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Time spent performing the health check in milliseconds. 0.0 if no actual check was performed.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "latency_ms must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Unified health check result for any model source. Provides enough information for the Router to make routing decisions without knowing backend specifics. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "ModelClientError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance of the error — which backend and model caused the failure.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Request identifier for audit trail correlation.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "request_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "original_error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "String representation of the original exception from the underlying backend, if any. Preserves diagnostic context without leaking backend types.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the error occurred. Generated at error construction time.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "timestamp_utc must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base error type for all unified model client errors. Carries structured context for audit logging and routing decisions. All specific error types (RetriableError, TerminalError, SourceUnavailableError) extend this conceptually. This is an Exception subclass in implementation."
+    },
+    {
+      "name": "RetriableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance of the error.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Request identifier for audit trail correlation.",
+          "validators": []
+        },
+        {
+          "name": "original_error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "String representation of the original backend exception.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the error occurred.",
+          "validators": []
+        },
+        {
+          "name": "retry_after_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Suggested wait time before retrying, in seconds. 0.0 if no Retry-After hint is available. Sourced from RateLimitError.retry_after_seconds when mapped from remote.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "retry_after_seconds must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "retries_exhausted",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries that were already attempted at the backend level before this error surfaced.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "retries_exhausted must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Error indicating a transient failure that may succeed on retry. Mapped from remote RateLimitError and RemoteUnavailableError. Carries an optional retry_after hint. Extends ModelClientError conceptually."
+    },
+    {
+      "name": "TerminalError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance of the error.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Request identifier for audit trail correlation.",
+          "validators": []
+        },
+        {
+          "name": "original_error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "String representation of the original backend exception.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the error occurred.",
+          "validators": []
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "HTTP status code from the failed request. 0 if not applicable.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "status_code must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Error indicating a permanent failure that will not succeed on retry. Mapped from remote AuthError and InvalidRequestError. Extends ModelClientError conceptually."
+    },
+    {
+      "name": "SourceUnavailableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "Provenance of the error.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Request identifier for audit trail correlation.",
+          "validators": []
+        },
+        {
+          "name": "original_error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "String representation of the original backend exception or unavailability detail.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the error occurred.",
+          "validators": []
+        },
+        {
+          "name": "reason",
+          "type_ref": "UnavailableReason",
+          "required": true,
+          "default": "",
+          "description": "Structured reason why the source is unavailable. Enables the Router to make informed fallback decisions.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Error signaling that a model source is entirely unavailable and the Router should consider fallback to an alternative source. Mapped from local LocalModelUnavailable results and remote RemoteUnavailableError after retries. Carries a structured reason for routing decisions. Extends ModelClientError conceptually."
+    },
+    {
+      "name": "RemoteAdapterConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Provider name: 'anthropic', 'openai', or 'google'. Mapped to remote_api_client's ProviderName enum.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value in ('anthropic', 'openai', 'google')",
+              "error_message": "provider must be one of: anthropic, openai, google"
+            }
+          ]
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier as recognized by the provider API.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "api_key_env_var",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the environment variable containing the API key.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "api_key_env_var must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Maximum retry attempts for transient failures. Passed through to remote_api_client's RetryConfig.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0 AND <=10",
+              "error_message": "max_retries must be between 0 and 10"
+            }
+          ]
+        },
+        {
+          "name": "base_delay_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Base delay for exponential backoff in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "base_delay_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "max_delay_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "60.0",
+          "description": "Maximum delay cap for any single retry wait in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "max_delay_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "connect_timeout_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "10.0",
+          "description": "TCP connection timeout in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "connect_timeout_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "read_timeout_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "Read timeout in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "read_timeout_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "total_timeout_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "180.0",
+          "description": "Total request timeout in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "total_timeout_seconds must be positive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for constructing a RemoteModelAdapter. Wraps the dependency's RemoteClientConfig and adds adapter-level settings. Validated strictly at construction time."
+    },
+    {
+      "name": "LocalAdapterConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Local backend type: 'ollama', 'vllm', or 'llamacpp'. Mapped to local_model_server's LocalBackendType enum.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value in ('ollama', 'vllm', 'llamacpp')",
+              "error_message": "backend must be one of: ollama, vllm, llamacpp"
+            }
+          ]
+        },
+        {
+          "name": "base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL of the local inference server.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "base_url must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Initial model identifier. Empty string if no model is loaded yet (Phase 1 bootstrap). Populated after first promotion.",
+          "validators": []
+        },
+        {
+          "name": "inference_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "Maximum time to wait for inference response in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=1.0 AND <=600.0",
+              "error_message": "inference_timeout_s must be between 1.0 and 600.0"
+            }
+          ]
+        },
+        {
+          "name": "health_check_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "3.0",
+          "description": "Maximum time to wait for health check response in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.1 AND <=30.0",
+              "error_message": "health_check_timeout_s must be between 0.1 and 30.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for constructing a LocalModelAdapter. Specifies which local backend to connect to and adapter-level settings. Validated strictly at construction time."
+    }
+  ],
+  "functions": [
+    {
+      "name": "create_remote_adapter",
+      "description": "Factory function that constructs a RemoteModelAdapter wrapping a remote_api_client RemoteClient. Reads config, builds the underlying RemoteClientConfig, calls remote_api_client.create_remote_client, and wraps the result in a RemoteModelAdapter that satisfies the ModelClient ABC. Validates config strictly at construction time — fails fast on invalid config or missing API keys. The returned adapter translates between the unified interface types and remote_api_client's types.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "RemoteAdapterConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration for the remote adapter including provider, model, API key env var, retry, and timeout settings.",
+          "validators": []
+        },
+        {
+          "name": "http_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional pre-constructed httpx.AsyncClient for dependency injection in testing. If None, the underlying remote client creates its own.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "missing_api_key",
+          "condition": "The environment variable specified by config.api_key_env_var is not set or is empty",
+          "error_type": "TerminalError",
+          "error_data": {
+            "detail": "API key environment variable is missing or empty — fail fast at construction"
+          }
+        },
+        {
+          "name": "invalid_config",
+          "condition": "Config fails Pydantic validation or contains invalid values",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Config validation failure with Pydantic error details"
+          }
+        },
+        {
+          "name": "unsupported_provider",
+          "condition": "Provider value does not match any implemented concrete client in remote_api_client",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "No concrete implementation available for the specified provider"
+          }
+        }
+      ],
+      "preconditions": [
+        "config passes all Pydantic validation",
+        "If http_client is provided, it must be an open httpx.AsyncClient instance",
+        "The environment variable specified by config.api_key_env_var must be set and non-empty"
+      ],
+      "postconditions": [
+        "Returned object is a RemoteModelAdapter that satisfies the ModelClient ABC",
+        "Returned adapter's source_info has source_type=REMOTE",
+        "Returned adapter's source_info.provider_name matches config.provider",
+        "Returned adapter's source_info.model_id matches config.model",
+        "Underlying RemoteClient has been constructed and API key validated"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs adapter construction with provider, model, and config summary"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_local_adapter",
+      "description": "Factory function that constructs a LocalModelAdapter wrapping a local_model_server LocalModelClient. Reads config, builds the appropriate backend-specific config (OllamaClientConfig, VLLMClientConfig, or LlamaCppClientConfig), constructs the local client via its async context manager protocol, and wraps it in a LocalModelAdapter that satisfies the ModelClient ABC. The adapter translates InferenceResult discriminated unions into CompletionResponse or SourceUnavailableError.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "LocalAdapterConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration for the local adapter including backend type, base URL, model ID, and timeout settings.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional pre-constructed LocalModelClient for dependency injection in testing. If None, the adapter constructs the appropriate backend client from config.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "invalid_config",
+          "condition": "Config fails Pydantic validation or contains invalid values",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Config validation failure with Pydantic error details"
+          }
+        },
+        {
+          "name": "unsupported_backend",
+          "condition": "Backend value does not match any implemented local client",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "No concrete implementation available for the specified backend"
+          }
+        }
+      ],
+      "preconditions": [
+        "config passes all Pydantic validation",
+        "If local_client is provided, it must satisfy the LocalModelClient protocol"
+      ],
+      "postconditions": [
+        "Returned object is a LocalModelAdapter that satisfies the ModelClient ABC",
+        "Returned adapter's source_info has source_type=LOCAL",
+        "Returned adapter's source_info.provider_name matches config.backend",
+        "Returned adapter's source_info.backend_type matches config.backend",
+        "If config.model_id is non-empty, adapter's source_info.model_id matches config.model_id"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs adapter construction with backend, base_url, and model_id"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "complete",
+      "description": "Send a completion request through the ModelClient and return a unified CompletionResponse. This is the primary abstract method on the ModelClient ABC, implemented by both RemoteModelAdapter and LocalModelAdapter. RemoteModelAdapter translates CompletionRequest to PromptMessage list + GenerationParams, calls remote_api_client.send_request, and maps TaskResponse to CompletionResponse. LocalModelAdapter translates CompletionRequest to InferenceRequest, calls local_model_server.infer, and pattern-matches on InferenceResult: InferenceSuccess maps to CompletionResponse, LocalModelUnavailable maps to SourceUnavailableError. All backend-specific errors are caught and mapped to the unified error hierarchy. A request_id is generated (UUID4) if not provided in the request.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "CompletionRequest",
+          "required": true,
+          "default": "",
+          "description": "The unified completion request containing messages, generation config, and request_id.",
+          "validators": []
+        }
+      ],
+      "output_type": "CompletionResponse",
+      "error_cases": [
+        {
+          "name": "source_unavailable_local",
+          "condition": "Local model server returns LocalModelUnavailable (server down, no model loaded, timeout, inference error)",
+          "error_type": "SourceUnavailableError",
+          "error_data": {
+            "detail": "Local model cannot serve request — reason field carries structured UnavailableReason"
+          }
+        },
+        {
+          "name": "source_unavailable_remote",
+          "condition": "Remote API is unreachable after all retries (RemoteUnavailableError from dependency)",
+          "error_type": "SourceUnavailableError",
+          "error_data": {
+            "detail": "Remote API unreachable after all retries — mapped from RemoteUnavailableError"
+          }
+        },
+        {
+          "name": "rate_limited",
+          "condition": "Remote API returns 429 after all retries exhausted (RateLimitError from dependency)",
+          "error_type": "RetriableError",
+          "error_data": {
+            "detail": "Rate limited by remote provider — retry_after_seconds may be populated"
+          }
+        },
+        {
+          "name": "auth_failure",
+          "condition": "Remote API returns 401/403 (AuthError from dependency)",
+          "error_type": "TerminalError",
+          "error_data": {
+            "detail": "Authentication failed at remote provider — not retriable"
+          }
+        },
+        {
+          "name": "invalid_request",
+          "condition": "Remote API returns 400/422 (InvalidRequestError from dependency)",
+          "error_type": "TerminalError",
+          "error_data": {
+            "detail": "Request rejected by remote provider — not retriable"
+          }
+        },
+        {
+          "name": "empty_messages",
+          "condition": "request.messages is empty or contains no message with role USER",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "messages must be non-empty and contain at least one USER message"
+          }
+        },
+        {
+          "name": "client_closed",
+          "condition": "complete() is called after close() on an adapter that owns its underlying client",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Cannot send completion on a closed client"
+          }
+        }
+      ],
+      "preconditions": [
+        "Client has been constructed via create_remote_adapter or create_local_adapter",
+        "Client has not been closed",
+        "request.messages is non-empty and contains at least one message with role USER"
+      ],
+      "postconditions": [
+        "Returned CompletionResponse.source_info matches the adapter's configured source",
+        "Returned CompletionResponse.response_id is a non-empty string",
+        "Returned CompletionResponse.latency_ms >= 0.0",
+        "Returned CompletionResponse.cost_usd >= 0.0",
+        "For remote source: cost_usd reflects actual computed cost from remote_api_client",
+        "For local source: cost_usd is always 0.0",
+        "Structured JSON log entry emitted with response_id, source_info, token_usage, cost, and latency"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "remote API or local inference server",
+          "description": "Sends HTTP request to the configured model backend via the underlying client"
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs completion outcome with request_id, source_info, tokens, cost, and latency"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "health",
+      "description": "Perform a health check against the underlying model source and return a unified HealthReport. This is an abstract method on the ModelClient ABC. RemoteModelAdapter performs a lightweight probe (e.g., a minimal API call or connectivity check) and returns available=true if the remote API is reachable and authenticated. LocalModelAdapter delegates to local_model_server.health() and maps HealthStatus to HealthReport: is_ready maps to available, loaded_model populates source_info.model_id. Never raises for operational failures — returns HealthReport with available=false and diagnostic detail.",
+      "inputs": [],
+      "output_type": "HealthReport",
+      "error_cases": [],
+      "preconditions": [
+        "Client has been constructed via create_remote_adapter or create_local_adapter"
+      ],
+      "postconditions": [
+        "Returned HealthReport.source_info matches the adapter's configured source",
+        "If available is true, the model source is ready to serve completions",
+        "If available is false, detail contains a human-readable diagnostic message",
+        "For local source: available=true implies a model is loaded (source_info.model_id is non-empty)",
+        "latency_ms reflects actual time spent on the health check",
+        "Structured JSON log entry emitted on health state transitions"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "remote API or local inference server",
+          "description": "Sends HTTP health check request to the configured backend"
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs health check result and any state transitions"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "close",
+      "description": "Async cleanup method on ModelClient ABC. Closes the underlying backend client and releases resources. If the underlying client was injected (dependency injection), this is a no-op — the caller retains ownership. Safe to call multiple times (idempotent). After close(), subsequent calls to complete() on an adapter that owns its client will raise RuntimeError.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [],
+      "preconditions": [
+        "Client has been constructed via create_remote_adapter or create_local_adapter"
+      ],
+      "postconditions": [
+        "If adapter owns the underlying client, it is closed after this call",
+        "If adapter does not own the underlying client (injected), no action is taken",
+        "Multiple calls to close are safe and have no additional effect",
+        "After close on an owned client, complete() raises RuntimeError"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs client closure with source_info"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_source_info",
+      "description": "Return the SourceInfo describing this adapter's configured model source. Pure accessor with no I/O. Used by the Router, budget tracker, and audit logger to identify which backend an adapter targets without performing a health check.",
+      "inputs": [],
+      "output_type": "SourceInfo",
+      "error_cases": [],
+      "preconditions": [
+        "Client has been constructed via create_remote_adapter or create_local_adapter"
+      ],
+      "postconditions": [
+        "Returned SourceInfo is the same instance configured at construction time",
+        "source_type is LOCAL for LocalModelAdapter, REMOTE for RemoteModelAdapter",
+        "provider_name and model_id are non-empty strings"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "promote_model",
+      "description": "Request a model promotion on the underlying local model server. Only available on LocalModelAdapter — calling this on RemoteModelAdapter raises NotImplementedError. Delegates to local_model_server.promote_model and maps the PromotionResult to update the adapter's internal source_info.model_id on success. On promotion success, subsequent completions and health checks use the new model. On failure, the previous model remains active.",
+      "inputs": [
+        {
+          "name": "new_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the new model to promote.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "new_model_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "smoke_test_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Prompt text used for the smoke test after loading the new model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "smoke_test_prompt must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "expected_substring",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional substring expected in the smoke test response. Empty string means any non-empty response passes.",
+          "validators": []
+        }
+      ],
+      "output_type": "PromotionReport",
+      "error_cases": [
+        {
+          "name": "not_supported_remote",
+          "condition": "promote_model is called on a RemoteModelAdapter",
+          "error_type": "NotImplementedError",
+          "error_data": {
+            "detail": "Model promotion is only supported on local model adapters"
+          }
+        },
+        {
+          "name": "invalid_model_id",
+          "condition": "new_model_id is empty or not a string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "new_model_id must be a non-empty string"
+          }
+        },
+        {
+          "name": "invalid_smoke_test_prompt",
+          "condition": "smoke_test_prompt is empty or not a string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "smoke_test_prompt must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "Adapter is a LocalModelAdapter (source_type == LOCAL)",
+        "Client has been constructed and not closed",
+        "new_model_id is a non-empty string",
+        "smoke_test_prompt is a non-empty string"
+      ],
+      "postconditions": [
+        "If status is 'success': adapter's source_info.model_id is updated to new_model_id",
+        "If status is not 'success': adapter's source_info.model_id is unchanged",
+        "Returned PromotionReport contains full details of the promotion attempt",
+        "Structured JSON log entry emitted with promotion outcome"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "local inference server",
+          "description": "Loads new model, runs smoke test, and potentially swaps active model on the local server"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "adapter source_info",
+          "description": "On success, updates the adapter's source_info.model_id to the new model"
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs full promotion details including status, old/new model IDs, smoke test outcome, and duration"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "map_remote_error",
+      "description": "Pure function that maps a remote_api_client error to the unified error hierarchy. Used internally by RemoteModelAdapter but exposed publicly for testing. Maps AuthError and InvalidRequestError to TerminalError, RateLimitError to RetriableError, RemoteUnavailableError to SourceUnavailableError. Preserves all structured context (provider, request_id, status_code, retries) in the mapped error.",
+      "inputs": [
+        {
+          "name": "error",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A remote_api_client error instance: AuthError, RateLimitError, RemoteUnavailableError, or InvalidRequestError.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "The adapter's SourceInfo to attach to the mapped error.",
+          "validators": []
+        }
+      ],
+      "output_type": "ModelClientError",
+      "error_cases": [
+        {
+          "name": "unknown_error_type",
+          "condition": "error is not a recognized remote_api_client error type",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "Cannot map unknown error type — expected a remote_api_client error"
+          }
+        }
+      ],
+      "preconditions": [
+        "error is an instance of one of the remote_api_client error types",
+        "source_info is a valid SourceInfo with source_type=REMOTE"
+      ],
+      "postconditions": [
+        "Returned error is one of RetriableError, TerminalError, or SourceUnavailableError",
+        "Returned error.source_info matches the provided source_info",
+        "Returned error.request_id matches the original error's request_id",
+        "Returned error.original_error contains the string representation of the input error",
+        "Returned error.timestamp_utc is a valid ISO 8601 UTC timestamp",
+        "AuthError maps to TerminalError",
+        "InvalidRequestError maps to TerminalError",
+        "RateLimitError maps to RetriableError with retry_after_seconds preserved",
+        "RemoteUnavailableError maps to SourceUnavailableError with reason=REMOTE_UNAVAILABLE"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "map_local_unavailable",
+      "description": "Pure function that maps a local_model_server LocalModelUnavailable result to a SourceUnavailableError. Used internally by LocalModelAdapter but exposed publicly for testing. Translates the local UnavailableReason enum to the unified UnavailableReason enum. Preserves request_id, backend, and detail.",
+      "inputs": [
+        {
+          "name": "unavailable",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A local_model_server LocalModelUnavailable instance.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "The adapter's SourceInfo to attach to the mapped error.",
+          "validators": []
+        }
+      ],
+      "output_type": "SourceUnavailableError",
+      "error_cases": [
+        {
+          "name": "invalid_input",
+          "condition": "unavailable is not a LocalModelUnavailable instance",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "Expected a LocalModelUnavailable instance"
+          }
+        }
+      ],
+      "preconditions": [
+        "unavailable is a LocalModelUnavailable instance with result_type='unavailable'",
+        "source_info is a valid SourceInfo with source_type=LOCAL"
+      ],
+      "postconditions": [
+        "Returned SourceUnavailableError.source_info matches the provided source_info",
+        "Returned SourceUnavailableError.request_id matches unavailable.request_id",
+        "Returned SourceUnavailableError.reason maps from the local UnavailableReason to the unified UnavailableReason",
+        "Returned SourceUnavailableError.original_error contains unavailable.detail if present",
+        "Returned SourceUnavailableError.timestamp_utc is a valid ISO 8601 UTC timestamp",
+        "Mapping preserves all five local UnavailableReason variants: SERVER_NOT_RUNNING, NO_MODEL_LOADED, MODEL_LOADING, INFERENCE_TIMEOUT, INFERENCE_ERROR"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "map_local_success_to_response",
+      "description": "Pure function that maps a local_model_server InferenceSuccess result to a unified CompletionResponse. Used internally by LocalModelAdapter but exposed publicly for testing. Translates token counts to UnifiedTokenUsage (with is_estimated=true if prompt token count came from the backend's approximation), sets cost_usd=0.0 for local inference, and populates source_info from the adapter's configuration.",
+      "inputs": [
+        {
+          "name": "success",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A local_model_server InferenceSuccess instance.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "The adapter's SourceInfo to attach to the response.",
+          "validators": []
+        }
+      ],
+      "output_type": "CompletionResponse",
+      "error_cases": [
+        {
+          "name": "invalid_input",
+          "condition": "success is not an InferenceSuccess instance",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "Expected an InferenceSuccess instance"
+          }
+        }
+      ],
+      "preconditions": [
+        "success is an InferenceSuccess instance with result_type='success'",
+        "source_info is a valid SourceInfo with source_type=LOCAL"
+      ],
+      "postconditions": [
+        "Returned CompletionResponse.content == success.text",
+        "Returned CompletionResponse.source_info matches the provided source_info",
+        "Returned CompletionResponse.cost_usd == 0.0",
+        "Returned CompletionResponse.latency_ms == success.latency_ms",
+        "Returned CompletionResponse.response_id == success.request_id",
+        "Returned CompletionResponse.token_usage.completion_tokens == success.tokens_generated",
+        "Returned CompletionResponse.token_usage.prompt_tokens == success.tokens_prompt",
+        "Returned CompletionResponse.token_usage.total_tokens == success.tokens_prompt + success.tokens_generated"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "map_remote_response",
+      "description": "Pure function that maps a remote_api_client TaskResponse to a unified CompletionResponse. Used internally by RemoteModelAdapter but exposed publicly for testing. Translates TokenUsage to UnifiedTokenUsage (is_estimated=false since remote APIs report exact counts), copies cost_usd directly, and populates source_info from the adapter's configuration.",
+      "inputs": [
+        {
+          "name": "response",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A remote_api_client TaskResponse instance.",
+          "validators": []
+        },
+        {
+          "name": "source_info",
+          "type_ref": "SourceInfo",
+          "required": true,
+          "default": "",
+          "description": "The adapter's SourceInfo to attach to the response.",
+          "validators": []
+        }
+      ],
+      "output_type": "CompletionResponse",
+      "error_cases": [
+        {
+          "name": "invalid_input",
+          "condition": "response is not a TaskResponse instance",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "Expected a TaskResponse instance"
+          }
+        }
+      ],
+      "preconditions": [
+        "response is a TaskResponse instance",
+        "source_info is a valid SourceInfo with source_type=REMOTE"
+      ],
+      "postconditions": [
+        "Returned CompletionResponse.content == response.content",
+        "Returned CompletionResponse.source_info matches the provided source_info",
+        "Returned CompletionResponse.cost_usd == response.cost_usd",
+        "Returned CompletionResponse.latency_ms == response.latency_ms",
+        "Returned CompletionResponse.response_id == response.request_id",
+        "Returned CompletionResponse.token_usage.prompt_tokens == response.usage.input_tokens",
+        "Returned CompletionResponse.token_usage.completion_tokens == response.usage.output_tokens",
+        "Returned CompletionResponse.token_usage.total_tokens == response.usage.input_tokens + response.usage.output_tokens",
+        "Returned CompletionResponse.token_usage.is_estimated == false"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "remote_api_client",
+    "local_model_server"
+  ],
+  "dependency_contracts": {
+    "remote_api_client": [
+      "create_remote_client",
+      "send_request",
+      "send_diversity_request",
+      "compute_cost",
+      "get_pricing",
+      "close"
+    ],
+    "local_model_server": [
+      "infer",
+      "health",
+      "promote_model",
+      "get_active_model"
+    ]
+  },
+  "invariants": [
+    "All public functions and methods are fully type-annotated and return Pydantic models, primitive types, or None",
+    "ModelClient is an ABC with abstract methods complete(), health(), and close() — fail-fast enforcement via abc.abstractmethod",
+    "ModelClient provides non-abstract __aenter__ and __aexit__ that delegate to close() — all adapters are async context managers",
+    "No retry, budget, or routing logic exists in this component — it is a pure contract and translation layer",
+    "All operational errors from backend dependencies are mapped to the unified three-category error hierarchy: RetriableError, TerminalError, SourceUnavailableError",
+    "Programming errors (wrong types, invalid arguments) raise standard Python exceptions (TypeError, ValueError) — these are not part of the unified hierarchy",
+    "CompletionResponse.cost_usd is always 0.0 for local source completions",
+    "CompletionResponse.token_usage.is_estimated is always false for remote source completions (remote APIs report exact counts)",
+    "Every CompletionResponse and every error carries a non-empty request_id / response_id for audit trail correlation",
+    "SourceInfo is immutable after construction — adapters update their internal source_info only on successful model promotion",
+    "Adapters are thin translation layers with no business logic — they translate types and map errors, nothing more",
+    "All Pydantic models use frozen=True for immutability",
+    "Configuration is validated strictly at construction time via Pydantic strict mode — invalid config raises at startup, not at runtime",
+    "No global state — all state flows through constructor parameters, method arguments, or injected dependencies",
+    "Structured JSON logging at all decision points using Python stdlib logging with a JSON formatter",
+    "Each source file stays under 300 lines: types.py ~120 lines, errors.py ~40 lines, client.py ~50 lines, remote.py ~80 lines, local.py ~80 lines",
+    "HealthReport never raises for operational failures — always returns a structured result with available=false on failure",
+    "RemoteModelAdapter maps: AuthError→TerminalError, InvalidRequestError→TerminalError, RateLimitError→RetriableError, RemoteUnavailableError→SourceUnavailableError",
+    "LocalModelAdapter maps: InferenceSuccess→CompletionResponse, LocalModelUnavailable→SourceUnavailableError",
+    "promote_model is only available on LocalModelAdapter — raises NotImplementedError on RemoteModelAdapter"
+  ],
+  "requires": [
+    "remote_api_client must expose RemoteClient protocol instances via create_remote_client factory",
+    "remote_api_client must return TaskResponse from send_request",
+    "remote_api_client must raise typed errors (AuthError, RateLimitError, RemoteUnavailableError, InvalidRequestError)",
+    "local_model_server must expose LocalModelClient protocol instances via async context manager",
+    "local_model_server must return InferenceResult (InferenceSuccess | LocalModelUnavailable) from infer",
+    "local_model_server must return HealthStatus from health",
+    "local_model_server must return PromotionResult from promote_model"
+  ]
+}

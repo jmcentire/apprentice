@@ -1,0 +1,1851 @@
+{
+  "component_id": "apprentice_class",
+  "name": "Apprentice Core Class",
+  "description": "The main Apprentice class — the composition root and sole public API surface. Constructor takes a config file path (or ApprenticeConfig object) plus optional component overrides for dependency injection. On init: loads config, constructs all internal components (Config Loader → Task Registry → Remote Client → Local Client → Confidence Engine → Sampling Scheduler → Budget Manager → Training Data Store → Router → Audit Log). Exposes three public methods: async run(), async status(), and sync report(). All internal components are stored as single-underscore attributes, accessible for testing but not part of the public API. Implements async context manager protocol for resource lifecycle management. Handles graceful error propagation with exactly three public exception types. Every run() call is audit-wrapped via a RunContext that accumulates routing decisions and flushes to the audit log on completion.",
+  "version": 1,
+  "types": [
+    {
+      "name": "ModelSource",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "local",
+        "remote"
+      ],
+      "inner_types": [],
+      "description": "Which model backend produced a response. Opaque to callers except for audit/billing transparency."
+    },
+    {
+      "name": "PhaseLabel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "bootstrapping",
+        "active_learning",
+        "supervised",
+        "autonomous"
+      ],
+      "inner_types": [],
+      "description": "Human-readable phase label derived from confidence score thresholds. Emergent from confidence, never manually set."
+    },
+    {
+      "name": "RunStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "success",
+        "degraded",
+        "error"
+      ],
+      "inner_types": [],
+      "description": "Outcome status of a single run() invocation."
+    },
+    {
+      "name": "ErrorKind",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "budget_exhausted",
+        "task_not_found",
+        "local_model_unavailable",
+        "internal"
+      ],
+      "inner_types": [],
+      "description": "Categorized error kinds for structured error reporting."
+    },
+    {
+      "name": "ApprenticeConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of task configuration blocks, each defining a task name, model endpoints, budget, and thresholds.",
+          "validators": []
+        },
+        {
+          "name": "remote_api_base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL for the remote model API endpoint.",
+          "validators": []
+        },
+        {
+          "name": "local_model_endpoint",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "URL or socket path for the local model server.",
+          "validators": []
+        },
+        {
+          "name": "budget_enforcement",
+          "type_ref": "BudgetEnforcementConfig",
+          "required": true,
+          "default": "",
+          "description": "Global budget enforcement settings.",
+          "validators": []
+        },
+        {
+          "name": "audit_log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "audit.jsonl",
+          "description": "File path for the structured JSON audit log.",
+          "validators": []
+        },
+        {
+          "name": "retry_max_attempts",
+          "type_ref": "int",
+          "required": true,
+          "default": "3",
+          "description": "Maximum retry attempts for transient remote API failures.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10",
+              "error_message": "retry_max_attempts must be between 1 and 10"
+            }
+          ]
+        },
+        {
+          "name": "retry_backoff_base_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "1.0",
+          "description": "Base delay in seconds for exponential backoff on retries.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.1 <= value <= 30.0",
+              "error_message": "retry_backoff_base_seconds must be between 0.1 and 30.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Top-level validated configuration object. Parsed from YAML config file. Frozen Pydantic v2 model (ConfigDict(frozen=True)). Strict parsing — rejects unknown fields and invalid values at construction time."
+    },
+    {
+      "name": "TaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this task.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]{1,62}[a-z0-9]$",
+              "error_message": "task_name must be 3-64 chars, lowercase alphanumeric with underscores, starting with letter"
+            }
+          ]
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier for the remote API backend.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model identifier for the local model backend.",
+          "validators": []
+        },
+        {
+          "name": "budget_limit_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Hard budget cap in USD for this task. System stops remote spending at this limit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "budget_limit_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_period_days",
+          "type_ref": "int",
+          "required": true,
+          "default": "30",
+          "description": "Rolling window in days over which the budget is enforced.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 365",
+              "error_message": "budget_period_days must be between 1 and 365"
+            }
+          ]
+        },
+        {
+          "name": "confidence_thresholds",
+          "type_ref": "ConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Threshold configuration for phase transitions and sampling rates.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration block for a single task. Defines the task's identity, model mappings, budget, and confidence thresholds."
+    },
+    {
+      "name": "ConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "bootstrapping_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.2",
+          "description": "Confidence below this value means bootstrapping phase (all remote).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Threshold must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "active_learning_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.5",
+          "description": "Confidence below this value (and above bootstrapping) means active learning phase.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Threshold must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "supervised_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.8",
+          "description": "Confidence below this value (and above active_learning) means supervised phase.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Threshold must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "autonomous_lower",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.8",
+          "description": "Confidence at or above this value means autonomous phase (all local).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Threshold must be in [0.0, 1.0]"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence score thresholds that determine emergent phase transitions. All values are floats in [0.0, 1.0]. Must satisfy: bootstrapping < active_learning < supervised < autonomous."
+    },
+    {
+      "name": "BudgetEnforcementConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "hard_limit",
+          "type_ref": "bool",
+          "required": true,
+          "default": "true",
+          "description": "If true, system never exceeds budget — switches to local-only when exhausted.",
+          "validators": []
+        },
+        {
+          "name": "warning_threshold_pct",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.8",
+          "description": "Percentage of budget at which to begin emitting warnings.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "warning_threshold_pct must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "log_every_spend",
+          "type_ref": "bool",
+          "required": true,
+          "default": "true",
+          "description": "If true, every remote API spend event is individually logged.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Global settings for hard budget enforcement behavior."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was executed.",
+          "validators": []
+        },
+        {
+          "name": "output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The model's structured output for the given input. Schema depends on the task definition.",
+          "validators": []
+        },
+        {
+          "name": "source",
+          "type_ref": "ModelSource",
+          "required": true,
+          "default": "",
+          "description": "Which backend (local or remote) produced this response.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "RunStatus",
+          "required": true,
+          "default": "",
+          "description": "Outcome status: success if nominal, degraded if fallback was used, error if partial.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this run invocation, usable for audit log correlation.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock duration of the run() call in milliseconds.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "ResponseMetadata",
+          "required": true,
+          "default": "",
+          "description": "Additional audit-transparency metadata. Does not expose routing internals.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model (ConfigDict(frozen=True)) returned from run(). Contains the model output plus audit-transparent metadata. The caller sees which source produced the answer but has zero visibility into routing logic, confidence scores, or phase details."
+    },
+    {
+      "name": "ResponseMetadata",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the model that produced the response.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost in USD for this invocation (0.0 for local).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "cost_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "retries",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Number of retries that occurred during this invocation.",
+          "validators": []
+        },
+        {
+          "name": "fallback_used",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if a fallback path was taken (e.g., local unavailable, fell back to remote or vice versa).",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the response was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Audit-transparency metadata attached to every TaskResponse. Provides enough information for billing and debugging without exposing internal routing decisions."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task this snapshot describes.",
+          "validators": []
+        },
+        {
+          "name": "confidence_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score in [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_score must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "PhaseLabel",
+          "required": true,
+          "default": "",
+          "description": "Current emergent phase label derived from the confidence score and thresholds.",
+          "validators": []
+        },
+        {
+          "name": "sampling_rate",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current continuous sampling rate for remote verification in [0.0, 1.0]. Higher during early phases, approaching 0.0 in autonomous.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "sampling_rate must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget in USD for this task in the current period.",
+          "validators": []
+        },
+        {
+          "name": "budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget consumed in USD for this task in the current period.",
+          "validators": []
+        },
+        {
+          "name": "budget_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the hard budget limit has been reached for this task.",
+          "validators": []
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the local model is currently reachable and healthy.",
+          "validators": []
+        },
+        {
+          "name": "total_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of run() invocations for this task since system start.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this snapshot was taken.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model providing a point-in-time view of a task's confidence state, emergent phase, and budget consumption. Returned by status()."
+    },
+    {
+      "name": "SystemReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_snapshots",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of ConfidenceSnapshot objects, one per registered task.",
+          "validators": []
+        },
+        {
+          "name": "global_budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget consumed across all tasks in the current period.",
+          "validators": []
+        },
+        {
+          "name": "global_budget_remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget remaining across all tasks in the current period.",
+          "validators": []
+        },
+        {
+          "name": "total_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations across all tasks.",
+          "validators": []
+        },
+        {
+          "name": "total_local_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations served by local model.",
+          "validators": []
+        },
+        {
+          "name": "total_remote_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations served by remote model.",
+          "validators": []
+        },
+        {
+          "name": "total_fallbacks",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of fallback events (local→remote or remote→local).",
+          "validators": []
+        },
+        {
+          "name": "total_errors",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of error outcomes across all tasks.",
+          "validators": []
+        },
+        {
+          "name": "uptime_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Seconds since the Apprentice instance entered the async context.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this report was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model providing a comprehensive system-wide report. Includes per-task snapshots, global budget status, and aggregate statistics. Returned by report()."
+    },
+    {
+      "name": "RunContext",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this run invocation (UUID v4).",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task name being executed.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input data passed to run().",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_entry",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time run() was called.",
+          "validators": []
+        },
+        {
+          "name": "phase_at_entry",
+          "type_ref": "PhaseLabel",
+          "required": true,
+          "default": "",
+          "description": "Emergent phase label at entry.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Description of the routing decision made (e.g., 'local_primary', 'remote_primary', 'remote_fallback').",
+          "validators": []
+        },
+        {
+          "name": "source_used",
+          "type_ref": "ModelSource",
+          "required": true,
+          "default": "",
+          "description": "Which backend actually produced the response.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback path was activated.",
+          "validators": []
+        },
+        {
+          "name": "fallback_reason",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Reason for fallback if triggered, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "budget_available_at_entry",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether remote budget was available when run() started.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred by this invocation.",
+          "validators": []
+        },
+        {
+          "name": "retries",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Number of retries performed.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "RunStatus",
+          "required": true,
+          "default": "",
+          "description": "Final outcome status.",
+          "validators": []
+        },
+        {
+          "name": "error_kind",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ErrorKind if an error occurred, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Error message if an error occurred, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "start_time_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when run() started.",
+          "validators": []
+        },
+        {
+          "name": "end_time_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when run() completed.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock duration in milliseconds.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal mutable context object that accumulates all decisions and timing information during a single run() invocation. Flushed to the audit log on completion (success or failure). Not part of the public API."
+    },
+    {
+      "name": "ComponentOverrides",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the config loader component.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the task registry component.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the remote API client component.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the local model client component.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the confidence engine component.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the sampling scheduler component.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the budget manager component.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the training data store component.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the router component.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the audit log component.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Typed keyword-only parameters for dependency injection overrides in the Apprentice constructor. All fields are optional — when None, the component is constructed from config. Used for test injection."
+    },
+    {
+      "name": "ApprenticeError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Categorized error kind for programmatic handling.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The task name that caused the error, if applicable.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The request_id of the run() invocation that caused the error, if applicable.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base exception class for all public Apprentice errors. All three public exception types derive from this. Contains a machine-readable error_kind and human-readable message."
+    },
+    {
+      "name": "BudgetExhaustedError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.budget_exhausted.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task whose budget is exhausted.",
+          "validators": []
+        },
+        {
+          "name": "budget_limit_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The budget limit that was hit.",
+          "validators": []
+        },
+        {
+          "name": "budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Amount already consumed.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the failing run() call.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when a run() call requires remote model access but the task's budget is exhausted AND the local model is unavailable. If local model is available, the system degrades gracefully instead of raising. Derives from ApprenticeError."
+    },
+    {
+      "name": "TaskNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.task_not_found.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was not found.",
+          "validators": []
+        },
+        {
+          "name": "available_tasks",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of valid task names for diagnostic help.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when a task_name is not found in the task registry. Derives from ApprenticeError."
+    },
+    {
+      "name": "LocalModelUnavailableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.local_model_unavailable.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task that needed the local model.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the failing run() call.",
+          "validators": []
+        },
+        {
+          "name": "budget_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Always true when this error is raised — confirms both conditions hold.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised ONLY when the local model is unavailable AND the budget is also exhausted, so no fallback to remote is possible. If budget is available, local model failure triggers graceful fallback to remote instead. Derives from ApprenticeError."
+    }
+  ],
+  "functions": [
+    {
+      "name": "__init__",
+      "description": "Synchronous constructor. Loads and validates config (from file path or ApprenticeConfig object), then constructs and wires all internal components via dependency injection. Component overrides enable test injection — any provided override replaces the default-constructed component. Fails fast on config errors with clear messages. Does NOT start async resources; the instance must be used as an async context manager before calling run().",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to a YAML config file (str or Path) OR a pre-validated ApprenticeConfig object. If a string/path, the config loader parses and validates it. If an ApprenticeConfig, it is used directly.",
+          "validators": []
+        },
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the config loader component. If None, default is constructed.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the task registry component.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the remote API client.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the local model client.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the confidence engine.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the sampling scheduler.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the budget manager.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the training data store.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the router.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional override for the audit log.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "config_file_not_found",
+          "condition": "config is a file path that does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "config_parse_error",
+          "condition": "YAML file is malformed or cannot be parsed",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to parse config file: {details}"
+          }
+        },
+        {
+          "name": "config_validation_error",
+          "condition": "Config values fail Pydantic validation (missing required fields, invalid ranges, unknown fields)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Config validation failed: {details}"
+          }
+        },
+        {
+          "name": "component_construction_error",
+          "condition": "A default component fails to construct from config (e.g., invalid endpoint format)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to construct component {component_name}: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid file path to a YAML file OR a valid ApprenticeConfig object",
+        "If config is a file path, the file must exist and be readable",
+        "Config must pass strict validation — unknown fields and invalid values are rejected"
+      ],
+      "postconditions": [
+        "self._config is a validated ApprenticeConfig instance",
+        "All 10 internal components are constructed and stored as self._<component_name>",
+        "self._running is False (async context not yet entered)",
+        "No async resources (httpx clients, file handles) are opened yet"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Reads config file from disk if path is provided"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "YAML config file at the provided path",
+          "description": "Reads and parses the YAML configuration file if a file path is provided"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create",
+      "description": "Async classmethod convenience factory. Constructs an Apprentice instance AND enters the async context, returning a fully ready-to-use instance. Equivalent to: `a = Apprentice(config); await a.__aenter__(); return a`. Caller is responsible for calling `await a.close()` or using try/finally.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to YAML config file OR ApprenticeConfig object.",
+          "validators": []
+        },
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional config loader override.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional task registry override.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional remote client override.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional local client override.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional confidence engine override.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional sampling scheduler override.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional budget manager override.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional training data store override.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional router override.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional audit log override.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "config_error",
+          "condition": "Any config error from __init__",
+          "error_type": "ValueError",
+          "error_data": {}
+        },
+        {
+          "name": "async_resource_error",
+          "condition": "Failed to open async resources (e.g., cannot create httpx client)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Failed to initialize async resources: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "Same preconditions as __init__"
+      ],
+      "postconditions": [
+        "Returned instance has self._running == True",
+        "All async resources (httpx clients) are initialized and ready",
+        "Audit log file handle is opened",
+        "Caller must eventually call close() or use async with"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "YAML config file",
+          "description": "Reads config file if path provided"
+        },
+        {
+          "kind": "network_call",
+          "target": "Initializes httpx async clients for remote and local endpoints",
+          "description": "Creates persistent HTTP client connections"
+        },
+        {
+          "kind": "writes_file",
+          "target": "Audit log file",
+          "description": "Opens audit log file for append-mode writing"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "__aenter__",
+      "description": "Async context manager entry. Initializes all async resources: creates httpx async clients for remote and local model endpoints, opens the audit log file handle, records the start time for uptime tracking. Sets self._running to True.",
+      "inputs": [],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "already_running",
+          "condition": "self._running is already True (double-enter)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice async context already entered"
+          }
+        },
+        {
+          "name": "resource_init_failure",
+          "condition": "Cannot create httpx client or open audit log file",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Failed to initialize async resources: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is False (not already entered)",
+        "__init__ has completed successfully"
+      ],
+      "postconditions": [
+        "self._running is True",
+        "httpx.AsyncClient instances are created and stored in remote_client and local_client",
+        "Audit log file handle is open for appending",
+        "self._start_time_utc is set to current UTC time",
+        "Instance is ready to accept run() calls"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "httpx async client creation for remote/local endpoints",
+          "description": ""
+        },
+        {
+          "kind": "writes_file",
+          "target": "Audit log file opened for appending",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "__aexit__",
+      "description": "Async context manager exit. Flushes the audit log, closes all httpx async clients, releases all async resources, and sets self._running to False. Always executes cleanup regardless of exception type. Does NOT re-raise exceptions.",
+      "inputs": [
+        {
+          "name": "exc_type",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Exception type if exiting due to exception, None otherwise.",
+          "validators": []
+        },
+        {
+          "name": "exc_val",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Exception value if exiting due to exception, None otherwise.",
+          "validators": []
+        },
+        {
+          "name": "exc_tb",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Traceback if exiting due to exception, None otherwise.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [
+        {
+          "name": "cleanup_error",
+          "condition": "Error during resource cleanup (e.g., audit flush fails). Logged but not raised — cleanup is best-effort.",
+          "error_type": "None",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [
+        "self._running is True"
+      ],
+      "postconditions": [
+        "self._running is False",
+        "All httpx async clients are closed",
+        "Audit log is flushed and file handle is closed",
+        "All async resources are released",
+        "Return value is False (do not suppress exceptions)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Audit log final flush and close",
+          "description": ""
+        },
+        {
+          "kind": "network_call",
+          "target": "Close httpx async clients",
+          "description": ""
+        },
+        {
+          "kind": "logging",
+          "target": "Log any cleanup errors",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "run",
+      "description": "Primary public method. Executes a task: looks up the task in the registry, creates a RunContext, queries confidence and budget state, routes to appropriate model backend (local or remote), handles fallbacks, records spend, stores training data, flushes the audit log entry, and returns a frozen TaskResponse. The caller has zero visibility into routing logic — they get a typed response with source transparency. Error decision matrix: (1) local_available=T, budget_available=T → route normally; (2) local_available=T, budget_available=F → local-only, log warning, status=degraded; (3) local_available=F, budget_available=T → remote-only with fallback cost; (4) local_available=F, budget_available=F → raise BudgetExhaustedError or LocalModelUnavailableError.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to execute. Must match a registered task in the task registry.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Structured input data for the task. Schema is task-dependent.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskResponse",
+      "error_cases": [
+        {
+          "name": "not_running",
+          "condition": "self._running is False — run() called outside async context",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice.run() must be called within an async context (use 'async with Apprentice(...) as a:')"
+          }
+        },
+        {
+          "name": "task_not_found",
+          "condition": "task_name is not registered in the task registry",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "available_tasks": "list of registered task names"
+          }
+        },
+        {
+          "name": "budget_exhausted_no_local",
+          "condition": "Budget is exhausted for this task AND local model is unavailable. Both fallback paths are blocked.",
+          "error_type": "BudgetExhaustedError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "budget_limit_usd": "configured limit",
+            "budget_used_usd": "current spend"
+          }
+        },
+        {
+          "name": "local_unavailable_no_budget",
+          "condition": "Local model is unavailable AND budget is exhausted. Raised when routing intended to use local but it failed and remote fallback is impossible.",
+          "error_type": "LocalModelUnavailableError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "budget_exhausted": "true"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is empty or whitespace-only",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be a non-empty string"
+          }
+        },
+        {
+          "name": "invalid_input_data",
+          "condition": "input_data is not a dict",
+          "error_type": "TypeError",
+          "error_data": {
+            "message": "input_data must be a dict, got {type}"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is True (async context has been entered)",
+        "task_name is a non-empty string",
+        "input_data is a non-null dict"
+      ],
+      "postconditions": [
+        "A RunContext has been created, populated, and flushed to the audit log",
+        "If remote model was used, spend has been recorded in the budget manager",
+        "If a response was collected, training data has been stored",
+        "Confidence engine has been updated with the outcome",
+        "Returned TaskResponse is a frozen Pydantic model with all fields populated",
+        "TaskResponse.request_id matches the RunContext.request_id",
+        "TaskResponse.source accurately reflects which backend produced the output",
+        "TaskResponse.status is 'success' for nominal path, 'degraded' for fallback path"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Calls remote API if routing decision selects remote backend",
+        "Calls local model server if routing decision selects local backend",
+        "Records spend in budget manager if remote was used",
+        "Stores input/output pair in training data store",
+        "Flushes RunContext to audit log",
+        "Updates confidence engine with outcome"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Remote model API (conditional, based on routing)",
+          "description": "Sends input_data to remote model endpoint if selected by router"
+        },
+        {
+          "kind": "network_call",
+          "target": "Local model server (conditional, based on routing)",
+          "description": "Sends input_data to local model endpoint if selected by router"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Budget manager spend records",
+          "description": "Records cost of remote API call if remote was used"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Training data store",
+          "description": "Stores the input/output pair for future fine-tuning"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Confidence engine",
+          "description": "Updates confidence score based on run outcome"
+        },
+        {
+          "kind": "writes_file",
+          "target": "Audit log (JSON lines)",
+          "description": "Flushes the RunContext as a structured JSON audit entry"
+        },
+        {
+          "kind": "logging",
+          "target": "Structured JSON logger",
+          "description": "Logs routing decision, fallback events, budget warnings"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "status",
+      "description": "Returns a frozen ConfidenceSnapshot for a specific task, providing a point-in-time view of the task's confidence score, emergent phase, sampling rate, budget consumption, and local model availability. This is a lightweight read-only query that does not mutate state.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to query status for. Must match a registered task.",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceSnapshot",
+      "error_cases": [
+        {
+          "name": "not_running",
+          "condition": "self._running is False — status() called outside async context",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice.status() must be called within an async context"
+          }
+        },
+        {
+          "name": "task_not_found",
+          "condition": "task_name is not registered in the task registry",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "available_tasks": "list of registered task names"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is empty or whitespace-only",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is True (async context has been entered)",
+        "task_name is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned ConfidenceSnapshot is a frozen Pydantic model",
+        "ConfidenceSnapshot.task_name matches the requested task_name",
+        "ConfidenceSnapshot.phase is consistent with confidence_score and configured thresholds",
+        "ConfidenceSnapshot.budget_remaining_usd + budget_used_usd equals the task's configured budget_limit_usd",
+        "ConfidenceSnapshot.timestamp_utc is the current UTC time in ISO 8601 format"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Local model server health check",
+          "description": "Pings local model server to determine local_model_available status"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "report",
+      "description": "Returns a frozen SystemReport with comprehensive system-wide statistics. Includes a ConfidenceSnapshot for every registered task, global budget aggregates, run counts by source, fallback and error tallies, and uptime. This is a synchronous method that reads from in-memory state only (no async I/O needed).",
+      "inputs": [],
+      "output_type": "SystemReport",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "Called on an improperly constructed instance (should not happen if __init__ completed)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice instance is not properly initialized"
+          }
+        }
+      ],
+      "preconditions": [
+        "__init__ has completed successfully (report can be called before async context for basic config info, but run counts will be zero)"
+      ],
+      "postconditions": [
+        "Returned SystemReport is a frozen Pydantic model",
+        "SystemReport.task_snapshots contains exactly one entry per registered task",
+        "SystemReport.total_runs == SystemReport.total_local_runs + SystemReport.total_remote_runs",
+        "SystemReport.global_budget_used_usd equals the sum of all task_snapshots[i].budget_used_usd",
+        "SystemReport.uptime_seconds is 0.0 if async context has not been entered, otherwise current UTC minus _start_time_utc",
+        "SystemReport.timestamp_utc is the current UTC time in ISO 8601 format"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read from in-memory state, no I/O or state mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "close",
+      "description": "Explicit async cleanup method. Equivalent to __aexit__(None, None, None). Provided for use with the create() factory pattern where the caller manages lifecycle without 'async with'. Flushes audit log, closes httpx clients, releases resources, sets _running to False. Safe to call multiple times (idempotent).",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "cleanup_error",
+          "condition": "Error during resource cleanup. Logged but not raised.",
+          "error_type": "None",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "self._running is False",
+        "All async resources are released",
+        "Audit log is flushed",
+        "Safe to call again (no-op on subsequent calls)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Audit log final flush and close",
+          "description": ""
+        },
+        {
+          "kind": "network_call",
+          "target": "Close httpx async clients",
+          "description": ""
+        },
+        {
+          "kind": "logging",
+          "target": "Log any cleanup errors",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "config_loader",
+    "task_registry",
+    "remote_client",
+    "local_client",
+    "confidence_engine",
+    "sampling_scheduler",
+    "budget_manager",
+    "training_data_store",
+    "router",
+    "audit_log"
+  ],
+  "dependency_contracts": {
+    "config_loader": [
+      "load_config(path) -> ApprenticeConfig",
+      "validate_config(config) -> ApprenticeConfig"
+    ],
+    "task_registry": [
+      "get_task(task_name) -> TaskDefinition",
+      "list_tasks() -> list[TaskDefinition]"
+    ],
+    "remote_client": [
+      "async call(task_name, input_data) -> ModelResponse",
+      "async close()"
+    ],
+    "local_client": [
+      "async call(task_name, input_data) -> ModelResponse",
+      "async close()",
+      "async is_available() -> bool"
+    ],
+    "confidence_engine": [
+      "get_confidence(task_name) -> ConfidenceScore",
+      "update_confidence(task_name, feedback)"
+    ],
+    "sampling_scheduler": [
+      "should_sample_remote(task_name, confidence) -> bool"
+    ],
+    "budget_manager": [
+      "can_spend(task_name, cost_estimate) -> bool",
+      "record_spend(task_name, cost) -> None",
+      "get_budget_status(task_name) -> BudgetStatus",
+      "get_total_budget_status() -> BudgetStatus"
+    ],
+    "training_data_store": [
+      "async store(task_name, input_data, response) -> None",
+      "async get_batch(task_name, min_size) -> list"
+    ],
+    "router": [
+      "async route(task_name, input_data, confidence, budget_available, local_available) -> RoutingDecision"
+    ],
+    "audit_log": [
+      "async log_run(run_context) -> None",
+      "async flush() -> None",
+      "get_entries(filters) -> list[AuditEntry]"
+    ]
+  },
+  "invariants": [
+    "self._config is always a fully validated, frozen ApprenticeConfig instance after __init__ completes",
+    "self._running is True if and only if the async context has been entered and not yet exited",
+    "run() and status() always raise RuntimeError if self._running is False",
+    "All 10 internal components are non-None after __init__ completes: _config_loader, _task_registry, _remote_client, _local_client, _confidence_engine, _sampling_scheduler, _budget_manager, _training_data_store, _router, _audit_log",
+    "Budget enforcement is hard: if budget_manager.can_spend() returns False for a task, no remote API call is made for that task",
+    "Every run() invocation creates exactly one RunContext, which is flushed to the audit log on completion regardless of success or failure",
+    "TaskResponse.source accurately reflects which model backend produced the output — never misattributed",
+    "Phase labels are always derived from confidence scores and thresholds — never manually assigned or overridden",
+    "Sampling rate is continuous (float in [0.0, 1.0]), never discrete tiers",
+    "All return types (TaskResponse, ConfidenceSnapshot, SystemReport) are frozen Pydantic v2 models — immutable after construction",
+    "No global state: all state flows through explicit parameters, injected dependencies, or instance attributes",
+    "Local model failure with available budget triggers graceful fallback to remote — never crashes",
+    "Budget exhaustion with available local model triggers graceful degradation to local-only — never crashes",
+    "Only when BOTH local model is unavailable AND budget is exhausted does the system raise an error",
+    "Component overrides provided in __init__ completely replace the default-constructed component — no partial merging",
+    "SystemReport.total_runs always equals SystemReport.total_local_runs + SystemReport.total_remote_runs",
+    "close() is idempotent — safe to call multiple times with no side effects after the first call"
+  ],
+  "requires": [
+    "config_loader",
+    "task_registry",
+    "remote_client",
+    "local_client",
+    "confidence_engine",
+    "sampling_scheduler",
+    "budget_manager",
+    "training_data_store",
+    "router",
+    "audit_log"
+  ]
+}

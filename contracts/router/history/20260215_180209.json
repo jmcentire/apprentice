@@ -1,0 +1,1087 @@
+{
+  "component_id": "router",
+  "name": "Request Router",
+  "description": "The central decision-maker for each request. Given a TaskRequest: (1) checks budget via Budget Manager, (2) gets current phase and confidence via Confidence Engine, (3) gets sampling decision via Sampling Scheduler, (4) routes accordingly based on the phase × sampling × budget matrix. Phase 1: send to remote only, store response as training example. Phase 2 (coaching sample): send to both local and remote, evaluate pair, store training example, return remote response to caller. Phase 2 (non-coaching): send to both, return remote response. Phase 3 (coaching sample): send to both, evaluate pair, return local response to caller (remote is for monitoring). Phase 3 (non-coaching): send to local only, return local response. Fallback: if local model fails, fall back to remote (counts against budget). If budget exhausted, serve degraded response from local only or return degraded result. Logs every routing decision to audit log with full context (phase, confidence, sampling decision, intended/actual route, cost, latency). All collaborators are injected via constructor as typing.Protocol interfaces. Uses asyncio.gather for dual-send concurrency. Never exceeds budget — budget enforcement is hard.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TaskRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this request (UUID as string). Used for tracing, audit, and deduplication.",
+          "validators": []
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The type/category of task (e.g. 'summarize', 'classify', 'extract'). Used for confidence lookup and routing.",
+          "validators": []
+        },
+        {
+          "name": "prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The full prompt text to send to the model backend.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "Prompt must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Arbitrary key-value metadata attached to the request for downstream use (logging, filtering, etc.).",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the request was created.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Inbound request to be routed. Represents a single task that needs AI completion."
+    },
+    {
+      "name": "RoutingAction",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE_ONLY",
+        "BOTH_RETURN_REMOTE",
+        "BOTH_RETURN_LOCAL",
+        "LOCAL_ONLY",
+        "LOCAL_FALLBACK_TO_REMOTE"
+      ],
+      "inner_types": [],
+      "description": "The routing action the router intends to take or actually took. Captures all possible routing paths through the phase × sampling × budget matrix."
+    },
+    {
+      "name": "Phase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "PHASE_1",
+        "PHASE_2",
+        "PHASE_3"
+      ],
+      "inner_types": [],
+      "description": "The current operational phase of the system, derived from confidence scores. Phases are emergent, not manually triggered."
+    },
+    {
+      "name": "ModelResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The generated text content from the model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the model that produced this response.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Time in milliseconds from request sent to response received.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Latency must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "cost",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Monetary cost of this individual model call in USD.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Cost must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "token_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total tokens consumed (prompt + completion).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Token count must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Response from a single model backend (local or remote)."
+    },
+    {
+      "name": "BudgetSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "total_budget_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total configured budget in USD.",
+          "validators": []
+        },
+        {
+          "name": "spent_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Amount already spent in USD.",
+          "validators": []
+        },
+        {
+          "name": "remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining in USD (total - spent).",
+          "validators": []
+        },
+        {
+          "name": "is_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if remaining budget is insufficient for a remote API call.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Point-in-time snapshot of budget state at the moment the routing decision was made."
+    },
+    {
+      "name": "PhaseContext",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The current emergent phase based on confidence scores.",
+          "validators": []
+        },
+        {
+          "name": "confidence",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score for this task type, range [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Confidence must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Phase and confidence information returned by the Confidence Engine for this task type."
+    },
+    {
+      "name": "RoutingDecision",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "intended_action",
+          "type_ref": "RoutingAction",
+          "required": true,
+          "default": "",
+          "description": "The routing action chosen based on phase, sampling, and budget.",
+          "validators": []
+        },
+        {
+          "name": "phase_context",
+          "type_ref": "PhaseContext",
+          "required": true,
+          "default": "",
+          "description": "Phase and confidence at decision time.",
+          "validators": []
+        },
+        {
+          "name": "is_coaching_sample",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the Sampling Scheduler selected this request for coaching.",
+          "validators": []
+        },
+        {
+          "name": "budget_snapshot",
+          "type_ref": "BudgetSnapshot",
+          "required": true,
+          "default": "",
+          "description": "Budget state at decision time.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal intermediate type capturing the pre-execution routing decision with all context that led to it."
+    },
+    {
+      "name": "RoutingResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Echo of the original request_id for correlation.",
+          "validators": []
+        },
+        {
+          "name": "response",
+          "type_ref": "ModelResponse",
+          "required": true,
+          "default": "",
+          "description": "The model response returned to the caller (from whichever backend was selected).",
+          "validators": []
+        },
+        {
+          "name": "intended_action",
+          "type_ref": "RoutingAction",
+          "required": true,
+          "default": "",
+          "description": "The routing action that was planned before execution.",
+          "validators": []
+        },
+        {
+          "name": "actual_action",
+          "type_ref": "RoutingAction",
+          "required": true,
+          "default": "",
+          "description": "The routing action that actually executed (may differ from intended due to fallback).",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase at routing decision time.",
+          "validators": []
+        },
+        {
+          "name": "confidence",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The confidence score at routing decision time.",
+          "validators": []
+        },
+        {
+          "name": "is_coaching_sample",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this request was selected as a coaching sample.",
+          "validators": []
+        },
+        {
+          "name": "total_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total cost of all model calls made for this request in USD.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Total cost must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock time for the entire routing operation in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Total latency must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "is_degraded",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the response quality is degraded (e.g., local model failed and budget exhausted, so no fallback possible; or local-only when confidence is low).",
+          "validators": []
+        },
+        {
+          "name": "is_fallback",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if a fallback path was taken (e.g., local failed, fell back to remote).",
+          "validators": []
+        },
+        {
+          "name": "local_response",
+          "type_ref": "OptionalModelResponse",
+          "required": false,
+          "default": "None",
+          "description": "The local model response if local was called (present even if not the primary response, for coaching evaluation).",
+          "validators": []
+        },
+        {
+          "name": "remote_response",
+          "type_ref": "OptionalModelResponse",
+          "required": false,
+          "default": "None",
+          "description": "The remote model response if remote was called (present even if not the primary response, for coaching evaluation).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "The complete result of routing a request. Contains the response payload, full routing metadata, cost accounting, and fallback/degradation indicators."
+    },
+    {
+      "name": "OptionalModelResponse",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "ModelResponse",
+      "variants": [],
+      "inner_types": [],
+      "description": "An optional ModelResponse, present when the corresponding backend was called and succeeded."
+    },
+    {
+      "name": "RoutingAuditEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request identifier for correlation.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the routing decision was made.",
+          "validators": []
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type from the original request.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase at decision time.",
+          "validators": []
+        },
+        {
+          "name": "confidence",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at decision time.",
+          "validators": []
+        },
+        {
+          "name": "is_coaching_sample",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this request was a coaching sample.",
+          "validators": []
+        },
+        {
+          "name": "budget_snapshot",
+          "type_ref": "BudgetSnapshot",
+          "required": true,
+          "default": "",
+          "description": "Budget state at decision time.",
+          "validators": []
+        },
+        {
+          "name": "intended_action",
+          "type_ref": "RoutingAction",
+          "required": true,
+          "default": "",
+          "description": "The planned routing action.",
+          "validators": []
+        },
+        {
+          "name": "actual_action",
+          "type_ref": "RoutingAction",
+          "required": true,
+          "default": "",
+          "description": "The actually executed routing action.",
+          "validators": []
+        },
+        {
+          "name": "total_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total cost incurred for this request.",
+          "validators": []
+        },
+        {
+          "name": "total_latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total wall-clock latency for the routing operation.",
+          "validators": []
+        },
+        {
+          "name": "is_degraded",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the response was degraded.",
+          "validators": []
+        },
+        {
+          "name": "is_fallback",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback path was taken.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model ID of local backend if called.",
+          "validators": []
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model ID of remote backend if called.",
+          "validators": []
+        },
+        {
+          "name": "error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error detail string if any backend failed or fallback occurred.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Complete audit record for a single routing decision. Logged for every request regardless of outcome. Designed for structured JSON logging and machine-readable audit trail."
+    },
+    {
+      "name": "DualSendOutcome",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "BOTH_SUCCEEDED",
+        "LOCAL_FAILED_REMOTE_SUCCEEDED",
+        "LOCAL_SUCCEEDED_REMOTE_FAILED",
+        "BOTH_FAILED"
+      ],
+      "inner_types": [],
+      "description": "The four possible outcomes when sending to both local and remote backends concurrently via asyncio.gather."
+    },
+    {
+      "name": "TrainingExampleType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE_RESPONSE_EXAMPLE",
+        "COACHING_EVALUATION_PAIR"
+      ],
+      "inner_types": [],
+      "description": "Indicates the purpose of a collected training data record."
+    },
+    {
+      "name": "TrainingExample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Correlation ID from the original request.",
+          "validators": []
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type for training data categorization.",
+          "validators": []
+        },
+        {
+          "name": "prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The original prompt.",
+          "validators": []
+        },
+        {
+          "name": "example_type",
+          "type_ref": "TrainingExampleType",
+          "required": true,
+          "default": "",
+          "description": "Whether this is a simple training example or a coaching evaluation pair.",
+          "validators": []
+        },
+        {
+          "name": "remote_response",
+          "type_ref": "OptionalModelResponse",
+          "required": false,
+          "default": "None",
+          "description": "Remote model response if available.",
+          "validators": []
+        },
+        {
+          "name": "local_response",
+          "type_ref": "OptionalModelResponse",
+          "required": false,
+          "default": "None",
+          "description": "Local model response if available (present for coaching pairs).",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at collection time.",
+          "validators": []
+        },
+        {
+          "name": "confidence",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence at collection time.",
+          "validators": []
+        },
+        {
+          "name": "collected_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of collection.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A training data record to be persisted by the TrainingDataCollector. Contains the request, one or two responses, and metadata about origin."
+    },
+    {
+      "name": "RouterConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_concurrent_dual_sends",
+          "type_ref": "int",
+          "required": false,
+          "default": "10",
+          "description": "Maximum number of concurrent dual-send operations (semaphore limit).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "Must allow at least 1 concurrent dual-send"
+            }
+          ]
+        },
+        {
+          "name": "remote_call_timeout_ms",
+          "type_ref": "int",
+          "required": false,
+          "default": "30000",
+          "description": "Timeout for remote backend calls in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1000",
+              "error_message": "Remote timeout must be at least 1000ms"
+            }
+          ]
+        },
+        {
+          "name": "local_call_timeout_ms",
+          "type_ref": "int",
+          "required": false,
+          "default": "10000",
+          "description": "Timeout for local backend calls in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 500",
+              "error_message": "Local timeout must be at least 500ms"
+            }
+          ]
+        },
+        {
+          "name": "enable_training_collection",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether to collect training examples. Can be disabled for testing or dry-run.",
+          "validators": []
+        },
+        {
+          "name": "enable_audit_logging",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether to emit audit log entries. Should always be true in production.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the RequestRouter. Parsed strictly from YAML config at startup — fails fast on invalid values."
+    }
+  ],
+  "functions": [
+    {
+      "name": "route",
+      "description": "Route a single task request through the phase × sampling × budget decision matrix. This is the sole public method of RequestRouter. It coordinates all collaborators: checks budget, gets phase/confidence, gets sampling decision, executes the appropriate routing action, collects training data, logs the audit entry, and returns the complete result. Uses asyncio.gather for dual-send scenarios. Handles all fallback and degradation paths. Never raises for recoverable failures — all degraded outcomes are represented in the return type.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "TaskRequest",
+          "required": true,
+          "default": "",
+          "description": "The inbound task request to be routed.",
+          "validators": []
+        }
+      ],
+      "output_type": "RoutingResult",
+      "error_cases": [
+        {
+          "name": "both_backends_unavailable",
+          "condition": "Both local and remote backends fail to produce a response, and no fallback is possible",
+          "error_type": "RoutingError",
+          "error_data": {
+            "request_id": "The request_id from the TaskRequest",
+            "local_error": "String description of the local backend failure",
+            "remote_error": "String description of the remote backend failure",
+            "phase": "The phase at decision time",
+            "budget_exhausted": "Whether budget was exhausted (preventing remote fallback)"
+          }
+        },
+        {
+          "name": "budget_check_failed",
+          "condition": "The BudgetManager itself is unavailable or throws an unexpected error when checking budget",
+          "error_type": "RoutingError",
+          "error_data": {
+            "request_id": "The request_id from the TaskRequest",
+            "detail": "Description of the budget manager failure"
+          }
+        },
+        {
+          "name": "confidence_engine_unavailable",
+          "condition": "The ConfidenceEngine fails to return phase and confidence for the given task type",
+          "error_type": "RoutingError",
+          "error_data": {
+            "request_id": "The request_id from the TaskRequest",
+            "task_type": "The task_type that was queried",
+            "detail": "Description of the confidence engine failure"
+          }
+        },
+        {
+          "name": "sampling_scheduler_unavailable",
+          "condition": "The SamplingScheduler fails to return a coaching decision",
+          "error_type": "RoutingError",
+          "error_data": {
+            "request_id": "The request_id from the TaskRequest",
+            "detail": "Description of the sampling scheduler failure"
+          }
+        },
+        {
+          "name": "invalid_request",
+          "condition": "The TaskRequest fails validation (empty prompt, missing request_id, etc.)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "request_id": "The request_id if available, empty string otherwise",
+            "field": "Name of the invalid field",
+            "detail": "Description of the validation failure"
+          }
+        }
+      ],
+      "preconditions": [
+        "request.request_id is a valid non-empty string",
+        "request.prompt is a non-empty string",
+        "request.task_type is a non-empty string",
+        "request.timestamp_utc is a valid ISO 8601 UTC timestamp",
+        "All collaborators (BudgetManager, ConfidenceEngine, SamplingScheduler, LocalModelBackend, RemoteModelBackend, TrainingDataCollector, AuditLogger) have been injected and are operational",
+        "RouterConfig has been validated at construction time"
+      ],
+      "postconditions": [
+        "Returned RoutingResult.request_id == request.request_id",
+        "Returned RoutingResult.response contains a valid ModelResponse with non-empty content",
+        "Returned RoutingResult.intended_action reflects the action computed from the decision matrix before execution",
+        "Returned RoutingResult.actual_action reflects what actually happened (may differ from intended due to fallback)",
+        "If actual_action != intended_action, then is_fallback == True",
+        "If is_fallback == True, actual_action is LOCAL_FALLBACK_TO_REMOTE",
+        "If is_degraded == True, the response came from local-only when local quality may be insufficient",
+        "total_cost_usd == sum of costs of all model calls made (local cost is 0 or near-0, remote cost > 0)",
+        "BudgetManager.record_spend() has been called with total_cost_usd for this request",
+        "A RoutingAuditEntry has been submitted to AuditLogger (fire-and-forget, failure does not affect result)",
+        "If the routing action involved a remote response in Phase 1 or Phase 2, a TrainingExample of type REMOTE_RESPONSE_EXAMPLE was submitted to TrainingDataCollector",
+        "If the routing action was a dual-send and both backends succeeded, a TrainingExample of type COACHING_EVALUATION_PAIR was submitted to TrainingDataCollector",
+        "Budget is never exceeded — if budget was exhausted before routing, no remote call is made"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Calls remote model API (network call, incurs cost)",
+        "Calls local model server (network call to local inference server)",
+        "Records spend against budget via BudgetManager",
+        "Submits training examples to TrainingDataCollector",
+        "Emits audit log entry via AuditLogger"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "RemoteModelBackend.generate",
+          "description": "Sends prompt to remote API (e.g., Claude, GPT) when routing action requires remote. Incurs monetary cost."
+        },
+        {
+          "kind": "network_call",
+          "target": "LocalModelBackend.generate",
+          "description": "Sends prompt to local model inference server when routing action requires local."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetManager.record_spend",
+          "description": "Records the cost of remote API calls against the budget. Mutates budget state."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "TrainingDataCollector.collect_training_example",
+          "description": "Persists training example data from remote responses in Phase 1 and Phase 2."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "TrainingDataCollector.collect_coaching_pair",
+          "description": "Persists coaching evaluation pair when both backends succeed in a dual-send scenario."
+        },
+        {
+          "kind": "logging",
+          "target": "AuditLogger.log_routing_decision",
+          "description": "Emits a structured RoutingAuditEntry as JSON for the machine-readable audit trail. Fire-and-forget."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "compute_routing_action",
+      "description": "Pure function that computes the intended RoutingAction from the current phase, coaching sample status, and budget availability. Implements the phase × sampling × budget decision matrix using match/case for exhaustive branch coverage. This is a deterministic, side-effect-free computation extracted for testability. Decision matrix: Phase 1 + budget available → REMOTE_ONLY. Phase 1 + budget exhausted → LOCAL_ONLY (degraded). Phase 2 + coaching sample + budget available → BOTH_RETURN_REMOTE. Phase 2 + not coaching sample + budget available → BOTH_RETURN_REMOTE. Phase 2 + budget exhausted → LOCAL_ONLY (degraded). Phase 3 + coaching sample + budget available → BOTH_RETURN_LOCAL. Phase 3 + not coaching sample → LOCAL_ONLY. Phase 3 + coaching sample + budget exhausted → LOCAL_ONLY (degraded, skips coaching).",
+      "inputs": [
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Current phase from the Confidence Engine.",
+          "validators": []
+        },
+        {
+          "name": "is_coaching_sample",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the Sampling Scheduler selected this request for coaching.",
+          "validators": []
+        },
+        {
+          "name": "budget_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether there is sufficient budget remaining for a remote API call.",
+          "validators": []
+        }
+      ],
+      "output_type": "RoutingAction",
+      "error_cases": [],
+      "preconditions": [
+        "phase is a valid Phase enum value",
+        "All inputs are well-typed"
+      ],
+      "postconditions": [
+        "Return value is always a valid RoutingAction enum member",
+        "If budget_available is False, return value is never REMOTE_ONLY, BOTH_RETURN_REMOTE, or BOTH_RETURN_LOCAL",
+        "If phase is PHASE_1 and budget_available is True, return value is REMOTE_ONLY",
+        "If phase is PHASE_3 and is_coaching_sample is False, return value is LOCAL_ONLY regardless of budget",
+        "The function is deterministic: same inputs always produce the same output"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function with no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "execute_dual_send",
+      "description": "Execute a dual-send to both local and remote backends concurrently using asyncio.gather(return_exceptions=True). Handles all four outcome combinations (both succeed, local fails/remote succeeds, local succeeds/remote fails, both fail) explicitly. Returns the outcome enum and both responses (or None for failed backends). This method does NOT perform fallback — it reports what happened. The caller decides how to handle each outcome.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "TaskRequest",
+          "required": true,
+          "default": "",
+          "description": "The task request to send to both backends.",
+          "validators": []
+        }
+      ],
+      "output_type": "DualSendResult",
+      "error_cases": [
+        {
+          "name": "timeout_exceeded",
+          "condition": "asyncio.gather itself times out or is cancelled (not individual backend timeouts, which are handled as failures)",
+          "error_type": "RoutingError",
+          "error_data": {
+            "request_id": "The request_id from the TaskRequest",
+            "detail": "Gather-level timeout or cancellation detail"
+          }
+        }
+      ],
+      "preconditions": [
+        "request is a valid TaskRequest",
+        "LocalModelBackend and RemoteModelBackend are injected and reachable (though individual calls may still fail)"
+      ],
+      "postconditions": [
+        "Returned DualSendResult.outcome accurately reflects which backends succeeded and failed",
+        "If outcome is BOTH_SUCCEEDED, both local_response and remote_response are non-None",
+        "If outcome is LOCAL_FAILED_REMOTE_SUCCEEDED, local_response is None and remote_response is non-None",
+        "If outcome is LOCAL_SUCCEEDED_REMOTE_FAILED, local_response is non-None and remote_response is None",
+        "If outcome is BOTH_FAILED, both local_response and remote_response are None",
+        "local_error is non-empty if and only if local backend failed",
+        "remote_error is non-empty if and only if remote backend failed",
+        "Both backends were called concurrently (not sequentially)"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Calls remote model API concurrently",
+        "Calls local model server concurrently"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "RemoteModelBackend.generate",
+          "description": "Concurrent call to remote model backend."
+        },
+        {
+          "kind": "network_call",
+          "target": "LocalModelBackend.generate",
+          "description": "Concurrent call to local model backend."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "build_audit_entry",
+      "description": "Build a complete RoutingAuditEntry from the request, routing decision, and execution result. Pure function that assembles the audit record for structured logging. Called after execution completes (or fails) to capture full context.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "TaskRequest",
+          "required": true,
+          "default": "",
+          "description": "The original task request.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "The pre-execution routing decision with phase, sampling, and budget context.",
+          "validators": []
+        },
+        {
+          "name": "result",
+          "type_ref": "RoutingResult",
+          "required": true,
+          "default": "",
+          "description": "The post-execution routing result.",
+          "validators": []
+        },
+        {
+          "name": "error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error detail if any backend failed or fallback occurred.",
+          "validators": []
+        }
+      ],
+      "output_type": "RoutingAuditEntry",
+      "error_cases": [],
+      "preconditions": [
+        "request, decision, and result are valid and internally consistent (same request_id)"
+      ],
+      "postconditions": [
+        "Returned RoutingAuditEntry.request_id == request.request_id",
+        "All fields of the audit entry are populated from the corresponding input fields",
+        "timestamp_utc is set to the current UTC time at the moment of building"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function with no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    }
+  ],
+  "dependencies": [
+    "budget_manager",
+    "confidence_engine",
+    "sampling_scheduler",
+    "local_model_backend",
+    "remote_model_backend",
+    "training_data_collector",
+    "audit_logger"
+  ],
+  "dependency_contracts": {
+    "budget_manager": [
+      "check_budget",
+      "record_spend"
+    ],
+    "confidence_engine": [
+      "get_phase_and_confidence"
+    ],
+    "sampling_scheduler": [
+      "should_coach"
+    ],
+    "local_model_backend": [
+      "generate"
+    ],
+    "remote_model_backend": [
+      "generate"
+    ],
+    "training_data_collector": [
+      "collect_training_example",
+      "collect_coaching_pair"
+    ],
+    "audit_logger": [
+      "log_routing_decision"
+    ]
+  },
+  "invariants": [
+    "Budget is never exceeded — if budget is exhausted, remote calls are not made and the result is degraded",
+    "Every call to route() produces exactly one RoutingAuditEntry logged via AuditLogger, regardless of success or failure",
+    "Audit logging failures are captured but never block or delay the response to the caller",
+    "Local model failures in dual-send or local-only scenarios trigger fallback to remote only if budget allows",
+    "The intended_action and actual_action in RoutingResult always reflect ground truth of what was planned vs executed",
+    "Training data is collected for every successful remote response in Phase 1 and Phase 2",
+    "Coaching pairs are collected for every dual-send scenario where both backends succeed",
+    "No global state — all state flows through explicit parameters or injected dependencies",
+    "RoutingAction is computed deterministically from (phase, is_coaching_sample, budget_available) inputs",
+    "Concurrency: dual-send uses asyncio.gather(return_exceptions=True) and all 4 outcome combinations are handled explicitly"
+  ],
+  "requires": [
+    "Python 3.12+",
+    "pydantic >=2.0",
+    "asyncio",
+    "typing.Protocol for all collaborator interfaces"
+  ]
+}

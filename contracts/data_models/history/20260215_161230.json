@@ -1,0 +1,2630 @@
+{
+  "component_id": "data_models",
+  "name": "Shared Data Models",
+  "description": "Pydantic v2 immutable data models forming the inter-component contract for the entire Apprentice system. Organized as a src/apprentice/models/ package with focused submodules: domain primitive types and enums (_types.py), task request/response (task.py), training data (training.py), confidence snapshots (confidence.py), budget state (budget.py), audit entries (audit.py), routing/sampling decisions (routing.py), evaluation results (evaluation.py), model versioning (versioning.py), and a re-exporting __init__.py. All models use frozen=True and strict=True as baseline. Contract models use extra='forbid'; persisted models use extra='ignore' for forward compatibility. Decimal for all monetary fields, AwareDatetime for all timestamps, Annotated domain types for IDs, composition over inheritance, and guaranteed clean JSON round-tripping.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TaskId",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[str, MinLen(1), MaxLen(128), Pattern(r'^[a-z][a-z0-9_-]*$')]. Domain-specific identifier for a task type. Prevents mixup with other string IDs."
+    },
+    {
+      "name": "ModelId",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[str, MinLen(1), MaxLen(256)]. Domain-specific identifier for a model (local or remote). Prevents mixup with other string IDs."
+    },
+    {
+      "name": "ConfidenceScore",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[float, Ge(0.0), Le(1.0)]. A confidence score in the range [0.0, 1.0]. Used throughout the system to drive phase transitions and sampling."
+    },
+    {
+      "name": "CostAmount",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[Decimal, Ge(0)]. Non-negative decimal monetary amount for budget tracking. Decimal ensures exact arithmetic for hard budget enforcement."
+    },
+    {
+      "name": "AwareDatetime",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "datetime with required tzinfo (timezone-aware). No naive datetimes allowed anywhere in the system. Serialized as ISO 8601 string with timezone offset."
+    },
+    {
+      "name": "Phase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "PHASE_1_REMOTE_ONLY",
+        "PHASE_2_SAMPLING",
+        "PHASE_3_LOCAL_PRIMARY"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing the current operational phase. Phases are emergent from confidence scores, not manually triggered."
+    },
+    {
+      "name": "RoutingDecision",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE",
+        "LOCAL",
+        "LOCAL_WITH_REMOTE_COMPARISON",
+        "LOCAL_FALLBACK_TO_REMOTE"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing where a request is routed."
+    },
+    {
+      "name": "EvaluatorType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "EXACT_MATCH",
+        "FUZZY_MATCH",
+        "SEMANTIC_SIMILARITY",
+        "LLM_JUDGE",
+        "CUSTOM"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing the type of evaluator used for comparing responses."
+    },
+    {
+      "name": "BudgetPeriodUnit",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "HOURLY",
+        "DAILY",
+        "WEEKLY",
+        "MONTHLY"
+      ],
+      "inner_types": [],
+      "description": "StrEnum for budget period granularity."
+    },
+    {
+      "name": "EvaluationResultType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "EXACT_MATCH_RESULT",
+        "FUZZY_MATCH_RESULT",
+        "SEMANTIC_SIMILARITY_RESULT",
+        "LLM_JUDGE_RESULT",
+        "CUSTOM_RESULT"
+      ],
+      "inner_types": [],
+      "description": "StrEnum discriminator for the EvaluationResult discriminated union."
+    },
+    {
+      "name": "TaskRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Globally unique request identifier (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Identifies which configured task type this request is for.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The actual input payload. Schema varies per task_id as defined in TaskConfig.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timezone-aware timestamp when the request was created.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional caller-supplied metadata for tracing and auditing. Not interpreted by the system.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing an incoming task request. This is the primary input contract between the Unified Interface and all downstream components."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Matches the request_id from the corresponding TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Echoed from the TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The response payload. Schema varies per task_id.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model produced this response.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "How the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase at the time this request was served.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time of routing.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when the response was generated.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Latency cannot be negative."
+            }
+          ]
+        },
+        {
+          "name": "cost_incurred",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Monetary cost incurred for this response. Zero for local-only responses.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional system-generated metadata.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing the response to a task request. Returned by the Unified Interface to the caller."
+    },
+    {
+      "name": "TrainingExample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "example_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this training example (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type this example belongs to.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input that was sent to the model.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The reference output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model generated this output.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this example was recorded.",
+          "validators": []
+        },
+        {
+          "name": "quality_score",
+          "type_ref": "ConfidenceScore",
+          "required": false,
+          "default": "",
+          "description": "Optional quality assessment of this example. If absent, assumed high quality.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest that generated this example.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a single training example derived from a remote model response. Flows to the Training Data Store."
+    },
+    {
+      "name": "ComparisonPair",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "pair_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this comparison pair (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type for this comparison.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input sent to both models.",
+          "validators": []
+        },
+        {
+          "name": "remote_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "local_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the local model.",
+          "validators": []
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the remote model used.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the local model used.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_result",
+          "type_ref": "EvaluationResult",
+          "required": false,
+          "default": "",
+          "description": "If evaluation has been performed, the result. None if pending.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this comparison was created.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a side-by-side comparison of remote vs. local model outputs for the same input. Used during Phase 2 sampling to evaluate local model quality."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this confidence snapshot belongs to.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase derived from the confidence score and configured thresholds.",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison samples that contributed to this score.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Sample count cannot be negative."
+            }
+          ]
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the most recent score update.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase2",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 2 begins (sampling starts).",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase3",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 3 begins (local primary).",
+          "validators": []
+        },
+        {
+          "name": "trend",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Short-term score trend: positive means improving, negative means degrading.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model capturing the confidence state for a task at a point in time. Phase is derived from score and thresholds, not set manually."
+    },
+    {
+      "name": "BudgetPeriod",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "unit",
+          "type_ref": "BudgetPeriodUnit",
+          "required": true,
+          "default": "",
+          "description": "Granularity of this period.",
+          "validators": []
+        },
+        {
+          "name": "period_start",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Start of the current budget period.",
+          "validators": []
+        },
+        {
+          "name": "period_end",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "End of the current budget period.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model tracking a single budget period window."
+    },
+    {
+      "name": "BudgetState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this budget state belongs to.",
+          "validators": []
+        },
+        {
+          "name": "total_budget",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Total budget for the current period.",
+          "validators": []
+        },
+        {
+          "name": "spent",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Amount already spent in the current period.",
+          "validators": []
+        },
+        {
+          "name": "remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining: total_budget - spent. Derived but stored for fast access.",
+          "validators": []
+        },
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period window.",
+          "validators": []
+        },
+        {
+          "name": "is_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True when remaining <= 0. System must serve from local only.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the last budget state update.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of requests that incurred cost in this period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Request count cannot be negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='ignore' for persistence forward-compat) representing current budget state. Persisted as JSON file. Uses Decimal for exact cost arithmetic. New instances created via record_cost() returning a copy."
+    },
+    {
+      "name": "AuditEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "When this decision was made. Timezone-aware.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request that triggered this decision.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "Where the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model ultimately served the request.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time of routing.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "System phase at decision time.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred for this request.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Latency cannot be negative."
+            }
+          ]
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Sampling probability if Phase 2, absent otherwise.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback from local to remote occurred.",
+          "validators": []
+        },
+        {
+          "name": "error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error message if something went wrong during processing.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional structured context for auditing.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing a single auditable decision. Structured for JSON logging via Python stdlib logging with JSON formatter."
+    },
+    {
+      "name": "SamplingDecision",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request this decision applies to.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "The routing decision made.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The probability used for the sampling coin flip. 0.0 in Phase 1, 1.0 in Phase 3.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Sampling probability must be in [0.0, 1.0]."
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at the time of decision.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at decision time.",
+          "validators": []
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining at decision time.",
+          "validators": []
+        },
+        {
+          "name": "rationale",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation of why this routing decision was made. Logged for auditability.",
+          "validators": []
+        },
+        {
+          "name": "decided_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the decision.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a routing/sampling decision made by the Router."
+    },
+    {
+      "name": "ExactMatchResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "EXACT_MATCH_RESULT",
+          "description": "Discriminator. Must be EXACT_MATCH_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "is_match",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the local and remote outputs matched exactly.",
+          "validators": []
+        },
+        {
+          "name": "matched_fields",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "List of field names that were compared.",
+          "validators": []
+        },
+        {
+          "name": "mismatched_fields",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "List of field names that did not match.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for exact match comparison."
+    },
+    {
+      "name": "FuzzyMatchResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "FUZZY_MATCH_RESULT",
+          "description": "Discriminator. Must be FUZZY_MATCH_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "similarity_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Similarity score between local and remote outputs in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether similarity_score >= threshold.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for fuzzy/approximate match comparison."
+    },
+    {
+      "name": "SemanticSimilarityResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "SEMANTIC_SIMILARITY_RESULT",
+          "description": "Discriminator. Must be SEMANTIC_SIMILARITY_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "similarity_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Semantic similarity score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether similarity_score >= threshold.",
+          "validators": []
+        },
+        {
+          "name": "embedding_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name/ID of the embedding model used for comparison.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for semantic similarity comparison. Requires optional dependency (loaded lazily)."
+    },
+    {
+      "name": "LlmJudgeResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "LLM_JUDGE_RESULT",
+          "description": "Discriminator. Must be LLM_JUDGE_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Judge-assigned quality score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether score >= threshold.",
+          "validators": []
+        },
+        {
+          "name": "judge_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model was used as judge.",
+          "validators": []
+        },
+        {
+          "name": "reasoning",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The judge's reasoning for the score.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost of the judge API call.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result from an LLM-as-judge comparison."
+    },
+    {
+      "name": "CustomEvalResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "CUSTOM_RESULT",
+          "description": "Discriminator. Must be CUSTOM_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Custom evaluator score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the evaluation passed.",
+          "validators": []
+        },
+        {
+          "name": "evaluator_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the custom evaluator.",
+          "validators": []
+        },
+        {
+          "name": "details",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Arbitrary evaluator-specific details.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result from a custom/plugin evaluator."
+    },
+    {
+      "name": "EvaluationResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "ExactMatchResult",
+        "FuzzyMatchResult",
+        "SemanticSimilarityResult",
+        "LlmJudgeResult",
+        "CustomEvalResult"
+      ],
+      "description": "Discriminated union of all evaluation result types. Discriminator field is 'result_type'. Pydantic Discriminator annotation on result_type field."
+    },
+    {
+      "name": "ModelVersion",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this model version (UUID4 or semantic version string).",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "The logical model this version belongs to.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path or URI to the model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "validation_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Validation score achieved during fine-tuning evaluation.",
+          "validators": []
+        },
+        {
+          "name": "promoted_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Timestamp when this version was promoted to active. None if not yet promoted.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this version was created.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training examples used to produce this version.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Training example count cannot be negative."
+            }
+          ]
+        },
+        {
+          "name": "parent_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The version this was fine-tuned from. None for initial versions.",
+          "validators": []
+        },
+        {
+          "name": "is_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this is the currently active version for serving.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='ignore' for persistence forward-compat) representing a versioned local model. Persisted as JSON."
+    },
+    {
+      "name": "ValidationErrorDetail",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "field",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The field path where validation failed (dot-separated for nested).",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "value",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "String representation of the rejected value, if available.",
+          "validators": []
+        },
+        {
+          "name": "error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Pydantic error type code (e.g. 'value_error', 'type_error.float').",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured detail about a single Pydantic validation error, used in error reporting."
+    },
+    {
+      "name": "ValidationErrorList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ValidationErrorDetail",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of validation error details."
+    },
+    {
+      "name": "SerializedModel",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "str — A JSON string produced by Pydantic's model_dump_json(). Used for serialization round-trip functions."
+    }
+  ],
+  "functions": [
+    {
+      "name": "create_task_request",
+      "description": "Factory function to construct and validate a TaskRequest. Generates a UUID4 request_id and sets created_at to the current UTC time if not provided. Validates all fields strictly.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input payload for the task.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional caller-supplied metadata.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional pre-generated request ID. If empty, UUID4 is generated.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskRequest",
+      "error_cases": [
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match the TaskId pattern or is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "invalid_input_data",
+          "condition": "input_data is not a valid dict",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "input_data"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is a non-empty string matching ^[a-z][a-z0-9_-]*$",
+        "input_data is a valid dict"
+      ],
+      "postconditions": [
+        "Returned TaskRequest is frozen and passes Pydantic validation",
+        "request_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_task_response",
+      "description": "Factory function to construct and validate a TaskResponse. Validates all fields strictly.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Must match the original TaskRequest.request_id.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The response payload.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model produced this response.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "How the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at the time of serving.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at routing time.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency.",
+          "validators": []
+        },
+        {
+          "name": "cost_incurred",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost for this response.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional metadata.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskResponse",
+      "error_cases": [
+        {
+          "name": "invalid_routing_decision",
+          "condition": "routing_decision is not a valid RoutingDecision variant",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "routing_decision"
+          }
+        },
+        {
+          "name": "invalid_phase",
+          "condition": "phase is not a valid Phase variant",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "phase"
+          }
+        },
+        {
+          "name": "negative_latency",
+          "condition": "latency_ms < 0.0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "latency_ms"
+          }
+        },
+        {
+          "name": "negative_cost",
+          "condition": "cost_incurred < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "cost_incurred"
+          }
+        }
+      ],
+      "preconditions": [
+        "request_id is a non-empty string",
+        "latency_ms >= 0.0",
+        "cost_incurred >= 0"
+      ],
+      "postconditions": [
+        "Returned TaskResponse is frozen and passes Pydantic validation",
+        "All enum fields hold valid enum values"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_confidence_snapshot",
+      "description": "Constructs a ConfidenceSnapshot. Derives the phase from the score and the two thresholds (threshold_phase2, threshold_phase3) using the rule: score < threshold_phase2 => PHASE_1, threshold_phase2 <= score < threshold_phase3 => PHASE_2, score >= threshold_phase3 => PHASE_3.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score.",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of samples that contributed to this score.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase2",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Threshold for entering Phase 2.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase3",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Threshold for entering Phase 3.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "trend",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Short-term score trend.",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceSnapshot",
+      "error_cases": [
+        {
+          "name": "invalid_score",
+          "condition": "score is not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "score"
+          }
+        },
+        {
+          "name": "invalid_thresholds",
+          "condition": "threshold_phase2 > threshold_phase3 or either is out of [0.0, 1.0]",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "threshold_phase2 must be <= threshold_phase3 and both in [0.0, 1.0]"
+          }
+        },
+        {
+          "name": "negative_sample_count",
+          "condition": "sample_count < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "sample_count"
+          }
+        }
+      ],
+      "preconditions": [
+        "0.0 <= score <= 1.0",
+        "0.0 <= threshold_phase2 <= threshold_phase3 <= 1.0",
+        "sample_count >= 0"
+      ],
+      "postconditions": [
+        "Returned ConfidenceSnapshot.phase is correctly derived from score and thresholds",
+        "If score < threshold_phase2 then phase == PHASE_1_REMOTE_ONLY",
+        "If threshold_phase2 <= score < threshold_phase3 then phase == PHASE_2_SAMPLING",
+        "If score >= threshold_phase3 then phase == PHASE_3_LOCAL_PRIMARY",
+        "Snapshot is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_budget_state",
+      "description": "Constructs a BudgetState. Computes remaining = total_budget - spent and is_exhausted = remaining <= 0.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "total_budget",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Total budget for the period.",
+          "validators": []
+        },
+        {
+          "name": "spent",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Amount already spent.",
+          "validators": []
+        },
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period window.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of requests that incurred cost.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetState",
+      "error_cases": [
+        {
+          "name": "negative_budget",
+          "condition": "total_budget < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "total_budget"
+          }
+        },
+        {
+          "name": "negative_spent",
+          "condition": "spent < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "spent"
+          }
+        },
+        {
+          "name": "invalid_period",
+          "condition": "period.period_start >= period.period_end",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "period_start must be before period_end"
+          }
+        }
+      ],
+      "preconditions": [
+        "total_budget >= 0",
+        "spent >= 0",
+        "request_count >= 0",
+        "period.period_start < period.period_end"
+      ],
+      "postconditions": [
+        "remaining == total_budget - spent",
+        "is_exhausted == (remaining <= 0)",
+        "BudgetState is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "record_cost",
+      "description": "Returns a new BudgetState with cost added to spent, remaining decremented, and is_exhausted recomputed. Uses model_copy for immutable update. This is the ONLY way to update budget state.",
+      "inputs": [
+        {
+          "name": "budget_state",
+          "type_ref": "BudgetState",
+          "required": true,
+          "default": "",
+          "description": "The current budget state.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "The cost to record.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp for the update. If absent, current UTC time is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetState",
+      "error_cases": [
+        {
+          "name": "negative_cost",
+          "condition": "cost < 0",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Cost to record must be non-negative"
+          }
+        }
+      ],
+      "preconditions": [
+        "cost >= 0",
+        "budget_state is a valid BudgetState"
+      ],
+      "postconditions": [
+        "Returned BudgetState.spent == original.spent + cost",
+        "Returned BudgetState.remaining == original.total_budget - (original.spent + cost)",
+        "Returned BudgetState.is_exhausted == (returned.remaining <= 0)",
+        "Returned BudgetState.request_count == original.request_count + 1",
+        "Original budget_state is not mutated",
+        "Returned BudgetState is a new frozen instance"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_audit_entry",
+      "description": "Factory function to construct and validate an AuditEntry. Structured for emission via Python stdlib logging with JSON formatter.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request that triggered this audit event.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "Where the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model served the request.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at routing time.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at decision time.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether fallback occurred.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Sampling probability if Phase 2.",
+          "validators": []
+        },
+        {
+          "name": "error",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error message if applicable.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional context.",
+          "validators": []
+        }
+      ],
+      "output_type": "AuditEntry",
+      "error_cases": [
+        {
+          "name": "invalid_request_id",
+          "condition": "request_id is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "request_id"
+          }
+        },
+        {
+          "name": "negative_latency",
+          "condition": "latency_ms < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "latency_ms"
+          }
+        }
+      ],
+      "preconditions": [
+        "request_id is non-empty",
+        "latency_ms >= 0.0",
+        "cost >= 0"
+      ],
+      "postconditions": [
+        "Returned AuditEntry is frozen",
+        "timestamp is timezone-aware",
+        "AuditEntry can be serialized to JSON via model_dump_json()"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_sampling_decision",
+      "description": "Factory function to construct and validate a SamplingDecision from the Router.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request this decision applies to.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "The routing decision.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Probability used for sampling.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Current phase.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence at decision time.",
+          "validators": []
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget.",
+          "validators": []
+        },
+        {
+          "name": "rationale",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation.",
+          "validators": []
+        },
+        {
+          "name": "decided_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "SamplingDecision",
+      "error_cases": [
+        {
+          "name": "invalid_sampling_probability",
+          "condition": "sampling_probability not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "sampling_probability"
+          }
+        },
+        {
+          "name": "empty_rationale",
+          "condition": "rationale is empty string",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "rationale"
+          }
+        }
+      ],
+      "preconditions": [
+        "0.0 <= sampling_probability <= 1.0",
+        "rationale is non-empty"
+      ],
+      "postconditions": [
+        "Returned SamplingDecision is frozen",
+        "decided_at is timezone-aware"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_training_example",
+      "description": "Factory function to construct and validate a TrainingExample from a remote model response.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input sent to the model.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The reference output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model generated the output.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The originating request ID.",
+          "validators": []
+        },
+        {
+          "name": "example_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional pre-generated example ID. If empty, UUID4 is generated.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "quality_score",
+          "type_ref": "ConfidenceScore",
+          "required": false,
+          "default": "",
+          "description": "Optional quality score for this example.",
+          "validators": []
+        }
+      ],
+      "output_type": "TrainingExample",
+      "error_cases": [
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match TaskId pattern",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "empty_source_request_id",
+          "condition": "source_request_id is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "source_request_id"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is valid",
+        "source_request_id is non-empty"
+      ],
+      "postconditions": [
+        "Returned TrainingExample is frozen",
+        "example_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_comparison_pair",
+      "description": "Factory function to construct and validate a ComparisonPair from dual model outputs.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The shared input.",
+          "validators": []
+        },
+        {
+          "name": "remote_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Remote model output.",
+          "validators": []
+        },
+        {
+          "name": "local_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Local model output.",
+          "validators": []
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Remote model ID.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Local model ID.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The originating request ID.",
+          "validators": []
+        },
+        {
+          "name": "pair_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional pre-generated pair ID. If empty, UUID4 is generated.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_result",
+          "type_ref": "EvaluationResult",
+          "required": false,
+          "default": "",
+          "description": "Optional evaluation result if already evaluated.",
+          "validators": []
+        }
+      ],
+      "output_type": "ComparisonPair",
+      "error_cases": [
+        {
+          "name": "same_model_ids",
+          "condition": "remote_model_id == local_model_id",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Remote and local model IDs must be different for a valid comparison"
+          }
+        },
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match TaskId pattern",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is valid",
+        "source_request_id is non-empty",
+        "remote_model_id != local_model_id"
+      ],
+      "postconditions": [
+        "Returned ComparisonPair is frozen",
+        "pair_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_model_version",
+      "description": "Factory function to construct and validate a ModelVersion record.",
+      "inputs": [
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "The logical model this version belongs to.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path or URI to model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "validation_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Validation score from fine-tuning evaluation.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training examples used.",
+          "validators": []
+        },
+        {
+          "name": "is_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this is the active version.",
+          "validators": []
+        },
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional pre-generated version ID. If empty, UUID4 is generated.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional timestamp. If absent, current UTC time is used.",
+          "validators": []
+        },
+        {
+          "name": "promoted_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "",
+          "description": "Optional promotion timestamp.",
+          "validators": []
+        },
+        {
+          "name": "parent_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The version this was fine-tuned from.",
+          "validators": []
+        }
+      ],
+      "output_type": "ModelVersion",
+      "error_cases": [
+        {
+          "name": "empty_path",
+          "condition": "path is empty string",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "path"
+          }
+        },
+        {
+          "name": "negative_example_count",
+          "condition": "training_example_count < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "training_example_count"
+          }
+        },
+        {
+          "name": "invalid_validation_score",
+          "condition": "validation_score not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "validation_score"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is non-empty",
+        "training_example_count >= 0",
+        "0.0 <= validation_score <= 1.0"
+      ],
+      "postconditions": [
+        "Returned ModelVersion is frozen",
+        "version_id is a valid UUID4 string",
+        "created_at is timezone-aware",
+        "If is_active is True and promoted_at was not provided, promoted_at is set to created_at"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "serialize_model",
+      "description": "Serializes any data model defined in this component to a JSON string using Pydantic's model_dump_json(). Guarantees clean round-trip serialization.",
+      "inputs": [
+        {
+          "name": "model_instance",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Any Pydantic model instance defined in this component.",
+          "validators": []
+        }
+      ],
+      "output_type": "SerializedModel",
+      "error_cases": [
+        {
+          "name": "not_a_pydantic_model",
+          "condition": "model_instance is not a Pydantic BaseModel",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "model_instance must be a Pydantic BaseModel"
+          }
+        },
+        {
+          "name": "serialization_error",
+          "condition": "Model contains non-serializable fields (should not happen with well-formed models)",
+          "error_type": "SerializationError",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [
+        "model_instance is an instance of a Pydantic BaseModel defined in this component"
+      ],
+      "postconditions": [
+        "Returned string is valid JSON",
+        "Calling deserialize_model with the result and the model's type returns an equivalent instance",
+        "Decimal fields are serialized as strings to preserve precision",
+        "AwareDatetime fields are serialized as ISO 8601 strings with timezone"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "deserialize_model",
+      "description": "Deserializes a JSON string back into a typed Pydantic model instance using model_validate_json(). Performs full validation on deserialization.",
+      "inputs": [
+        {
+          "name": "json_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "JSON string to deserialize.",
+          "validators": []
+        },
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The name of the model type to deserialize into (e.g. 'TaskRequest', 'BudgetState'). Must be one of the types defined in this component.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "invalid_json",
+          "condition": "json_data is not valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Input is not valid JSON"
+          }
+        },
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "JSON data does not conform to the target model's schema",
+          "error_type": "ValidationError",
+          "error_data": {}
+        },
+        {
+          "name": "extra_fields_forbidden",
+          "condition": "JSON contains extra fields and the model uses extra='forbid'",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Extra fields not permitted"
+          }
+        }
+      ],
+      "preconditions": [
+        "json_data is a valid JSON string",
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returned instance is of the specified model_type",
+        "Returned instance passes all Pydantic validation",
+        "Returned instance is frozen if the model type is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_model",
+      "description": "Validates raw data (dict) against a model type without constructing the full model. Returns a list of validation errors or an empty list if valid. Useful for pre-flight validation.",
+      "inputs": [
+        {
+          "name": "data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Raw data to validate.",
+          "validators": []
+        },
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The name of the model type to validate against.",
+          "validators": []
+        }
+      ],
+      "output_type": "ValidationErrorList",
+      "error_cases": [
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        }
+      ],
+      "preconditions": [
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returns empty list if data is valid against the model type",
+        "Returns one or more ValidationErrorDetail items if validation fails",
+        "Does not raise exceptions — all validation issues are captured in the return value"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_model_json_schema",
+      "description": "Returns the JSON Schema for a model type. Useful for documentation, config validation, and client SDK generation.",
+      "inputs": [
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The name of the model type.",
+          "validators": []
+        }
+      ],
+      "output_type": "dict",
+      "error_cases": [
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        }
+      ],
+      "preconditions": [
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returned dict is a valid JSON Schema (Draft 2020-12 compatible via Pydantic)",
+        "Schema includes all field definitions, types, constraints, and descriptions"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All model instances with frozen=True are immutable after construction — no field can be reassigned",
+    "All models with extra='forbid' reject any fields not explicitly defined in the schema",
+    "All models with extra='ignore' silently discard unknown fields (forward compatibility for persisted state)",
+    "All CostAmount fields use Decimal arithmetic — no floating point for monetary values",
+    "All timestamp fields are timezone-aware (AwareDatetime) — naive datetimes are rejected at validation",
+    "All models round-trip cleanly through JSON: model_validate_json(model.model_dump_json()) produces an equivalent instance",
+    "Phase is always derived from ConfidenceScore and thresholds, never set independently",
+    "BudgetState.remaining always equals BudgetState.total_budget - BudgetState.spent",
+    "BudgetState.is_exhausted always equals (BudgetState.remaining <= 0)",
+    "EvaluationResult is a discriminated union — the result_type field determines which variant is active",
+    "TaskId values match the pattern ^[a-z][a-z0-9_-]*$ and are between 1 and 128 characters",
+    "ModelId values are non-empty strings of at most 256 characters",
+    "ConfidenceScore values are always in the closed interval [0.0, 1.0]",
+    "No model in this component performs I/O, network calls, or mutates global state — all functions are pure",
+    "Composition over inheritance: no model type inherits from another model type in this component"
+  ],
+  "requires": [
+    "pydantic>=2.0",
+    "python>=3.12"
+  ]
+}

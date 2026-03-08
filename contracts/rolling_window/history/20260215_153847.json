@@ -1,0 +1,905 @@
+{
+  "component_id": "rolling_window",
+  "name": "Rolling Comparison Window",
+  "description": "Maintains a fixed-size deque of ComparisonPair samples per task type for per-task quality tracking. Each pair includes timestamp, input, local response, remote response, and evaluation score. Supports adding new pairs, computing aggregate correlation (mean of evaluation scores), computing trend (slope of scores over recent N pairs via linear regression), and checking staleness (whether oldest pair exceeds max_window_age). Persists to disk as JSON for survival across restarts. Thread-safe via threading.Lock (lock not held during I/O). Timestamps assigned at insertion time. Empty/insufficient-data cases return None/INSUFFICIENT_DATA rather than raising exceptions. Persistence is triggered explicitly by the caller, not on every add.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TrendDirection",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "IMPROVING",
+        "DEGRADING",
+        "STABLE",
+        "INSUFFICIENT_DATA"
+      ],
+      "inner_types": [],
+      "description": "Direction of the evaluation score trend over the recent window of comparison pairs."
+    },
+    {
+      "name": "ComparisonPair",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 UTC datetime string indicating when this pair was inserted into the window. Assigned by the window implementation, not caller-provided.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "Timestamp must be an ISO-8601 UTC datetime string ending in +00:00"
+            }
+          ]
+        },
+        {
+          "name": "input_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The input prompt or query that was sent to both local and remote models.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "input_data must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "local_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the local model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "remote_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the remote model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Score from 0.0 to 1.0 (inclusive) representing evaluation quality of the local response relative to the remote response, as determined by a task-specific evaluator.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "evaluation_score must be between 0.0 and 1.0 inclusive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic v2 model representing a single comparison sample between local and remote model responses, with an evaluation score. Timestamp is assigned at insertion time by the window, not by the caller."
+    },
+    {
+      "name": "ComparisonPairInput",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "input_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The input prompt or query that was sent to both local and remote models.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "input_data must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "local_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the local model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "remote_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the remote model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Score from 0.0 to 1.0 (inclusive) representing evaluation quality.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "evaluation_score must be between 0.0 and 1.0 inclusive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Caller-provided data for creating a ComparisonPair. Does not include timestamp — that is assigned at insertion time by the window."
+    },
+    {
+      "name": "WindowAggregate",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "mean_score",
+          "type_ref": "OptionalFloat",
+          "required": true,
+          "default": "",
+          "description": "Arithmetic mean of evaluation_score across all pairs in the window. None if the window is empty.",
+          "validators": []
+        },
+        {
+          "name": "trend_slope",
+          "type_ref": "OptionalFloat",
+          "required": true,
+          "default": "",
+          "description": "Slope of the linear regression of evaluation_score over the most recent trend_window pairs (or all pairs if trend_window is None). None if fewer than 2 pairs are available for trend computation. Positive slope indicates improvement, negative indicates degradation.",
+          "validators": []
+        },
+        {
+          "name": "trend_direction",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Categorical interpretation of trend_slope: IMPROVING if slope > 0, DEGRADING if slope < 0, STABLE if slope == 0, INSUFFICIENT_DATA if fewer than 2 pairs.",
+          "validators": []
+        },
+        {
+          "name": "is_stale",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the window is empty or the oldest pair's timestamp exceeds the configured max_window_age relative to current UTC time. Always true for empty windows (no data = needs samples).",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison pairs currently in the window.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "oldest_timestamp",
+          "type_ref": "OptionalStr",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 UTC datetime string of the oldest pair in the window, or None if the window is empty.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic v2 result model containing aggregate statistics computed from the current contents of a rolling window. Fields that cannot be computed (empty window, insufficient pairs for trend) are None or INSUFFICIENT_DATA."
+    },
+    {
+      "name": "OptionalFloat",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "float",
+      "variants": [],
+      "inner_types": [],
+      "description": "A float value or None."
+    },
+    {
+      "name": "OptionalStr",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "str",
+      "variants": [],
+      "inner_types": [],
+      "description": "A string value or None."
+    },
+    {
+      "name": "ComparisonPairList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ComparisonPair",
+      "variants": [],
+      "inner_types": [],
+      "description": "An ordered sequence of ComparisonPair instances, from oldest to newest."
+    },
+    {
+      "name": "WindowConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "window_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum number of ComparisonPair samples to retain. When exceeded, the oldest pair is evicted. Default is 100.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "window_size must be between 1 and 10000 inclusive"
+            }
+          ]
+        },
+        {
+          "name": "max_window_age_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "86400.0",
+          "description": "Maximum age in seconds for the oldest pair before the window is considered stale. Used by check_staleness and aggregate. Default is 86400 (24 hours).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0",
+              "error_message": "max_window_age_seconds must be positive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for constructing a DequeRollingWindow instance."
+    },
+    {
+      "name": "StoreConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem directory path where per-task JSON files are stored. Created if it does not exist.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "base_dir must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for constructing a JsonFileWindowStore instance."
+    }
+  ],
+  "functions": [
+    {
+      "name": "DequeRollingWindow.__init__",
+      "description": "Constructs a DequeRollingWindow backed by collections.deque(maxlen=window_size). Accepts a WindowConfig and an injected WindowStore for persistence. Initializes an empty deque and a threading.Lock. Does NOT load persisted state — caller must explicitly call load_from_store if restoration is desired.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "WindowConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration specifying window_size and max_window_age_seconds.",
+          "validators": []
+        },
+        {
+          "name": "store",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "An injected WindowStore protocol implementation for persistence. Typed as protocol reference (WindowStore). Passed via dependency injection for testability.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_window_size",
+          "condition": "config.window_size < 1 or config.window_size > 10000",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "window_size"
+          }
+        }
+      ],
+      "preconditions": [
+        "config.window_size >= 1",
+        "config.max_window_age_seconds > 0.0"
+      ],
+      "postconditions": [
+        "len(self) == 0 after construction (empty window)",
+        "Internal deque has maxlen == config.window_size",
+        "Internal threading.Lock is initialized and unlocked"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure construction, no I/O or mutation beyond self"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.add",
+      "description": "Adds a new ComparisonPair to the rolling window. The caller provides a ComparisonPairInput (without timestamp); the implementation assigns timestamp as datetime.now(timezone.utc) at insertion time. If the deque is at maxlen, the oldest pair is automatically evicted. Acquires threading.Lock for the duration of the deque mutation. Does NOT trigger persistence — caller must explicitly call persist().",
+      "inputs": [
+        {
+          "name": "pair_input",
+          "type_ref": "ComparisonPairInput",
+          "required": true,
+          "default": "",
+          "description": "Caller-provided comparison data without timestamp. Timestamp is assigned internally at insertion time.",
+          "validators": []
+        }
+      ],
+      "output_type": "ComparisonPair",
+      "error_cases": [
+        {
+          "name": "invalid_evaluation_score",
+          "condition": "pair_input.evaluation_score < 0.0 or pair_input.evaluation_score > 1.0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "evaluation_score"
+          }
+        },
+        {
+          "name": "empty_input_data",
+          "condition": "pair_input.input_data is empty string",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "input_data"
+          }
+        }
+      ],
+      "preconditions": [
+        "pair_input.evaluation_score >= 0.0 and pair_input.evaluation_score <= 1.0",
+        "pair_input.input_data is non-empty"
+      ],
+      "postconditions": [
+        "len(self) <= window_size",
+        "len(self) == min(previous_len + 1, window_size)",
+        "Returned ComparisonPair has timestamp set to approximately datetime.now(UTC)",
+        "Returned ComparisonPair.input_data == pair_input.input_data",
+        "Returned ComparisonPair.evaluation_score == pair_input.evaluation_score",
+        "The newest pair in the window is the returned ComparisonPair",
+        "If window was at capacity, the oldest pair has been evicted"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "internal deque",
+          "description": "Appends a new ComparisonPair to the deque under threading.Lock; may evict oldest pair if at capacity"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.aggregate",
+      "description": "Computes aggregate statistics over the current window contents. Returns a WindowAggregate with mean_score, trend_slope, trend_direction, is_stale, sample_count, and oldest_timestamp. Trend is computed via statistics.linear_regression over the most recent trend_window pairs (or all pairs if trend_window is None). Staleness is checked against max_window_age_seconds from config. Acquires threading.Lock only to copy pair data, then computes outside the lock. Empty window returns mean_score=None, trend_slope=None, trend_direction=INSUFFICIENT_DATA, is_stale=True, sample_count=0, oldest_timestamp=None.",
+      "inputs": [
+        {
+          "name": "trend_window",
+          "type_ref": "int",
+          "required": false,
+          "default": "None",
+          "description": "Number of most recent pairs to use for trend (slope) computation. If None, all pairs in the window are used. Must be >= 2 if provided, otherwise trend is INSUFFICIENT_DATA.",
+          "validators": []
+        }
+      ],
+      "output_type": "WindowAggregate",
+      "error_cases": [
+        {
+          "name": "invalid_trend_window",
+          "condition": "trend_window is not None and trend_window < 2",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "trend_window",
+            "message": "trend_window must be >= 2 or None"
+          }
+        }
+      ],
+      "preconditions": [
+        "trend_window is None or trend_window >= 2"
+      ],
+      "postconditions": [
+        "result.sample_count == len(self) at time of snapshot",
+        "result.mean_score is None if and only if sample_count == 0",
+        "result.mean_score is in [0.0, 1.0] if not None",
+        "result.trend_slope is None if sample_count < 2 or (trend_window is not None and trend_window > sample_count)",
+        "result.trend_direction == INSUFFICIENT_DATA if trend_slope is None",
+        "result.trend_direction == IMPROVING if trend_slope is not None and trend_slope > 0",
+        "result.trend_direction == DEGRADING if trend_slope is not None and trend_slope < 0",
+        "result.trend_direction == STABLE if trend_slope is not None and trend_slope == 0",
+        "result.is_stale == True if sample_count == 0",
+        "result.oldest_timestamp is None if and only if sample_count == 0"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only computation; acquires lock briefly to snapshot data, no mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.check_staleness",
+      "description": "Checks whether the rolling window is stale. A window is stale if it is empty or if the oldest pair's timestamp is older than max_age relative to the current UTC time. Acquires threading.Lock briefly to read the oldest pair.",
+      "inputs": [
+        {
+          "name": "max_age_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "None",
+          "description": "Maximum allowed age in seconds for the oldest pair. If not provided, uses max_window_age_seconds from the WindowConfig supplied at construction.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [
+        {
+          "name": "invalid_max_age",
+          "condition": "max_age_seconds is not None and max_age_seconds <= 0.0",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "max_age_seconds",
+            "message": "max_age_seconds must be positive or None"
+          }
+        }
+      ],
+      "preconditions": [
+        "max_age_seconds is None or max_age_seconds > 0.0"
+      ],
+      "postconditions": [
+        "Returns True if window is empty",
+        "Returns True if oldest pair timestamp < (now_utc - max_age)",
+        "Returns False if oldest pair timestamp >= (now_utc - max_age)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only check, no mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.pairs",
+      "description": "Returns a read-only snapshot of all ComparisonPair instances currently in the window, ordered from oldest to newest. Acquires threading.Lock to copy the deque contents, then returns the copy. The returned list is a snapshot — subsequent adds do not affect it.",
+      "inputs": [],
+      "output_type": "ComparisonPairList",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "len(result) == len(self) at time of snapshot",
+        "result is ordered from oldest (index 0) to newest (index -1)",
+        "result is a copy — mutations to result do not affect the window",
+        "All elements are frozen ComparisonPair instances"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only snapshot, no mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.__len__",
+      "description": "Returns the current number of ComparisonPair instances in the window. Thread-safe — acquires threading.Lock briefly.",
+      "inputs": [],
+      "output_type": "int",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "result >= 0",
+        "result <= window_size"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only, no mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.persist",
+      "description": "Persists the current window contents to the injected WindowStore. Acquires threading.Lock to copy pair data, then releases the lock BEFORE performing I/O — the store.save() call happens outside the lock. This is an explicit operation; persistence is not triggered automatically on add(). No-op if no WindowStore was injected at construction.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier used as the key for storing this window's pairs. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "empty_task_type",
+          "condition": "task_type is empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "task_type",
+            "message": "task_type must be non-empty"
+          }
+        },
+        {
+          "name": "store_write_error",
+          "condition": "The injected WindowStore raises an I/O error during save",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "save"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_type is a non-empty string"
+      ],
+      "postconditions": [
+        "If a WindowStore is injected, store.save(task_type, pairs_snapshot) has been called with a snapshot of current pairs",
+        "The threading.Lock is NOT held during the store.save() I/O operation",
+        "If no WindowStore is injected, this is a silent no-op"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "WindowStore persistence backend",
+          "description": "Delegates to injected WindowStore.save() outside the threading.Lock"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "DequeRollingWindow.load_from_store",
+      "description": "Loads persisted ComparisonPair data from the injected WindowStore and replaces the current window contents. Acquires threading.Lock to replace the deque contents after loading. If the store returns more pairs than window_size, only the most recent window_size pairs are retained. No-op if no WindowStore was injected.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier used as the key for loading this window's pairs. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "int",
+      "error_cases": [
+        {
+          "name": "empty_task_type",
+          "condition": "task_type is empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "task_type",
+            "message": "task_type must be non-empty"
+          }
+        },
+        {
+          "name": "store_read_error",
+          "condition": "The injected WindowStore raises an I/O error during load",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "load"
+          }
+        },
+        {
+          "name": "corrupt_data_recovered",
+          "condition": "The WindowStore encounters corrupt data and returns an empty list with a warning log (graceful fallback)",
+          "error_type": "None",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [
+        "task_type is a non-empty string"
+      ],
+      "postconditions": [
+        "len(self) <= window_size",
+        "Returned int == len(self) after load (number of pairs loaded)",
+        "If store returned more pairs than window_size, only the most recent window_size are retained",
+        "If no WindowStore is injected, returns 0 (no-op)",
+        "Pairs are ordered oldest-to-newest in the deque"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "WindowStore persistence backend",
+          "description": "Delegates to injected WindowStore.load() to read persisted pairs"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "internal deque",
+          "description": "Replaces deque contents with loaded pairs under threading.Lock"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonFileWindowStore.__init__",
+      "description": "Constructs a JsonFileWindowStore that persists ComparisonPair data as JSON files in the specified base directory. Creates the base_dir if it does not exist (using os.makedirs with exist_ok=True).",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "StoreConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration specifying the base directory for JSON file storage.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "permission_denied",
+          "condition": "Cannot create or access base_dir due to filesystem permissions",
+          "error_type": "PermissionError",
+          "error_data": {
+            "path": "base_dir"
+          }
+        },
+        {
+          "name": "invalid_path",
+          "condition": "base_dir is not a valid filesystem path",
+          "error_type": "OSError",
+          "error_data": {
+            "path": "base_dir"
+          }
+        }
+      ],
+      "preconditions": [
+        "config.base_dir is a non-empty string"
+      ],
+      "postconditions": [
+        "base_dir exists on the filesystem (created if necessary)",
+        "Store is ready for save() and load() operations"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "base_dir",
+          "description": "Creates base_dir if it does not exist via os.makedirs(exist_ok=True)"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonFileWindowStore.save",
+      "description": "Persists a sequence of ComparisonPair instances as a JSON file for the given task_type. Uses atomic writes: serializes to a temporary file in the same directory, then atomically replaces the target file via os.replace(). The filename is derived from the task_type with sanitization. Structured logging emitted on success.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier used to derive the JSON filename. Must be non-empty. Sanitized to prevent path traversal.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "pairs",
+          "type_ref": "ComparisonPairList",
+          "required": true,
+          "default": "",
+          "description": "Sequence of ComparisonPair instances to persist. May be empty (stores an empty JSON array).",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "empty_task_type",
+          "condition": "task_type is empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "task_type"
+          }
+        },
+        {
+          "name": "write_permission_denied",
+          "condition": "Cannot write to base_dir due to filesystem permissions",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "save",
+            "reason": "permission_denied"
+          }
+        },
+        {
+          "name": "disk_full",
+          "condition": "Filesystem has insufficient space to write the JSON file",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "save",
+            "reason": "disk_full"
+          }
+        },
+        {
+          "name": "serialization_error",
+          "condition": "A ComparisonPair cannot be serialized to JSON (should not occur with valid Pydantic models)",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "save",
+            "reason": "serialization_failed"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_type is non-empty",
+        "All pairs have valid ComparisonPair structure",
+        "base_dir exists and is writable"
+      ],
+      "postconditions": [
+        "A JSON file at base_dir/{sanitized_task_type}.json contains the serialized pairs",
+        "The write was atomic — either the full file is present or the previous version remains",
+        "No temporary files remain after successful completion",
+        "A structured log entry is emitted recording the save operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "base_dir/{task_type}.json",
+          "description": "Atomic write via temp file + os.replace()"
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs save operation details including task_type and pair count"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonFileWindowStore.load",
+      "description": "Loads a list of ComparisonPair instances from the JSON file for the given task_type. Graceful fallback: if the file is missing, returns an empty list. If the file is corrupt (invalid JSON or schema mismatch), logs a warning and returns an empty list — never raises on corrupt data. Structured logging emitted on fallback events.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier used to derive the JSON filename. Must be non-empty. Sanitized to prevent path traversal.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "ComparisonPairList",
+      "error_cases": [
+        {
+          "name": "empty_task_type",
+          "condition": "task_type is empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "parameter": "task_type"
+          }
+        },
+        {
+          "name": "read_permission_denied",
+          "condition": "Cannot read from base_dir due to filesystem permissions",
+          "error_type": "PersistenceError",
+          "error_data": {
+            "operation": "load",
+            "reason": "permission_denied"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_type is non-empty"
+      ],
+      "postconditions": [
+        "Returns a list of valid ComparisonPair instances or an empty list",
+        "If the file does not exist, returns empty list (no error)",
+        "If the file is corrupt JSON, returns empty list and logs a warning",
+        "If individual pair entries are invalid, they are skipped and a warning is logged for each",
+        "Returned list is ordered as stored (oldest to newest)",
+        "All returned ComparisonPair instances pass validation (score in [0,1], non-empty input_data, valid timestamp)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "base_dir/{task_type}.json",
+          "description": "Reads JSON file from disk"
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs warnings on missing file, corrupt data, or skipped invalid entries"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "The internal deque length never exceeds window_size (enforced by collections.deque(maxlen=window_size))",
+    "All ComparisonPair instances are immutable (frozen Pydantic v2 models) — once created, they cannot be modified",
+    "ComparisonPair.evaluation_score is always in the range [0.0, 1.0]",
+    "ComparisonPair.timestamp is always a valid ISO-8601 UTC datetime string",
+    "ComparisonPair.input_data is always a non-empty string",
+    "Pairs in the deque are always ordered chronologically from oldest (index 0) to newest (index -1)",
+    "The threading.Lock is never held during I/O operations (persistence reads or writes)",
+    "Timestamps are assigned at insertion time by the window, not provided by callers",
+    "An empty window always reports is_stale=True (no data means samples are needed)",
+    "Trend computation requires at least 2 data points; fewer returns INSUFFICIENT_DATA and trend_slope=None",
+    "WindowAggregate is an immutable snapshot — it does not update when the window changes after computation",
+    "JsonFileWindowStore never raises on corrupt or missing files during load — always falls back to empty list with warning log",
+    "JsonFileWindowStore writes are atomic (temp file + os.replace) — no partial writes are visible to readers",
+    "No global state — all state flows through constructor parameters and explicit method arguments",
+    "All public methods have full type annotations"
+  ],
+  "requires": []
+}

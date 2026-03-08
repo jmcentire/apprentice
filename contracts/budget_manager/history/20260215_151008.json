@@ -1,0 +1,1426 @@
+{
+  "component_id": "budget_manager",
+  "name": "Budget Manager",
+  "description": "Enforces hard spending limits on remote API usage. Tracks actual spend per request (reported by Remote API Client after each call). Maintains running totals for configurable periods: daily, weekly, monthly. Persists budget state to disk (JSON) via atomic writes for crash-safe survival across restarts. Uses a write-ahead reservation pattern: authorize() reserves estimated cost before API call, record_spend() reconciles with actual cost afterward. A crash between authorize and record conservatively counts the estimate. Phase-agnostic: returns allowed/denied decisions; the orchestrator decides whether denial means raising BudgetExhaustedError (Phase 1) or switching to local-only mode with warning (Phase 2/3). All monetary values use Decimal (stdlib) to avoid floating-point drift over thousands of micro-transactions. Period boundary rollovers are checked on every authorize() call using zoneinfo-aware timestamps. Single-threaded concurrency model: check-then-spend is atomic with no race conditions. Reporting (savings, cost trajectory) is provided as read-only query methods separated from the enforce/record write path.",
+  "version": 1,
+  "types": [
+    {
+      "name": "PeriodType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "inner_types": [],
+      "description": "Configurable budget period granularity. Multiple periods can be active simultaneously (e.g., daily AND monthly limits)."
+    },
+    {
+      "name": "Decimal",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Python stdlib decimal.Decimal. Used for all monetary values to avoid floating-point drift. Serialized as string in JSON."
+    },
+    {
+      "name": "DateTime",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Python stdlib datetime.datetime. Always timezone-aware (zoneinfo). Serialized as ISO 8601 string."
+    },
+    {
+      "name": "Path",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Python stdlib pathlib.Path. Filesystem path for state persistence."
+    },
+    {
+      "name": "PeriodLimit",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_type",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "The granularity of this limit (daily, weekly, or monthly).",
+          "validators": []
+        },
+        {
+          "name": "limit_amount",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Maximum spend allowed in this period. Must be positive.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "limit_amount must be a positive Decimal."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A spending limit for a single budget period type. Part of BudgetConfig."
+    },
+    {
+      "name": "PeriodLimitList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PeriodLimit",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of PeriodLimit entries. At least one must be configured."
+    },
+    {
+      "name": "BudgetConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_limits",
+          "type_ref": "PeriodLimitList",
+          "required": true,
+          "default": "",
+          "description": "One or more period limits to enforce simultaneously. E.g., both a daily and monthly limit.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "At least one period limit must be configured."
+            }
+          ]
+        },
+        {
+          "name": "timezone",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "IANA timezone string (e.g. 'America/New_York') for period boundary calculation. Must be valid for zoneinfo.ZoneInfo.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "zoneinfo.ZoneInfo(value) does not raise",
+              "error_message": "timezone must be a valid IANA timezone identifier."
+            }
+          ]
+        },
+        {
+          "name": "estimated_cost_per_input_token",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Default estimated cost per input token for reservation estimates and savings calculations. Must be non-negative.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value >= Decimal('0')",
+              "error_message": "estimated_cost_per_input_token must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "estimated_cost_per_output_token",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Default estimated cost per output token for reservation estimates and savings calculations. Must be non-negative.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value >= Decimal('0')",
+              "error_message": "estimated_cost_per_output_token must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "state_file_path",
+          "type_ref": "Path",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path for JSON budget state persistence. Parent directory must exist.",
+          "validators": []
+        },
+        {
+          "name": "max_historical_periods",
+          "type_ref": "int",
+          "required": false,
+          "default": "90",
+          "description": "Maximum number of archived period summaries to retain in state. Bounded to prevent unbounded growth.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1,max=3650",
+              "error_message": "max_historical_periods must be between 1 and 3650."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic model parsed from YAML config. Defines all budget policy parameters. Validated strictly at startup — fails fast on invalid config."
+    },
+    {
+      "name": "PeriodSpend",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_type",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "Which period this tracks.",
+          "validators": []
+        },
+        {
+          "name": "period_start",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "Timezone-aware start timestamp of the current period.",
+          "validators": []
+        },
+        {
+          "name": "confirmed_spend",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "Decimal('0')",
+          "description": "Total confirmed (reconciled) spend in this period. Always non-negative.",
+          "validators": []
+        },
+        {
+          "name": "reserved_spend",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "Decimal('0')",
+          "description": "Total currently reserved (authorize() called but not yet reconciled via record_spend/release_reservation). Non-negative. Counted toward limit for crash safety.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Number of confirmed remote API requests in this period.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Tracks spend and reservations for a single active period type within the current state."
+    },
+    {
+      "name": "PeriodSpendList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PeriodSpend",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of PeriodSpend entries, one per active period type."
+    },
+    {
+      "name": "SavingsTracker",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "total_local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Total number of requests served locally across all time.",
+          "validators": []
+        },
+        {
+          "name": "total_estimated_savings",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "Decimal('0')",
+          "description": "Cumulative estimated savings (local requests × estimated remote cost). Non-negative.",
+          "validators": []
+        },
+        {
+          "name": "current_period_local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Local requests in the current primary period (for trajectory reporting).",
+          "validators": []
+        },
+        {
+          "name": "current_period_estimated_savings",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "Decimal('0')",
+          "description": "Estimated savings in the current primary period.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Tracks estimated savings from requests served locally instead of remotely."
+    },
+    {
+      "name": "PeriodSummary",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_type",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "The period type of this summary.",
+          "validators": []
+        },
+        {
+          "name": "period_start",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "Start of the archived period.",
+          "validators": []
+        },
+        {
+          "name": "period_end",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "End of the archived period (equals the start of the next period).",
+          "validators": []
+        },
+        {
+          "name": "total_spend",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Confirmed spend during this period.",
+          "validators": []
+        },
+        {
+          "name": "limit_amount",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "The limit that was in effect during this period.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of remote API requests during this period.",
+          "validators": []
+        },
+        {
+          "name": "local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of requests served locally during this period.",
+          "validators": []
+        },
+        {
+          "name": "estimated_savings",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Estimated savings from local requests during this period.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Archived summary of a completed budget period. Immutable once created."
+    },
+    {
+      "name": "PeriodSummaryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PeriodSummary",
+      "variants": [],
+      "inner_types": [],
+      "description": "Bounded list of archived period summaries. Oldest entries evicted when max_historical_periods exceeded."
+    },
+    {
+      "name": "BudgetState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "schema_version",
+          "type_ref": "int",
+          "required": true,
+          "default": "1",
+          "description": "Schema version for forward-compatible migration. Current version: 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1,max=1",
+              "error_message": "Unsupported schema version. Only version 1 is supported."
+            }
+          ]
+        },
+        {
+          "name": "active_periods",
+          "type_ref": "PeriodSpendList",
+          "required": true,
+          "default": "",
+          "description": "Currently active period spend trackers, one per configured period type.",
+          "validators": []
+        },
+        {
+          "name": "savings",
+          "type_ref": "SavingsTracker",
+          "required": true,
+          "default": "",
+          "description": "Cumulative and current-period savings tracking.",
+          "validators": []
+        },
+        {
+          "name": "historical_periods",
+          "type_ref": "PeriodSummaryList",
+          "required": true,
+          "default": "",
+          "description": "Archived summaries of completed periods, bounded by config.max_historical_periods.",
+          "validators": []
+        },
+        {
+          "name": "last_persisted_at",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of last successful atomic write to disk.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Mutable Pydantic model persisted to JSON via atomic writes. Represents the complete budget tracking state. In-memory copy is authoritative; disk is for crash recovery. Schema version enables forward migration."
+    },
+    {
+      "name": "DenialReason",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "daily_limit_exceeded",
+        "weekly_limit_exceeded",
+        "monthly_limit_exceeded"
+      ],
+      "inner_types": [],
+      "description": "Machine-readable reasons why a budget authorization was denied."
+    },
+    {
+      "name": "OptionalDenialReason",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "DenialReason"
+      ],
+      "description": "Optional DenialReason — None when authorization is allowed."
+    },
+    {
+      "name": "BudgetAuthorizationResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "allowed",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the requested spend is authorized. True if estimated_cost fits within ALL active period limits.",
+          "validators": []
+        },
+        {
+          "name": "remaining",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget of the tightest (most constrained) active period after this authorization. Zero or negative if denied.",
+          "validators": []
+        },
+        {
+          "name": "limiting_period",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "The period type that is most constrained (tightest remaining). If denied, this is the period that caused denial.",
+          "validators": []
+        },
+        {
+          "name": "denial_reason",
+          "type_ref": "OptionalDenialReason",
+          "required": true,
+          "default": "",
+          "description": "Machine-readable denial reason. None if allowed is True.",
+          "validators": []
+        },
+        {
+          "name": "estimated_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "The estimated cost that was evaluated (echo back for caller traceability).",
+          "validators": []
+        },
+        {
+          "name": "period_utilization_pct",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Utilization percentage (0-100) of the tightest period after this authorization. Can exceed 100 if denied.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen (immutable) Pydantic model returned from authorize(). Carries rich context for the caller — NOT a simple bool. When allowed, remaining reflects the tightest remaining budget. When denied, denial_reason and limiting_period identify the exhausted period."
+    },
+    {
+      "name": "SpendMetadata",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the remote API request.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "request_id must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name/identifier of the remote model used (e.g. 'claude-sonnet-4-20250514').",
+          "validators": []
+        },
+        {
+          "name": "input_tokens",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of input tokens consumed.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0",
+              "error_message": "input_tokens must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "output_tokens",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of output tokens generated.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0",
+              "error_message": "output_tokens must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": false,
+          "default": "inference",
+          "description": "Category of the task for cost attribution (e.g. 'inference', 'evaluation').",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "When the API request completed. Used for period attribution.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Metadata accompanying a spend record. Enables auditing and cost attribution."
+    },
+    {
+      "name": "CostTrajectoryPoint",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_type",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "The period granularity of this trajectory point.",
+          "validators": []
+        },
+        {
+          "name": "period_start",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "Start of the period.",
+          "validators": []
+        },
+        {
+          "name": "total_spend",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Total confirmed spend in this period.",
+          "validators": []
+        },
+        {
+          "name": "estimated_savings",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Estimated savings from local requests in this period.",
+          "validators": []
+        },
+        {
+          "name": "remote_request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of remote requests in this period.",
+          "validators": []
+        },
+        {
+          "name": "local_request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of local requests in this period.",
+          "validators": []
+        },
+        {
+          "name": "local_ratio",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Ratio of local to total requests (0.0 to 1.0). Indicates convergence toward local-only serving.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single data point in the cost trajectory, representing a completed period's spending pattern."
+    },
+    {
+      "name": "CostTrajectoryPointList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "CostTrajectoryPoint",
+      "variants": [],
+      "inner_types": [],
+      "description": "Ordered list of cost trajectory points, oldest first."
+    },
+    {
+      "name": "BudgetReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "generated_at",
+          "type_ref": "DateTime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this report was generated.",
+          "validators": []
+        },
+        {
+          "name": "active_periods",
+          "type_ref": "PeriodSpendList",
+          "required": true,
+          "default": "",
+          "description": "Snapshot of current active period spend trackers.",
+          "validators": []
+        },
+        {
+          "name": "total_all_time_spend",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Cumulative confirmed spend across all historical and current periods.",
+          "validators": []
+        },
+        {
+          "name": "total_all_time_savings",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Cumulative estimated savings from local serving.",
+          "validators": []
+        },
+        {
+          "name": "total_local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of requests served locally across all time.",
+          "validators": []
+        },
+        {
+          "name": "total_remote_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of confirmed remote API requests across all time.",
+          "validators": []
+        },
+        {
+          "name": "cost_trajectory",
+          "type_ref": "CostTrajectoryPointList",
+          "required": true,
+          "default": "",
+          "description": "Historical cost trajectory showing convergence toward lower spend. Ordered oldest-first.",
+          "validators": []
+        },
+        {
+          "name": "current_period_remaining",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget for the tightest current period.",
+          "validators": []
+        },
+        {
+          "name": "tightest_period",
+          "type_ref": "PeriodType",
+          "required": true,
+          "default": "",
+          "description": "The period type that is currently most constrained.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Comprehensive read-only budget report. Contains current status, savings summary, and cost trajectory for convergence analysis."
+    },
+    {
+      "name": "BudgetError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "context",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional structured context for logging and debugging.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base error type for all budget-related errors. Extends ApprenticeError (project-wide base). Contains a human-readable message and optional structured context."
+    },
+    {
+      "name": "BudgetExhaustedError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "authorization_result",
+          "type_ref": "BudgetAuthorizationResult",
+          "required": true,
+          "default": "",
+          "description": "The authorization result that triggered this error.",
+          "validators": []
+        },
+        {
+          "name": "context",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional structured context.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised by the ORCHESTRATOR (not by Budget Manager) when budget is denied and no local fallback is available (Phase 1). Budget Manager returns BudgetAuthorizationResult; orchestrator interprets it. Extends BudgetError."
+    },
+    {
+      "name": "BudgetStateCorruptedError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "state_file_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the corrupted state file.",
+          "validators": []
+        },
+        {
+          "name": "validation_errors",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Serialized Pydantic validation errors for diagnostics.",
+          "validators": []
+        },
+        {
+          "name": "context",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional structured context.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when persisted JSON state file fails Pydantic validation on load. Budget Manager should log the corruption and offer to reset to fresh state."
+    }
+  ],
+  "functions": [
+    {
+      "name": "__init__",
+      "description": "Constructs a BudgetManager instance. Loads existing state from disk if state file exists, otherwise initializes fresh state. Validates config strictly — fails fast on invalid config. If state file exists but fails validation, raises BudgetStateCorruptedError. Uses dependency injection: receives config and path, does not construct them internally.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "BudgetConfig",
+          "required": true,
+          "default": "",
+          "description": "Immutable budget configuration parsed from YAML. Validated by Pydantic on construction.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "corrupted_state_file",
+          "condition": "State file exists but fails Pydantic validation on load",
+          "error_type": "BudgetStateCorruptedError",
+          "error_data": {
+            "state_file_path": "Path to the corrupted file",
+            "validation_errors": "Serialized validation error details"
+          }
+        },
+        {
+          "name": "state_file_unreadable",
+          "condition": "State file exists but cannot be read (permissions, I/O error)",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Unable to read budget state file"
+          }
+        },
+        {
+          "name": "state_dir_not_writable",
+          "condition": "Parent directory of state_file_path does not exist or is not writable",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "State file directory does not exist or is not writable"
+          }
+        }
+      ],
+      "preconditions": [
+        "config has been validated by Pydantic (all validators passed)",
+        "config.state_file_path parent directory exists and is writable",
+        "config.timezone is a valid IANA timezone identifier"
+      ],
+      "postconditions": [
+        "BudgetManager instance is fully initialized and ready for authorize() calls",
+        "In-memory BudgetState is consistent: either loaded from valid state file or freshly initialized",
+        "If state file existed and was loaded, active_periods match config.period_limits types",
+        "If state file did not exist, fresh state is persisted to disk atomically"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Reads state file from disk if it exists",
+        "Writes fresh state file to disk if no existing state"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.state_file_path",
+          "description": "Reads existing JSON budget state if file exists."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Writes fresh JSON budget state via atomic write if no existing state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Logs initialization, state load/creation, and any migration actions as structured JSON."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "authorize",
+      "description": "Checks whether a remote API request with the given estimated cost is allowed under ALL active period budgets. If allowed, reserves the estimated_cost in all active periods (write-ahead pattern) and persists state. If denied, returns rich denial context. The caller (orchestrator) decides behavior based on allowed/denied and current phase. On every call, checks for period boundary crossover and performs rollover if needed (archives completed period, resets running totals). This is the primary enforcement point — called before every remote API request.",
+      "inputs": [
+        {
+          "name": "estimated_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost of the pending remote API request. Must be positive. The reservation amount if authorized.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "estimated_cost must be a positive Decimal."
+            }
+          ]
+        }
+      ],
+      "output_type": "BudgetAuthorizationResult",
+      "error_cases": [
+        {
+          "name": "invalid_estimated_cost",
+          "condition": "estimated_cost is zero, negative, or not a valid Decimal",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "estimated_cost must be a positive Decimal"
+          }
+        },
+        {
+          "name": "persistence_failure_on_reservation",
+          "condition": "Authorization is allowed but atomic write to state file fails. In-memory state is authoritative; reservation stands. CRITICAL log emitted.",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to persist budget state after reservation. In-memory state is authoritative."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager is fully initialized (__init__ completed successfully)",
+        "estimated_cost is a positive Decimal"
+      ],
+      "postconditions": [
+        "If result.allowed is True: estimated_cost has been added to reserved_spend in ALL active periods",
+        "If result.allowed is True: state has been persisted to disk atomically (write-ahead guarantee)",
+        "If result.allowed is False: no reservation was made, state is unchanged",
+        "Period boundary rollover has been checked and applied if needed before authorization evaluation",
+        "result.remaining reflects the tightest period's remaining budget AFTER reservation (if allowed) or current remaining (if denied)",
+        "result.denial_reason is None if and only if result.allowed is True",
+        "result.estimated_cost equals the input estimated_cost"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates in-memory BudgetState (reserved_spend incremented if allowed)",
+        "Persists state to disk via atomic write if allowed",
+        "Logs authorization decision as structured JSON"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods[*].reserved_spend",
+          "description": "Increments reserved_spend in all active periods by estimated_cost if authorized."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods",
+          "description": "May archive and reset periods if boundary crossed."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write (write temp, rename) of updated state after successful reservation."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: authorization decision, estimated_cost, remaining, period details, denial reason if denied."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "record_spend",
+      "description": "Records the actual spend for a completed remote API request. Reconciles the reservation made by authorize(): removes the estimated reservation and adds the actual confirmed spend. Called by Remote API Client after each successful API call. Persists state atomically after recording. If actual cost differs from estimated, the difference adjusts the period totals accordingly.",
+      "inputs": [
+        {
+          "name": "actual_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Actual cost reported by the remote API after request completion. Must be non-negative.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value >= Decimal('0')",
+              "error_message": "actual_cost must be a non-negative Decimal."
+            }
+          ]
+        },
+        {
+          "name": "estimated_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "The estimated cost that was originally reserved by authorize(). Used to release the reservation. Must match the value passed to authorize().",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "estimated_cost must be a positive Decimal."
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "SpendMetadata",
+          "required": true,
+          "default": "",
+          "description": "Metadata for auditing: request_id, model, tokens, task type, timestamp.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "no_matching_reservation",
+          "condition": "reserved_spend is less than estimated_cost (reservation was not found or already released). Spend is still recorded to avoid data loss.",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "No matching reservation found for estimated_cost. Spend recorded but reservation reconciliation was partial."
+          }
+        },
+        {
+          "name": "persistence_failure",
+          "condition": "Atomic write to state file fails after recording. In-memory state is authoritative. CRITICAL log emitted.",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to persist budget state after recording spend. In-memory state is authoritative."
+          }
+        }
+      ],
+      "preconditions": [
+        "authorize() was previously called with the same estimated_cost and returned allowed=True",
+        "actual_cost is a non-negative Decimal",
+        "estimated_cost matches the value previously passed to authorize()",
+        "metadata.request_id is non-empty and unique"
+      ],
+      "postconditions": [
+        "reserved_spend in all active periods decreased by estimated_cost (clamped to zero floor)",
+        "confirmed_spend in all active periods increased by actual_cost",
+        "request_count in all active periods incremented by 1",
+        "State has been persisted to disk atomically",
+        "Net effect on effective_spend (confirmed + reserved) is: actual_cost - estimated_cost (may be positive or negative)"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates in-memory BudgetState",
+        "Persists to disk",
+        "Structured logging of spend record"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods[*].confirmed_spend",
+          "description": "Increments confirmed_spend by actual_cost in all active periods."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods[*].reserved_spend",
+          "description": "Decrements reserved_spend by estimated_cost in all active periods (clamped to zero)."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods[*].request_count",
+          "description": "Increments request_count by 1 in all active periods."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write of updated state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: actual_cost, estimated_cost, delta, metadata, updated totals."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "release_reservation",
+      "description": "Releases a reservation made by authorize() without recording any spend. Called when a remote API request fails before incurring cost (e.g., network error before request reaches the API). Ensures reserved_spend does not accumulate for failed-before-send requests.",
+      "inputs": [
+        {
+          "name": "estimated_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "The estimated cost that was reserved by authorize(). Must be positive and match the original reservation.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "estimated_cost must be a positive Decimal."
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "no_matching_reservation",
+          "condition": "reserved_spend is less than estimated_cost. Release applied as far as possible (clamped to zero).",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "No matching reservation found for estimated_cost. Partial release applied."
+          }
+        },
+        {
+          "name": "persistence_failure",
+          "condition": "Atomic write fails after release. In-memory state is authoritative.",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to persist budget state after releasing reservation."
+          }
+        }
+      ],
+      "preconditions": [
+        "authorize() was previously called with this estimated_cost and returned allowed=True",
+        "Neither record_spend() nor release_reservation() has been called for this reservation yet"
+      ],
+      "postconditions": [
+        "reserved_spend in all active periods decreased by estimated_cost (clamped to zero floor)",
+        "confirmed_spend is unchanged",
+        "State has been persisted to disk atomically"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates in-memory BudgetState",
+        "Persists to disk",
+        "Structured logging"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods[*].reserved_spend",
+          "description": "Decrements reserved_spend by estimated_cost in all active periods (clamped to zero)."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write of updated state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: reservation release, estimated_cost, updated reserved totals."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "record_local_request",
+      "description": "Records that a request was served locally instead of via remote API. Tracks the estimated remote cost that was saved. Used for savings calculations and cost trajectory convergence reporting. Does not affect budget limits or reservations.",
+      "inputs": [
+        {
+          "name": "estimated_remote_cost",
+          "type_ref": "Decimal",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost that would have been incurred had this request been sent to the remote API. Must be non-negative.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value >= Decimal('0')",
+              "error_message": "estimated_remote_cost must be a non-negative Decimal."
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "persistence_failure",
+          "condition": "Atomic write fails. In-memory state is authoritative. WARNING log emitted (not CRITICAL since savings tracking is non-critical).",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to persist budget state after recording local request."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager is fully initialized"
+      ],
+      "postconditions": [
+        "savings.total_local_requests incremented by 1",
+        "savings.total_estimated_savings incremented by estimated_remote_cost",
+        "savings.current_period_local_requests incremented by 1",
+        "savings.current_period_estimated_savings incremented by estimated_remote_cost",
+        "No budget limits or reservations are affected",
+        "State has been persisted to disk atomically"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates SavingsTracker in BudgetState",
+        "Persists to disk",
+        "Structured logging"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.savings",
+          "description": "Increments local request counts and estimated savings totals."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write of updated state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: local request recorded, estimated_remote_cost, updated savings totals."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "remaining_budget",
+      "description": "Returns the remaining budget for the tightest (most constrained) active period. This is a read-only query — no state mutation. Accounts for both confirmed_spend and reserved_spend against the period limit. Checks for period boundary rollover before calculating.",
+      "inputs": [],
+      "output_type": "Decimal",
+      "error_cases": [],
+      "preconditions": [
+        "BudgetManager is fully initialized"
+      ],
+      "postconditions": [
+        "Return value equals min(limit - confirmed_spend - reserved_spend) across all active periods",
+        "Return value may be negative if reservations have been partially consumed but overshoot occurred",
+        "Period boundary rollover has been checked and applied if needed (state may be mutated as side effect)"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "May trigger period boundary rollover which mutates state and persists"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods",
+          "description": "May archive and reset periods if boundary has been crossed since last check."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write if period rollover occurred."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_report",
+      "description": "Generates a comprehensive read-only budget report including current period status, cumulative savings, and cost trajectory for convergence analysis. Computes derived metrics from current state and historical period summaries. Does not mutate state (except potential period boundary rollover check).",
+      "inputs": [],
+      "output_type": "BudgetReport",
+      "error_cases": [],
+      "preconditions": [
+        "BudgetManager is fully initialized"
+      ],
+      "postconditions": [
+        "Returned BudgetReport is a frozen snapshot — caller modifications do not affect internal state",
+        "cost_trajectory is ordered oldest-first",
+        "total_all_time_spend includes both historical and current period confirmed spend",
+        "total_all_time_savings includes both historical and current period estimated savings",
+        "current_period_remaining equals remaining_budget()"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "May trigger period boundary rollover"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.active_periods",
+          "description": "May archive and reset periods if boundary has been crossed since last check."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write if period rollover occurred."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "force_persist",
+      "description": "Forces an immediate atomic write of the current in-memory state to disk. Useful for graceful shutdown scenarios. Normally state is persisted after every mutation, but this method ensures the latest state is written even if no mutation has occurred since last persist.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "persistence_failure",
+          "condition": "Atomic write to state file fails (disk full, permissions, I/O error).",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to force-persist budget state to disk."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager is fully initialized"
+      ],
+      "postconditions": [
+        "State file on disk matches in-memory BudgetState exactly",
+        "last_persisted_at is updated to current time"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Writes state to disk"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write (write temp file, fsync, rename) of complete state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: force persist completed, timestamp."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "reset_state",
+      "description": "Resets the budget state to fresh initial values. Archives the current period(s) before resetting. Used for recovery from corrupted state or manual administrative reset. Persists the fresh state atomically.",
+      "inputs": [
+        {
+          "name": "archive_current",
+          "type_ref": "bool",
+          "required": false,
+          "default": "True",
+          "description": "If True, archives current period data to historical_periods before resetting. If False, discards current period data entirely.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "persistence_failure",
+          "condition": "Atomic write fails after reset. In-memory state is already reset. CRITICAL log emitted.",
+          "error_type": "BudgetError",
+          "error_data": {
+            "message": "Failed to persist budget state after reset. In-memory state has been reset but disk state is stale."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager is fully initialized"
+      ],
+      "postconditions": [
+        "All active_periods have confirmed_spend=0, reserved_spend=0, request_count=0 with fresh period_start",
+        "savings tracker current-period counters are reset to zero",
+        "If archive_current was True: previous period data is in historical_periods",
+        "Fresh state has been persisted to disk atomically",
+        "Cumulative savings totals (total_local_requests, total_estimated_savings) are preserved regardless of archive_current"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Resets in-memory state",
+        "Persists to disk",
+        "Structured logging"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState",
+          "description": "Full reset of active periods and current-period savings counters."
+        },
+        {
+          "kind": "writes_file",
+          "target": "config.state_file_path",
+          "description": "Atomic write of fresh state."
+        },
+        {
+          "kind": "logging",
+          "target": "budget_manager",
+          "description": "Structured JSON log: state reset, archive_current flag, previous period summary if archived."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All monetary values (spend, limits, savings, costs) are represented as Decimal — never float.",
+    "confirmed_spend + reserved_spend <= limit is enforced by authorize() for all active periods when authorization is granted. The effective spend (confirmed + reserved) never exceeds the limit at the moment of authorization.",
+    "reserved_spend is always non-negative (clamped to zero floor on release/reconciliation).",
+    "confirmed_spend is always non-negative and monotonically increasing within a period.",
+    "In-memory BudgetState is always authoritative over the disk-persisted state. Disk is for crash recovery only.",
+    "State file writes are atomic: write to temp file, fsync, rename. No partial writes are possible.",
+    "Period boundary rollover is checked on every authorize() and remaining_budget() call. Stale periods are always archived before evaluation.",
+    "historical_periods list length never exceeds config.max_historical_periods. Oldest entries are evicted first.",
+    "The budget manager is phase-agnostic: it returns BudgetAuthorizationResult and never raises BudgetExhaustedError. Phase-specific behavior is the orchestrator's responsibility.",
+    "Single-threaded execution model: authorize-then-spend is atomic with no race conditions. No concurrent calls to authorize() or record_spend() are supported.",
+    "Every state mutation (authorize, record_spend, release_reservation, record_local_request, reset_state) triggers an atomic persist. Persistence failure does not roll back the in-memory mutation.",
+    "All timestamps are timezone-aware using zoneinfo.ZoneInfo(config.timezone). No naive datetimes.",
+    "No global state: all state flows through the BudgetManager instance and its injected BudgetConfig."
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0",
+    "pyyaml"
+  ]
+}

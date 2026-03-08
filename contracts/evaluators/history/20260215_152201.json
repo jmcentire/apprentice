@@ -1,0 +1,815 @@
+{
+  "component_id": "evaluators",
+  "name": "Response Evaluators",
+  "description": "Pluggable evaluator implementations behind an Evaluator protocol (@runtime_checkable typing.Protocol). Each evaluator takes a local TaskResponse and a remote TaskResponse (ground truth) plus task-specific evaluator config, and returns a frozen EvaluationResult (score 0.0–1.0, per-field breakdown, evaluator type used, optional error, metadata, timestamp). Built-in implementations: StructuredMatchEvaluator (per-field exact match rate averaged across configured match_fields), ExactMatchEvaluator (full output equality yielding 0.0 or 1.0), SemanticSimilarityEvaluator (cosine similarity of embeddings with lazy-loaded sentence-transformers model and injectable embed_fn). Custom evaluator support via Pydantic ImportString resolved at config parse time, wrapped in FunctionEvaluatorAdapter. All evaluators are stateless, independently testable, and clamp scores to [0.0, 1.0]. Runtime errors never raise — they produce EvaluationResult with score=0.0 and error annotation. Config errors fail fast via Pydantic validation at startup.",
+  "version": 1,
+  "types": [
+    {
+      "name": "EvaluatorType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "structured_match",
+        "exact_match",
+        "semantic_similarity",
+        "custom"
+      ],
+      "inner_types": [],
+      "description": "Enumeration of supported evaluator type identifiers. Used in TaskEvaluatorConfig and logged in EvaluationResult for audit filtering."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the task this response belongs to.",
+          "validators": []
+        },
+        {
+          "name": "output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The full textual output of the model for this task.",
+          "validators": []
+        },
+        {
+          "name": "fields",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Structured key-value fields extracted from the output. Keys are field names (str), values are the field values (any JSON-serializable type). Used by StructuredMatchEvaluator for per-field comparison.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "\"\"",
+          "description": "Identifier of the model that produced this response. Empty string if unknown.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 datetime string of when this response was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A task response (either local model output or remote ground truth) to be evaluated. Carries the full output string and an optional structured fields dict for per-field comparison. This is a Pydantic BaseModel."
+    },
+    {
+      "name": "TaskEvaluatorConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "evaluator_type",
+          "type_ref": "EvaluatorType",
+          "required": true,
+          "default": "",
+          "description": "Which evaluator implementation to use for this task.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "List of field names to compare for StructuredMatchEvaluator. Must be non-empty when evaluator_type is 'structured_match'. Validated at config parse time.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "len(match_fields) > 0 if evaluator_type == 'structured_match' else True",
+              "error_message": "match_fields must be non-empty when evaluator_type is 'structured_match'"
+            }
+          ]
+        },
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": false,
+          "default": "\"all-MiniLM-L6-v2\"",
+          "description": "Name of the sentence-transformers model to use for SemanticSimilarityEvaluator. Only relevant when evaluator_type is 'semantic_similarity'.",
+          "validators": []
+        },
+        {
+          "name": "custom_evaluator",
+          "type_ref": "str",
+          "required": false,
+          "default": "null",
+          "description": "Python dotted import path (Pydantic ImportString) to a custom evaluator callable. Required and validated non-null when evaluator_type is 'custom'. Resolved and validated at config parse time — import failure fails fast.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "custom_evaluator is not None if evaluator_type == 'custom' else True",
+              "error_message": "custom_evaluator must be provided when evaluator_type is 'custom'"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Per-task evaluator configuration. Frozen Pydantic model validated at config parse time. Determines which evaluator to use and provides evaluator-specific parameters. Config errors fail fast via Pydantic validation — never silently defaults."
+    },
+    {
+      "name": "FieldEvaluation",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "field_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The name of the field that was evaluated.",
+          "validators": []
+        },
+        {
+          "name": "matched",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the local value exactly matched the remote (ground truth) value for this field.",
+          "validators": []
+        },
+        {
+          "name": "local_value",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The value of this field in the local TaskResponse. May be None if the field was missing.",
+          "validators": []
+        },
+        {
+          "name": "remote_value",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The value of this field in the remote (ground truth) TaskResponse. May be None if the field was missing.",
+          "validators": []
+        },
+        {
+          "name": "similarity",
+          "type_ref": "float",
+          "required": false,
+          "default": "null",
+          "description": "Optional similarity score for this field. Set to 1.0 if matched, 0.0 if not matched for exact-match fields. May carry cosine similarity if a hybrid evaluator is used. Null when not computed.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Per-field evaluation result for StructuredMatchEvaluator. Frozen Pydantic model capturing match status and both local/remote values for auditability. Serializable via .model_dump(mode='json')."
+    },
+    {
+      "name": "EvaluationResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Overall evaluation score, clamped to [0.0, 1.0]. 1.0 = perfect match, 0.0 = no match or error.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= score <= 1.0",
+              "error_message": "score must be between 0.0 and 1.0 inclusive"
+            }
+          ]
+        },
+        {
+          "name": "evaluator_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "String identifier of the evaluator that produced this result (e.g. 'structured_match', 'exact_match', 'semantic_similarity', 'custom'). Used for log filtering and audit.",
+          "validators": []
+        },
+        {
+          "name": "field_breakdown",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Per-field evaluation breakdown. Keys are field names (str), values are FieldEvaluation instances. Empty dict for evaluators that do not operate on individual fields (ExactMatch, SemanticSimilarity).",
+          "validators": []
+        },
+        {
+          "name": "error",
+          "type_ref": "str",
+          "required": false,
+          "default": "null",
+          "description": "Error message if the evaluation encountered a runtime error (field access failure, embedding model load failure, etc.). Null when evaluation succeeded normally. When set, score is typically 0.0.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Evaluator-specific metadata. For SemanticSimilarityEvaluator: {'model_name': str, 'raw_cosine_similarity': float}. For custom evaluators: whatever the custom function returns. Keys are strings, values are any JSON-serializable type.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 datetime string of when this evaluation was performed.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing the outcome of a single evaluation. Immutable after creation. Score is always clamped to [0.0, 1.0]. Serializable via .model_dump(mode='json') for structured logging and JSON state persistence. evaluator_type enables log filtering and audit trail."
+    },
+    {
+      "name": "EmbedFunction",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Type alias for a callable that takes a list of strings and returns a list of embedding vectors (list of list of floats). Signature: Callable[[list[str]], list[list[float]]]. Used for dependency injection in SemanticSimilarityEvaluator to avoid hard coupling to sentence-transformers."
+    },
+    {
+      "name": "EvaluatorProtocol",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "evaluate",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Protocol method signature: evaluate(self, local: TaskResponse, remote: TaskResponse, task_config: TaskEvaluatorConfig) -> EvaluationResult. Structural typing — implementors need only match this signature.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "typing.Protocol (runtime_checkable) defining the Evaluator interface. Any class with an 'evaluate' method matching the signature satisfies this protocol via structural typing — no inheritance required. Built-in implementations and FunctionEvaluatorAdapter all satisfy this protocol."
+    }
+  ],
+  "functions": [
+    {
+      "name": "StructuredMatchEvaluator.evaluate",
+      "description": "Evaluates local vs remote TaskResponse by comparing each field listed in task_config.match_fields using exact equality. Returns the average match rate across all configured fields as the score. Produces a per-field breakdown in field_breakdown. Missing fields in either response are treated as non-matching (matched=False). Score is clamped to [0.0, 1.0]. Stateless — no side effects beyond result construction.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response to evaluate.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) response to compare against.",
+          "validators": []
+        },
+        {
+          "name": "task_config",
+          "type_ref": "TaskEvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "Task-specific evaluator config. match_fields must be non-empty.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "field_access_error",
+          "condition": "A field listed in match_fields is not present in local.fields or remote.fields, or field access raises an unexpected exception",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0, error message describing which field(s) were inaccessible. Does NOT raise an exception."
+          }
+        },
+        {
+          "name": "empty_match_fields",
+          "condition": "task_config.match_fields is empty (should be caught at config parse time)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "behavior": "Pydantic validation error raised at config construction time, not at evaluate() call time. Fail-fast behavior."
+          }
+        }
+      ],
+      "preconditions": [
+        "task_config.evaluator_type == 'structured_match'",
+        "task_config.match_fields is non-empty (enforced by config validation)",
+        "local and remote have the same task_id"
+      ],
+      "postconditions": [
+        "result.score >= 0.0 and result.score <= 1.0",
+        "result.evaluator_type == 'structured_match'",
+        "result.field_breakdown contains exactly one entry per field in task_config.match_fields",
+        "result.score == average of (1.0 if matched else 0.0) across all fields in field_breakdown",
+        "result.error is None on success, non-None string on runtime field access errors",
+        "result.timestamp is a valid ISO-8601 datetime string"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Stateless pure function. No I/O, no mutation, no logging."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "ExactMatchEvaluator.evaluate",
+      "description": "Evaluates local vs remote TaskResponse by comparing the full output strings for exact equality. Returns score 1.0 if local.output == remote.output, else 0.0. No per-field breakdown (field_breakdown is empty dict). Stateless — no side effects.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response to evaluate.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) response to compare against.",
+          "validators": []
+        },
+        {
+          "name": "task_config",
+          "type_ref": "TaskEvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "Task-specific evaluator config. match_fields and model_name are ignored for this evaluator.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "output_access_error",
+          "condition": "Unexpected error accessing local.output or remote.output (should not occur with valid TaskResponse, but guarded defensively)",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0 and error message. Does NOT raise."
+          }
+        }
+      ],
+      "preconditions": [
+        "task_config.evaluator_type == 'exact_match'",
+        "local and remote have the same task_id"
+      ],
+      "postconditions": [
+        "result.score == 1.0 if local.output == remote.output else result.score == 0.0",
+        "result.evaluator_type == 'exact_match'",
+        "result.field_breakdown == {}",
+        "result.error is None",
+        "result.timestamp is a valid ISO-8601 datetime string"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Stateless pure function. No I/O, no mutation."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "SemanticSimilarityEvaluator.__init__",
+      "description": "Constructs a SemanticSimilarityEvaluator. Accepts an optional embed_fn for dependency injection. If embed_fn is None, the evaluator will lazy-load a sentence-transformers model on first call to evaluate(). The model is NOT loaded at construction time — only when first needed. The instance is stateless aside from the cached embedding function/model reference.",
+      "inputs": [
+        {
+          "name": "embed_fn",
+          "type_ref": "any",
+          "required": false,
+          "default": "null",
+          "description": "Optional callable with signature (list[str]) -> list[list[float]]. If provided, used instead of loading sentence-transformers. Enables testing without ML dependencies and dependency injection per operating procedures.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [],
+      "preconditions": [
+        "If embed_fn is provided, it must be callable and accept a list of strings returning a list of float vectors of equal length"
+      ],
+      "postconditions": [
+        "Instance is created with embed_fn stored (or None for lazy loading)",
+        "No model is loaded at construction time"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "No side effects at construction time. Model loading is deferred."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "SemanticSimilarityEvaluator.evaluate",
+      "description": "Evaluates local vs remote TaskResponse by computing cosine similarity of their output embeddings. Lazy-loads sentence-transformers model on first invocation if no embed_fn was injected. Cosine similarity is mapped via max(0.0, cosine_sim) — negative similarity maps to 0.0 (no match, not negative score). Score is clamped to [0.0, 1.0]. No per-field breakdown. Metadata includes model_name and raw_cosine_similarity.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response to evaluate.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) response to compare against.",
+          "validators": []
+        },
+        {
+          "name": "task_config",
+          "type_ref": "TaskEvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "Task-specific evaluator config. model_name determines which sentence-transformers model to load (default 'all-MiniLM-L6-v2').",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "embedding_model_load_failure",
+          "condition": "sentence-transformers is not installed or model specified by task_config.model_name cannot be loaded, and no embed_fn was injected",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0, error message describing the load failure, and metadata including attempted model_name. Does NOT raise."
+          }
+        },
+        {
+          "name": "embedding_computation_error",
+          "condition": "embed_fn raises an exception during embedding computation (e.g. OOM, invalid input)",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0 and error message. Does NOT raise."
+          }
+        },
+        {
+          "name": "empty_output",
+          "condition": "local.output or remote.output is an empty string",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0 and error message indicating empty output cannot be embedded. Does NOT raise."
+          }
+        }
+      ],
+      "preconditions": [
+        "task_config.evaluator_type == 'semantic_similarity'",
+        "local and remote have the same task_id",
+        "local.output and remote.output are non-empty strings"
+      ],
+      "postconditions": [
+        "result.score >= 0.0 and result.score <= 1.0",
+        "result.evaluator_type == 'semantic_similarity'",
+        "result.field_breakdown == {}",
+        "result.metadata contains 'model_name' key with string value",
+        "result.metadata contains 'raw_cosine_similarity' key with float value",
+        "result.score == max(0.0, min(1.0, raw_cosine_similarity))",
+        "result.timestamp is a valid ISO-8601 datetime string",
+        "If error occurred, result.error is non-None and result.score == 0.0"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "May lazy-load sentence-transformers model into memory on first call if no embed_fn was injected"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "self._embed_fn / self._model",
+          "description": "Caches the loaded embedding model/function internally on first call for subsequent reuse. This is the only stateful behavior."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "FunctionEvaluatorAdapter.__init__",
+      "description": "Wraps a plain callable (resolved from a Python dotted import path via Pydantic ImportString) into an object satisfying the Evaluator protocol. The wrapped function must accept (local: TaskResponse, remote: TaskResponse, task_config: TaskEvaluatorConfig) and return either an EvaluationResult or a float score.",
+      "inputs": [
+        {
+          "name": "fn",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The custom evaluator callable resolved from config. Must accept (TaskResponse, TaskResponse, TaskEvaluatorConfig) and return EvaluationResult or float.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "non_callable_argument",
+          "condition": "fn is not callable",
+          "error_type": "TypeError",
+          "error_data": {
+            "behavior": "Raises TypeError at construction time with clear message. Fail-fast behavior."
+          }
+        }
+      ],
+      "preconditions": [
+        "fn is callable",
+        "fn accepts three positional arguments: local (TaskResponse), remote (TaskResponse), task_config (TaskEvaluatorConfig)"
+      ],
+      "postconditions": [
+        "Instance is created wrapping the provided callable",
+        "Instance satisfies the Evaluator protocol (has evaluate method with correct signature)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure construction, no side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "FunctionEvaluatorAdapter.evaluate",
+      "description": "Delegates to the wrapped callable. If the callable returns a float, wraps it into an EvaluationResult with evaluator_type='custom', empty field_breakdown, and clamped score. If it returns an EvaluationResult, passes it through with score clamping applied. Any exception from the callable is caught and returned as an EvaluationResult with score=0.0 and error annotation.",
+      "inputs": [
+        {
+          "name": "local",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The local model's response to evaluate.",
+          "validators": []
+        },
+        {
+          "name": "remote",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The remote (ground truth) response to compare against.",
+          "validators": []
+        },
+        {
+          "name": "task_config",
+          "type_ref": "TaskEvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "Task-specific evaluator config with evaluator_type='custom'.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationResult",
+      "error_cases": [
+        {
+          "name": "custom_function_exception",
+          "condition": "The wrapped callable raises any exception during execution",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Catches the exception. Returns EvaluationResult with score=0.0, evaluator_type='custom', error message containing exception details. Does NOT re-raise."
+          }
+        },
+        {
+          "name": "invalid_return_type",
+          "condition": "The wrapped callable returns a value that is neither float, int, nor EvaluationResult",
+          "error_type": "EvaluationResult",
+          "error_data": {
+            "behavior": "Returns EvaluationResult with score=0.0 and error message indicating unexpected return type. Does NOT raise."
+          }
+        }
+      ],
+      "preconditions": [
+        "task_config.evaluator_type == 'custom'",
+        "local and remote have the same task_id"
+      ],
+      "postconditions": [
+        "result.score >= 0.0 and result.score <= 1.0 (clamped)",
+        "result.evaluator_type == 'custom'",
+        "result.timestamp is a valid ISO-8601 datetime string",
+        "If wrapped callable raised, result.error is non-None and result.score == 0.0"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Delegates to user-provided callable which may have arbitrary side effects"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "custom callable",
+          "description": "The wrapped custom callable may have arbitrary side effects. The adapter itself is stateless."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_evaluator",
+      "description": "Factory function that creates the appropriate evaluator instance from a TaskEvaluatorConfig. Routes based on evaluator_type: 'structured_match' -> StructuredMatchEvaluator(), 'exact_match' -> ExactMatchEvaluator(), 'semantic_similarity' -> SemanticSimilarityEvaluator(embed_fn), 'custom' -> FunctionEvaluatorAdapter(resolved_callable). For custom evaluators, the import path in task_config.custom_evaluator is resolved at config parse time via Pydantic ImportString, so by the time this factory is called the callable is already validated and importable.",
+      "inputs": [
+        {
+          "name": "task_config",
+          "type_ref": "TaskEvaluatorConfig",
+          "required": true,
+          "default": "",
+          "description": "The task evaluator configuration specifying which evaluator to create.",
+          "validators": []
+        },
+        {
+          "name": "embed_fn",
+          "type_ref": "any",
+          "required": false,
+          "default": "null",
+          "description": "Optional embedding function to inject into SemanticSimilarityEvaluator. If None, the evaluator will lazy-load sentence-transformers.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluatorProtocol",
+      "error_cases": [
+        {
+          "name": "unknown_evaluator_type",
+          "condition": "task_config.evaluator_type is not one of the known EvaluatorType variants (should not occur if config validation is correct)",
+          "error_type": "ValueError",
+          "error_data": {
+            "behavior": "Raises ValueError with message describing the unsupported evaluator type. Fail-fast."
+          }
+        },
+        {
+          "name": "custom_import_failure",
+          "condition": "task_config.custom_evaluator dotted path cannot be resolved to a callable (should be caught at config parse time, but guarded here too)",
+          "error_type": "ImportError",
+          "error_data": {
+            "behavior": "Raises ImportError with clear message. Fail-fast at evaluator creation time."
+          }
+        }
+      ],
+      "preconditions": [
+        "task_config is a valid TaskEvaluatorConfig (Pydantic validated)",
+        "If evaluator_type is 'custom', task_config.custom_evaluator is a non-None importable dotted path"
+      ],
+      "postconditions": [
+        "Returned object satisfies the Evaluator protocol (has evaluate method with correct signature)",
+        "Returned evaluator type matches task_config.evaluator_type"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure factory function. No I/O, no state mutation."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "clamp_score",
+      "description": "Utility function that clamps a raw score to the [0.0, 1.0] range. Used as a post-computation safety net by all evaluators. Applies min(1.0, max(0.0, score)). This is a pure function with no side effects.",
+      "inputs": [
+        {
+          "name": "score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Raw score to clamp.",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [
+        {
+          "name": "nan_score",
+          "condition": "score is NaN (float('nan'))",
+          "error_type": "ValueError",
+          "error_data": {
+            "behavior": "Raises ValueError indicating NaN is not a valid score. Fail-fast — NaN should never silently become 0.0."
+          }
+        }
+      ],
+      "preconditions": [
+        "score is a finite float (not NaN, not inf)"
+      ],
+      "postconditions": [
+        "result >= 0.0 and result <= 1.0",
+        "if score < 0.0 then result == 0.0",
+        "if score > 1.0 then result == 1.0",
+        "if 0.0 <= score <= 1.0 then result == score"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function. No side effects."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "cosine_similarity",
+      "description": "Computes cosine similarity between two embedding vectors. Returns a float in [-1.0, 1.0]. Used internally by SemanticSimilarityEvaluator. Pure function, no dependencies beyond stdlib math.",
+      "inputs": [
+        {
+          "name": "vec_a",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "First embedding vector as a list of floats.",
+          "validators": []
+        },
+        {
+          "name": "vec_b",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Second embedding vector as a list of floats.",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [
+        {
+          "name": "dimension_mismatch",
+          "condition": "len(vec_a) != len(vec_b)",
+          "error_type": "ValueError",
+          "error_data": {
+            "behavior": "Raises ValueError indicating vectors must have the same dimensionality."
+          }
+        },
+        {
+          "name": "empty_vectors",
+          "condition": "vec_a or vec_b is an empty list",
+          "error_type": "ValueError",
+          "error_data": {
+            "behavior": "Raises ValueError indicating embedding vectors must be non-empty."
+          }
+        }
+      ],
+      "preconditions": [
+        "vec_a and vec_b are non-empty lists of floats",
+        "vec_a and vec_b have the same length",
+        "At least one of vec_a, vec_b has non-zero magnitude"
+      ],
+      "postconditions": [
+        "result >= -1.0 and result <= 1.0",
+        "If both vectors are identical, result == 1.0",
+        "If either vector has zero magnitude, result == 0.0"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure mathematical function."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All evaluator implementations satisfy the Evaluator protocol via structural typing (runtime_checkable) — no inheritance required",
+    "All EvaluationResult.score values are in [0.0, 1.0] — enforced by clamp_score post-computation and Pydantic field validator",
+    "All evaluators are stateless with respect to evaluation logic — evaluate() calls with the same inputs always produce the same score (deterministic for StructuredMatch and ExactMatch; SemanticSimilarity is deterministic given the same model and embed_fn)",
+    "Runtime errors in evaluate() never raise exceptions — they return EvaluationResult with score=0.0 and error annotation",
+    "Config validation errors (invalid evaluator_type, empty match_fields for structured_match, missing custom_evaluator for custom) fail fast at config parse time via Pydantic validation, never at runtime",
+    "Custom evaluator import paths are resolved and validated at config parse time (Pydantic ImportString) — import failures are startup errors, not runtime errors",
+    "SemanticSimilarityEvaluator lazy-loads the sentence-transformers model only on first evaluate() call, not at construction time",
+    "Negative cosine similarity values are mapped to 0.0 — the score domain is [0.0, 1.0], not [-1.0, 1.0]",
+    "All EvaluationResult instances are frozen Pydantic models — immutable after creation",
+    "All EvaluationResult instances are JSON-serializable via .model_dump(mode='json') for structured logging and state persistence",
+    "No global state — all configuration flows through TaskEvaluatorConfig, all dependencies flow through constructor injection",
+    "FunctionEvaluatorAdapter wraps the return value of custom callables: float -> EvaluationResult with clamped score; EvaluationResult -> pass-through with clamped score; other -> error result"
+  ],
+  "requires": []
+}

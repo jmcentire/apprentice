@@ -1,0 +1,1027 @@
+{
+  "component_id": "confidence_engine",
+  "name": "Confidence Engine & Evaluators",
+  "description": "Per-task quality tracking Facade/orchestrator. Maintains a rolling window of comparison-pair samples per task, computes correlation scores using task-specific evaluators, detects drift (gradual degradation) and shift (sudden quality drops), derives current phase from confidence metrics via the phase manager, and exposes frozen ConfidenceSnapshot objects for downstream consumers. Implemented as a composition-root-friendly class with three injected dependencies: EvaluatorRegistry (from evaluators), a factory for RollingComparisonWindow instances (from rolling_window), and phase evaluation functions (from phase_manager). Phase is NEVER stored — always recomputed from current window metrics plus externally-provided training example counts. Evaluator failures are caught and logged, never propagated. All state flows through explicit parameters or injected dependencies; no global state.",
+  "version": 1,
+  "types": [
+    {
+      "name": "ConfidenceEngineConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "window_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum number of comparison-pair samples per task rolling window. Applies to all task types uniformly.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1 and value <= 10000",
+              "error_message": "window_size must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "max_window_age_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "259200.0",
+          "description": "Maximum age in seconds of the oldest sample in a window before the window is considered stale and a coaching sample is overdue. Default is 72 hours (259200 seconds).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0",
+              "error_message": "max_window_age_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "trend_sensitivity",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.05",
+          "description": "Threshold for detecting a sudden quality shift. If the absolute difference between the current window aggregate score and the previous snapshot score exceeds this value in a single evaluation, a shift event is flagged. Must be in (0.0, 1.0).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0 and value < 1.0",
+              "error_message": "trend_sensitivity must be in (0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "trend_window_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "10",
+          "description": "Number of most recent comparison pairs used for trend (slope) computation within each rolling window. Must be >= 2.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 2",
+              "error_message": "trend_window_size must be >= 2"
+            }
+          ]
+        },
+        {
+          "name": "task_evaluator_configs",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from task_id (str) to EvaluatorConfig (from evaluators dependency). Determines which evaluator is used for each task type. Every task_id encountered at runtime must have an entry here; missing entries cause a configuration error at record_comparison time.",
+          "validators": []
+        },
+        {
+          "name": "phase_thresholds",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "PhaseThresholds configuration (from phase_manager dependency), serialized as a dict. Validated via phase_manager.validate_thresholds at engine construction time. Keys: phase1_to_phase2_example_count, phase2_to_phase3_threshold, coaching_trigger, emergency_threshold, sustained_window_count.",
+          "validators": []
+        },
+        {
+          "name": "persistence_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/confidence",
+          "description": "Directory path for persisting rolling window state as JSON files. One file per task_id. Created on first persist_state call if it does not exist.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "persistence_dir must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 configuration model for the ConfidenceEngine. Validated strictly at construction time (fail fast). Contains window parameters, drift/shift detection sensitivity, per-task evaluator configs, phase thresholds, and persistence directory. Immutable after construction."
+    },
+    {
+      "name": "EvaluationOutcome",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the task type for which this evaluation was performed.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "score",
+          "type_ref": "OptionalFloat",
+          "required": true,
+          "default": "",
+          "description": "Evaluation score in [0.0, 1.0] if evaluation succeeded, None if the evaluator failed. When None, the error field is populated.",
+          "validators": []
+        },
+        {
+          "name": "evaluator_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the evaluator that was used (or attempted). Matches the EvaluatorConfig type discriminator for the task.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "evaluator_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "type_ref": "OptionalStr",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message if evaluation failed. None on success. Suitable for structured logging.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 formatted UTC-aware datetime of when this evaluation was performed.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
+              "error_message": "timestamp must be ISO-8601 UTC-aware format"
+            }
+          ]
+        },
+        {
+          "name": "added_to_window",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the comparison pair was successfully added to the rolling window, False if evaluation failed or the result was discarded.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic v2 model representing the result of a single record_comparison call. Contains the evaluation score (if successful), the evaluator type used, an optional error message (if the evaluator failed), and the timestamp. When evaluation fails, score is None and error is populated; the failed evaluation is NOT added to the rolling window."
+    },
+    {
+      "name": "DriftShiftStatus",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "drift_detected",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the trend direction is DEGRADING over recent consecutive windows, indicating gradual quality degradation.",
+          "validators": []
+        },
+        {
+          "name": "shift_detected",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the absolute change in aggregate correlation score from the previous snapshot exceeds trend_sensitivity, indicating a sudden quality change.",
+          "validators": []
+        },
+        {
+          "name": "score_delta",
+          "type_ref": "OptionalFloat",
+          "required": true,
+          "default": "",
+          "description": "Signed difference between the current aggregate score and the previous snapshot score. Positive = improvement, negative = degradation. None if no previous snapshot exists.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Diagnostic struct indicating whether drift (gradual degradation) or shift (sudden quality drop) has been detected for a task. Computed during get_snapshot by comparing current aggregate score and trend against thresholds."
+    },
+    {
+      "name": "ConfidenceSnapshotEnriched",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "correlation_score",
+          "type_ref": "OptionalFloat",
+          "required": true,
+          "default": "",
+          "description": "Current rolling aggregate correlation score in [0.0, 1.0]. None if the window is empty (no samples yet).",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Training example count as provided by the caller. Used for phase derivation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_example_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison-pair samples currently in the rolling window.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "consecutive_windows_above_threshold",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of consecutive get_snapshot calls where correlation_score >= phase2_to_phase3_threshold. Tracked internally by the engine to feed into phase_manager sustained-period logic.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_windows_above_threshold must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "trend_direction",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Trend direction string: 'IMPROVING', 'STABLE', or 'DEGRADING'. Derived from rolling window trend computation.",
+          "validators": []
+        },
+        {
+          "name": "is_stale",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the oldest sample in the window exceeds max_window_age, indicating a coaching sample is overdue. False if not stale. Defaults to False when window is empty.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Derived phase string: 'REMOTE_ONLY', 'COACHING', or 'AUTONOMOUS'. Always recomputed from current metrics, never stored.",
+          "validators": []
+        },
+        {
+          "name": "drift_shift_status",
+          "type_ref": "DriftShiftStatus",
+          "required": true,
+          "default": "",
+          "description": "Drift and shift detection diagnostics for this snapshot.",
+          "validators": []
+        },
+        {
+          "name": "window_size",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Configured maximum window size for this task's rolling window.",
+          "validators": []
+        },
+        {
+          "name": "phase_transition",
+          "type_ref": "OptionalPhaseTransitionDict",
+          "required": true,
+          "default": "",
+          "description": "If a phase transition occurred (derived phase differs from the last-known phase for this task), contains the PhaseTransition audit event as a dict. None if no transition occurred.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Extended snapshot combining the phase_manager ConfidenceSnapshot fields with engine-level drift/shift diagnostics and the derived phase. This is the primary output of get_snapshot. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "OptionalFloat",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "float"
+      ],
+      "description": "A float value or None."
+    },
+    {
+      "name": "OptionalStr",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "str"
+      ],
+      "description": "A string value or None."
+    },
+    {
+      "name": "OptionalPhaseTransitionDict",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "dict"
+      ],
+      "description": "A dict representing a PhaseTransition audit event, or None if no transition occurred."
+    },
+    {
+      "name": "ConfidenceSnapshotEnrichedMap",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "snapshots",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Dict mapping task_id (str) to ConfidenceSnapshotEnriched for all known tasks.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Mapping from task_id to ConfidenceSnapshotEnriched, returned by get_all_snapshots."
+    },
+    {
+      "name": "TaskEvaluatorConfigEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "evaluator_config",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "EvaluatorConfig for this task, as defined in the evaluators dependency. Must have a 'type' discriminator field.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single entry mapping a task_id to its evaluator configuration. Used for documentation; the actual config is stored as dict in ConfidenceEngineConfig.task_evaluator_configs."
+    }
+  ],
+  "functions": [
+    {
+      "name": "__init__",
+      "description": "Constructs the ConfidenceEngine with validated configuration and injected dependencies. Validates ConfidenceEngineConfig strictly (fail fast on invalid config). Validates phase_thresholds via phase_manager.validate_thresholds. Stores the EvaluatorRegistry, window factory parameters, and phase evaluation function references. Initializes empty internal state: task-to-window map, task-to-last-known-phase map (all tasks start as REMOTE_ONLY), task-to-consecutive-windows-above-threshold counters, and task-to-previous-score map for shift detection. No file I/O is performed during construction; use load_state to restore persisted windows.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "ConfidenceEngineConfig",
+          "required": true,
+          "default": "",
+          "description": "Validated configuration for the engine. Must pass all field validators and cross-field validation (phase threshold ordering).",
+          "validators": []
+        },
+        {
+          "name": "evaluator_registry",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "EvaluatorRegistry.evaluators dict mapping evaluator type names to evaluator instances satisfying the Evaluator protocol. Built by evaluators.build_evaluator_registry at the composition root.",
+          "validators": []
+        },
+        {
+          "name": "logger",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Python stdlib logging.Logger instance for structured JSON audit logging. If None, a default logger named 'apprentice.confidence_engine' is created.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_config",
+          "condition": "config fails Pydantic validation or cross-field validation",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "ConfidenceEngineConfig validation failed — check window_size, max_window_age_seconds, trend_sensitivity, phase_thresholds, and task_evaluator_configs"
+          }
+        },
+        {
+          "name": "invalid_phase_thresholds",
+          "condition": "config.phase_thresholds violates ordering invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Phase thresholds must satisfy: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold"
+          }
+        },
+        {
+          "name": "empty_evaluator_registry",
+          "condition": "evaluator_registry is an empty dict",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "evaluator_registry must contain at least one evaluator"
+          }
+        },
+        {
+          "name": "missing_evaluator_for_task",
+          "condition": "A task_evaluator_configs entry references an evaluator type not present in evaluator_registry",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Task evaluator config references evaluator type not found in registry"
+          }
+        },
+        {
+          "name": "empty_task_evaluator_configs",
+          "condition": "config.task_evaluator_configs is an empty dict",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "task_evaluator_configs must contain at least one task entry"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid ConfidenceEngineConfig with all field validators passing",
+        "config.phase_thresholds satisfies: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold",
+        "evaluator_registry is a non-empty dict with string keys and Evaluator-protocol-conformant values",
+        "Every evaluator type referenced in config.task_evaluator_configs has a corresponding entry in evaluator_registry"
+      ],
+      "postconditions": [
+        "Engine internal task-to-window map is empty (no windows created until first record_comparison or load_state)",
+        "Engine internal task-to-last-known-phase map is empty (phases derived on demand)",
+        "Engine internal consecutive-windows-above-threshold counters are empty",
+        "Engine internal previous-score map is empty (shift detection initializes on first snapshot)",
+        "Phase thresholds have been validated via phase_manager.validate_thresholds",
+        "Config is stored immutably; no further mutation is possible"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs engine initialization at INFO level with config summary"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "record_comparison",
+      "description": "Records a comparison between a local model response and a remote model response for a given task. Resolves the evaluator for the task from the registry, calls evaluate() with internally-constructed TaskResponse objects, and on success creates a ComparisonPair and adds it to the task's rolling window. On evaluator failure, logs the error at WARNING level and returns a degraded EvaluationOutcome with score=None and the error message — the failed evaluation is NOT added to the rolling window. If no rolling window exists for the task_id, one is lazily created with the engine's configured window_size and max_window_age_seconds. The timestamp is generated as datetime.now(timezone.utc) in ISO-8601 format.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier. Must have a corresponding entry in config.task_evaluator_configs.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "input_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The input prompt/query that was sent to both local and remote models.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "input_data must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "local_output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Full textual output from the local model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "remote_output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Full textual output from the remote model (ground truth) for the given input.",
+          "validators": []
+        },
+        {
+          "name": "local_fields",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Structured key-value field breakdown of the local response. Required for structured_match evaluator; can be empty dict for other evaluators.",
+          "validators": []
+        },
+        {
+          "name": "remote_fields",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Structured key-value field breakdown of the remote response. Required for structured_match evaluator; can be empty dict for other evaluators.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluationOutcome",
+      "error_cases": [
+        {
+          "name": "unknown_task_id",
+          "condition": "task_id has no corresponding entry in config.task_evaluator_configs",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "No evaluator config found for task_id. All task types must be declared in task_evaluator_configs at startup."
+          }
+        },
+        {
+          "name": "evaluator_not_in_registry",
+          "condition": "The evaluator type for this task is not present in the evaluator_registry",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Evaluator type referenced by task config not found in evaluator registry"
+          }
+        },
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "task_id must be a non-empty string"
+          }
+        },
+        {
+          "name": "empty_input_data",
+          "condition": "input_data is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "input_data must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is a non-empty string with a corresponding entry in config.task_evaluator_configs",
+        "input_data is a non-empty string",
+        "local_output is a string (may be empty for evaluators that handle it, but evaluator may reject it)",
+        "remote_output is a string (may be empty for evaluators that handle it, but evaluator may reject it)",
+        "evaluator_registry contains the evaluator type referenced by the task's config"
+      ],
+      "postconditions": [
+        "If evaluation succeeded: returned EvaluationOutcome.score is in [0.0, 1.0], .added_to_window is True, .error is None",
+        "If evaluation succeeded: a ComparisonPair with the evaluation score has been added to the task's rolling window",
+        "If evaluation failed: returned EvaluationOutcome.score is None, .added_to_window is False, .error contains a human-readable message",
+        "If evaluation failed: no ComparisonPair was added to the rolling window",
+        "A rolling window for task_id exists after this call (created lazily if it did not exist)",
+        "EvaluationOutcome.timestamp is a UTC-aware ISO-8601 datetime string",
+        "EvaluationOutcome.evaluator_type matches the task's configured evaluator type"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Adds a ComparisonPair to the task's rolling window on successful evaluation",
+        "Lazily creates a RollingComparisonWindow for the task_id if one does not exist"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "internal task-to-window map",
+          "description": "Adds comparison pair to rolling window on success; may create window on first call for a task"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs evaluation result at DEBUG level on success; logs evaluator error at WARNING level on failure"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_snapshot",
+      "description": "Computes and returns an enriched confidence snapshot for a single task. Retrieves the aggregate correlation score from the task's rolling window, computes trend via the window's get_trend method, checks staleness, builds a phase_manager ConfidenceSnapshot, calls phase_manager.evaluate to derive the current phase, detects drift (trend is DEGRADING) and shift (score delta exceeds trend_sensitivity), and assembles the final ConfidenceSnapshotEnriched. If the task has no rolling window (never recorded a comparison), returns a snapshot with correlation_score=None, sample_count=0, phase=REMOTE_ONLY, no drift/shift. Internally tracks consecutive_windows_above_threshold per task and the previous aggregate score per task for shift detection. Logs phase transitions at INFO or WARNING level when the derived phase differs from the last-known phase for this task.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier to compute the snapshot for.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Current number of training examples accumulated for this task type. Provided by the caller (e.g., the training data store). Used for phase 1→2 transition logic.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "example_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a local model is currently available for this task. If False, phase is forced to REMOTE_ONLY regardless of metrics.",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceSnapshotEnriched",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "task_id must be a non-empty string"
+          }
+        },
+        {
+          "name": "negative_example_count",
+          "condition": "example_count is negative",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "example_count must be non-negative"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is a non-empty string",
+        "example_count is a non-negative integer",
+        "local_model_available is a boolean"
+      ],
+      "postconditions": [
+        "Returned snapshot.task_type == task_id",
+        "Returned snapshot.training_example_count == example_count",
+        "If task has no rolling window, snapshot.correlation_score is None, snapshot.sample_count == 0, snapshot.phase == 'REMOTE_ONLY', snapshot.is_stale == False",
+        "If task has a rolling window with samples, snapshot.correlation_score is in [0.0, 1.0]",
+        "snapshot.sample_count == len(rolling_window) for the task",
+        "snapshot.phase is one of 'REMOTE_ONLY', 'COACHING', 'AUTONOMOUS'",
+        "snapshot.trend_direction is one of 'IMPROVING', 'STABLE', 'DEGRADING'",
+        "If local_model_available is False, snapshot.phase == 'REMOTE_ONLY'",
+        "snapshot.consecutive_windows_above_threshold reflects the tracked count for this task",
+        "If a phase transition occurred, snapshot.phase_transition is a dict with from_phase, to_phase, reason, and context fields",
+        "If no phase transition occurred, snapshot.phase_transition is None",
+        "Internal last-known-phase for this task is updated to the derived phase",
+        "Internal previous-score for this task is updated to the current aggregate score",
+        "Internal consecutive_windows_above_threshold is incremented if correlation_score >= phase2_to_phase3_threshold, otherwise reset to 0"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Updates internal last-known-phase, consecutive-windows-above-threshold, and previous-score tracking state for the task"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "internal per-task phase tracking state",
+          "description": "Updates last-known phase, consecutive windows counter, and previous score for shift detection"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs phase transitions at INFO (promotions) or WARNING (regressions/emergency) level as structured JSON audit events. Logs drift/shift detection at WARNING level."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_all_snapshots",
+      "description": "Computes and returns enriched confidence snapshots for all known tasks (i.e., all tasks that have either a rolling window from prior record_comparison calls or load_state, OR are declared in task_evaluator_configs). Calls get_snapshot for each task with the provided example counts and local model availability flags. Tasks not present in example_counts default to example_count=0. Tasks not present in local_model_availability default to local_model_available=False.",
+      "inputs": [
+        {
+          "name": "example_counts",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from task_id (str) to training example count (int). Tasks not present in this map are assumed to have 0 training examples.",
+          "validators": []
+        },
+        {
+          "name": "local_model_availability",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from task_id (str) to local_model_available (bool). Tasks not present in this map are assumed to have no local model available (False).",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceSnapshotEnrichedMap",
+      "error_cases": [
+        {
+          "name": "invalid_example_count_value",
+          "condition": "A value in example_counts is negative",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "All example_counts values must be non-negative integers"
+          }
+        }
+      ],
+      "preconditions": [
+        "example_counts is a dict with string keys and non-negative integer values",
+        "local_model_availability is a dict with string keys and boolean values"
+      ],
+      "postconditions": [
+        "Returned map contains an entry for every task_id that has a rolling window OR is in task_evaluator_configs",
+        "Each entry is a valid ConfidenceSnapshotEnriched produced by get_snapshot",
+        "All internal per-task tracking state has been updated as a side effect of individual get_snapshot calls"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Updates internal per-task tracking state for all known tasks"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "internal per-task phase tracking state",
+          "description": "Delegates to get_snapshot for each task, which updates tracking state"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs phase transitions for each task via delegated get_snapshot calls"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "persist_state",
+      "description": "Persists the rolling window state for all tasks to disk as JSON files. Each task's window is persisted to a separate file: {persistence_dir}/{task_id}.json. Uses the rolling_window.persist method which performs atomic file writes (temp file + os.replace). Creates the persistence_dir if it does not exist. Persistence failures are logged at WARNING level and do NOT raise exceptions — the engine continues operating with in-memory state. This method is caller-controlled and should be called periodically or at shutdown.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "persistence_dir_not_creatable",
+          "condition": "Cannot create persistence_dir due to permissions or invalid path",
+          "error_type": "OSError",
+          "error_data": {
+            "detail": "Cannot create persistence directory. Window state not persisted."
+          }
+        }
+      ],
+      "preconditions": [
+        "Engine has been initialized with a valid config",
+        "config.persistence_dir is a writable path (or can be created)"
+      ],
+      "postconditions": [
+        "For each task with a rolling window, a JSON file exists at {persistence_dir}/{task_id}.json containing a valid WindowSnapshot",
+        "All file writes were atomic (no partial writes on crash)",
+        "persistence_dir exists as a directory",
+        "On I/O failure for any task, a WARNING-level log is emitted and other tasks still attempt persistence"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Writes JSON files to disk for each task's rolling window"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "{persistence_dir}/{task_id}.json",
+          "description": "Atomically writes a WindowSnapshot JSON file per task"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs persistence success at DEBUG level, persistence failures at WARNING level per task"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "load_state",
+      "description": "Loads persisted rolling window state from disk for all tasks that have JSON files in the persistence_dir. For each {task_id}.json file found, loads the window via rolling_window.load and populates the internal task-to-window map. Existing in-memory windows are overwritten by loaded state. Tasks with no persisted file are not affected. Files that fail to load (corrupted, invalid schema, unsupported version) are logged at WARNING level and skipped — the engine continues with whatever state it has. Should be called once at startup after __init__ and before processing requests.",
+      "inputs": [],
+      "output_type": "int",
+      "error_cases": [
+        {
+          "name": "persistence_dir_not_readable",
+          "condition": "persistence_dir exists but is not readable due to permissions",
+          "error_type": "OSError",
+          "error_data": {
+            "detail": "Cannot read persistence directory. No state loaded."
+          }
+        }
+      ],
+      "preconditions": [
+        "Engine has been initialized with a valid config",
+        "config.persistence_dir exists and is readable, OR does not exist (in which case this is a no-op)"
+      ],
+      "postconditions": [
+        "For each valid {task_id}.json in persistence_dir, the corresponding rolling window has been loaded into the internal task-to-window map",
+        "Windows loaded from disk have their original window_size and max_window_age preserved from the persisted snapshot",
+        "Return value is the count of successfully loaded task windows",
+        "In-memory windows for tasks not found on disk remain unchanged",
+        "Files that fail to load are skipped with a WARNING log; remaining files still load"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Reads JSON files from disk and populates internal task-to-window map"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "{persistence_dir}/*.json",
+          "description": "Reads all *.json files in persistence_dir, parses as WindowSnapshot, and loads into rolling windows"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "internal task-to-window map",
+          "description": "Overwrites or creates rolling window entries for each successfully loaded task"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.confidence_engine",
+          "description": "Logs each loaded task at INFO level, failed loads at WARNING level, and summary at INFO level"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_task_ids",
+      "description": "Returns the set of all task_ids currently known to the engine. A task is known if it has a rolling window (from record_comparison or load_state) OR is declared in task_evaluator_configs. Useful for iterating over all tasks to compute snapshots.",
+      "inputs": [],
+      "output_type": "list",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "Returned list contains all unique task_ids from both the internal window map and task_evaluator_configs keys",
+        "No duplicates in the returned list",
+        "Order is not guaranteed"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "get_window_size",
+      "description": "Returns the current number of comparison pairs in the rolling window for a given task. Returns 0 if the task has no rolling window yet.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "int",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "task_id must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is a non-empty string"
+      ],
+      "postconditions": [
+        "Return value >= 0",
+        "Return value <= config.window_size",
+        "If task has no rolling window, returns 0"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "evaluators",
+    "phase_manager",
+    "rolling_window"
+  ],
+  "dependency_contracts": {
+    "evaluators": [
+      "evaluate",
+      "build_evaluator_registry",
+      "EvaluatorRegistry",
+      "EvaluationResult",
+      "TaskResponse",
+      "EvaluatorConfig"
+    ],
+    "phase_manager": [
+      "evaluate",
+      "get_initial_phase",
+      "validate_thresholds",
+      "Phase",
+      "PhaseThresholds",
+      "ConfidenceSnapshot",
+      "PhaseResult",
+      "PhaseTransition",
+      "TransitionReason",
+      "TrendDirection"
+    ],
+    "rolling_window": [
+      "__init__",
+      "add_pair",
+      "get_aggregate_score",
+      "get_trend",
+      "is_stale",
+      "__len__",
+      "to_snapshot",
+      "from_snapshot",
+      "persist",
+      "load",
+      "ComparisonPair",
+      "TrendResult",
+      "TrendDirection",
+      "WindowSnapshot"
+    ]
+  },
+  "invariants": [
+    "Phase is NEVER stored as persistent state — always recomputed from current window metrics, training example count, and local model availability via phase_manager.evaluate",
+    "Evaluator failures are caught and logged, never propagated as exceptions to callers of record_comparison; a degraded EvaluationOutcome with score=None is returned instead",
+    "Failed evaluations are never added to the rolling window — only successful evaluations produce ComparisonPair entries",
+    "One RollingComparisonWindow instance per task_id; windows are created lazily on first record_comparison or loaded from disk via load_state",
+    "All internal state (window map, last-known-phase map, consecutive-windows counters, previous-score map) is instance-scoped — no global state",
+    "Config is immutable after __init__ — validated strictly at construction time per fail-fast policy",
+    "Every phase transition is logged as a structured JSON audit event via stdlib logging",
+    "consecutive_windows_above_threshold is incremented when correlation_score >= phase2_to_phase3_threshold and reset to 0 otherwise, tracked per-task within the engine",
+    "Persistence is explicit and caller-controlled; no automatic file writes on record_comparison",
+    "All public methods that read from rolling windows are thread-safe via the window's internal threading.Lock",
+    "Drift is detected when trend_direction is DEGRADING; shift is detected when absolute score delta from previous snapshot exceeds trend_sensitivity",
+    "All datetime values use UTC timezone; naive datetimes are never produced or accepted",
+    "The engine can operate with zero persisted state — all tasks start with empty windows and REMOTE_ONLY phase",
+    "ConfidenceSnapshotEnriched is a frozen Pydantic model — immutable after construction"
+  ],
+  "requires": [
+    "evaluators",
+    "phase_manager",
+    "rolling_window"
+  ]
+}

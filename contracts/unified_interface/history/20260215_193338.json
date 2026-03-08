@@ -1,0 +1,3161 @@
+{
+  "component_id": "unified_interface",
+  "name": "Unified Interface & Entry Points",
+  "description": "The product surface — a single async class (Apprentice) that accepts a task name + input dict and returns a typed TaskResponse. The caller has zero visibility into routing, phases, or which model produced the answer. Also includes the CLI entry point (apprentice CLI command) that loads config, boots all components via dependency injection, and provides subcommands: 'run' (start serving), 'status' (show current phase/confidence/budget per task), 'report' (generate full report). Library entry point: 'from apprentice import Apprentice' for programmatic use. Constructor takes config path, wires all components together. The Apprentice class is the composition root — it constructs and injects all dependencies. Structured across five files: types.py (~250 lines, all Pydantic models and enums), errors.py (~60 lines, exception hierarchy), core.py (~120 lines, Apprentice class), cli.py (~170 lines, CLI entry point and subcommand dispatch), __init__.py (~10 lines, public re-exports).",
+  "version": 1,
+  "types": [
+    {
+      "name": "ModelSource",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "LOCAL",
+        "REMOTE"
+      ],
+      "inner_types": [],
+      "description": "Which model backend produced a response. StrEnum for serialization transparency. Opaque to callers except for audit/billing."
+    },
+    {
+      "name": "PhaseLabel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "BOOTSTRAPPING",
+        "ACTIVE_LEARNING",
+        "SUPERVISED",
+        "AUTONOMOUS"
+      ],
+      "inner_types": [],
+      "description": "Human-readable phase label derived from confidence score thresholds. StrEnum. Emergent from confidence, never manually set."
+    },
+    {
+      "name": "RunStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SUCCESS",
+        "DEGRADED",
+        "ERROR"
+      ],
+      "inner_types": [],
+      "description": "Outcome status of a single run() invocation. StrEnum."
+    },
+    {
+      "name": "ErrorKind",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "BUDGET_EXHAUSTED",
+        "TASK_NOT_FOUND",
+        "LOCAL_MODEL_UNAVAILABLE",
+        "INTERNAL"
+      ],
+      "inner_types": [],
+      "description": "Categorized error kinds for structured error reporting. StrEnum."
+    },
+    {
+      "name": "ExitCode",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SUCCESS_0",
+        "APP_ERROR_1",
+        "USAGE_ERROR_2",
+        "KEYBOARD_INTERRUPT_130"
+      ],
+      "inner_types": [],
+      "description": "Process exit codes returned by CLI main(). IntEnum following Unix conventions."
+    },
+    {
+      "name": "OutputFormat",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "HUMAN",
+        "JSON"
+      ],
+      "inner_types": [],
+      "description": "Controls how CLI results are serialized for terminal output. StrEnum."
+    },
+    {
+      "name": "LogLevel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "WARNING",
+        "INFO",
+        "DEBUG"
+      ],
+      "inner_types": [],
+      "description": "Logging verbosity levels mapped from --verbose flag. StrEnum."
+    },
+    {
+      "name": "SubcommandName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "RUN",
+        "STATUS",
+        "REPORT"
+      ],
+      "inner_types": [],
+      "description": "The three CLI subcommands recognized by the argument parser. StrEnum."
+    },
+    {
+      "name": "ConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "bootstrapping_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence below this value means bootstrapping phase (all remote).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "bootstrapping_upper must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "active_learning_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence below this value (and above bootstrapping) means active learning phase.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "active_learning_upper must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "supervised_upper",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence below this value (and above active_learning) means supervised phase.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "supervised_upper must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "autonomous_lower",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence at or above this value means autonomous phase (all local).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "autonomous_lower must be in [0.0, 1.0]"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence score thresholds that determine emergent phase transitions. Frozen Pydantic v2 model. All values are floats in [0.0, 1.0]. Must satisfy: bootstrapping_upper < active_learning_upper < supervised_upper <= autonomous_lower."
+    },
+    {
+      "name": "BudgetEnforcementConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "hard_limit",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If true, system never exceeds budget — switches to local-only when exhausted.",
+          "validators": []
+        },
+        {
+          "name": "warning_threshold_pct",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Percentage of budget at which to begin emitting warnings.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "warning_threshold_pct must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "log_every_spend",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If true, every remote API spend event is individually logged.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Global settings for hard budget enforcement behavior. Frozen Pydantic v2 model."
+    },
+    {
+      "name": "TaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this task.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]{1,62}[a-z0-9]$",
+              "error_message": "task_name must be 3-64 chars, lowercase alphanumeric with underscores, starting with letter and ending with alphanumeric"
+            }
+          ]
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier for the remote API backend.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model identifier for the local model backend. Empty string if no local model configured for this task.",
+          "validators": []
+        },
+        {
+          "name": "budget_limit_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Hard budget cap in USD for this task. System stops remote spending at this limit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "budget_limit_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_period_days",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Rolling window in days over which the budget is enforced.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 365",
+              "error_message": "budget_period_days must be between 1 and 365"
+            }
+          ]
+        },
+        {
+          "name": "confidence_thresholds",
+          "type_ref": "ConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Threshold configuration for phase transitions and sampling rates.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration block for a single task. Frozen Pydantic v2 model. Defines the task's identity, model mappings, budget, and confidence thresholds."
+    },
+    {
+      "name": "TaskConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of TaskConfig objects, one per configured task."
+    },
+    {
+      "name": "ApprenticeConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "TaskConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of task configuration blocks, each defining a task name, model endpoints, budget, and thresholds.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "At least one task must be configured"
+            }
+          ]
+        },
+        {
+          "name": "remote_api_base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL for the remote model API endpoint.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "remote_api_base_url must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "local_model_endpoint",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "URL or socket path for the local model server. Empty string if no local model is configured.",
+          "validators": []
+        },
+        {
+          "name": "budget_enforcement",
+          "type_ref": "BudgetEnforcementConfig",
+          "required": true,
+          "default": "",
+          "description": "Global budget enforcement settings.",
+          "validators": []
+        },
+        {
+          "name": "audit_log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File path for the structured JSON audit log.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "audit_log_path must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "retry_max_attempts",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Maximum retry attempts for transient remote API failures.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10",
+              "error_message": "retry_max_attempts must be between 1 and 10"
+            }
+          ]
+        },
+        {
+          "name": "retry_backoff_base_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Base delay in seconds for exponential backoff on retries.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.1 <= value <= 30.0",
+              "error_message": "retry_backoff_base_seconds must be between 0.1 and 30.0"
+            }
+          ]
+        },
+        {
+          "name": "schema_version",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Config schema version for forward compatibility. Currently must be 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value == 1",
+              "error_message": "schema_version must be 1"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Top-level validated configuration object. Parsed from YAML config file. Frozen Pydantic v2 model (ConfigDict(frozen=True)). Strict parsing — rejects unknown fields and invalid values at construction time."
+    },
+    {
+      "name": "ResponseMetadata",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the model that produced the response.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost in USD for this invocation (0.0 for local).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "cost_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "retries",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries that occurred during this invocation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "retries must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "fallback_used",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if a fallback path was taken (e.g., local unavailable, fell back to remote or vice versa).",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the response was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Audit-transparency metadata attached to every TaskResponse. Frozen Pydantic v2 model. Provides enough information for billing and debugging without exposing internal routing decisions."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was executed.",
+          "validators": []
+        },
+        {
+          "name": "output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The model's structured output for the given input. Schema depends on the task definition.",
+          "validators": []
+        },
+        {
+          "name": "source",
+          "type_ref": "ModelSource",
+          "required": true,
+          "default": "",
+          "description": "Which backend (local or remote) produced this response.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "RunStatus",
+          "required": true,
+          "default": "",
+          "description": "Outcome status: success if nominal, degraded if fallback was used, error if partial.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier (UUID v4) for this run invocation, usable for audit log correlation.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock duration of the run() call in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "duration_ms must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "ResponseMetadata",
+          "required": true,
+          "default": "",
+          "description": "Additional audit-transparency metadata. Does not expose routing internals.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model (ConfigDict(frozen=True)) returned from run(). Contains the model output plus audit-transparent metadata. The caller sees which source produced the answer but has zero visibility into routing logic, confidence scores, or phase details."
+    },
+    {
+      "name": "ConfidenceSnapshotList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ConfidenceSnapshot",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of ConfidenceSnapshot objects, one per registered task."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task this snapshot describes.",
+          "validators": []
+        },
+        {
+          "name": "confidence_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score in [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_score must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "PhaseLabel",
+          "required": true,
+          "default": "",
+          "description": "Current emergent phase label derived from the confidence score and thresholds.",
+          "validators": []
+        },
+        {
+          "name": "sampling_rate",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current continuous sampling rate for remote verification in [0.0, 1.0]. Higher during early phases, approaching 0.0 in autonomous.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "sampling_rate must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget in USD for this task in the current period.",
+          "validators": []
+        },
+        {
+          "name": "budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget consumed in USD for this task in the current period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "budget_used_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the hard budget limit has been reached for this task.",
+          "validators": []
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the local model is currently reachable and healthy.",
+          "validators": []
+        },
+        {
+          "name": "total_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of run() invocations for this task since system start.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this snapshot was taken.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model providing a point-in-time view of a task's confidence state, emergent phase, and budget consumption. Returned by status()."
+    },
+    {
+      "name": "SystemReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_snapshots",
+          "type_ref": "ConfidenceSnapshotList",
+          "required": true,
+          "default": "",
+          "description": "List of ConfidenceSnapshot objects, one per registered task.",
+          "validators": []
+        },
+        {
+          "name": "global_budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget consumed across all tasks in the current period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "global_budget_used_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "global_budget_remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget remaining across all tasks in the current period.",
+          "validators": []
+        },
+        {
+          "name": "total_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations across all tasks.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_local_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations served by local model.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_local_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_remote_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total run() invocations served by remote model.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_remote_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_fallbacks",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of fallback events (local→remote or remote→local).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_fallbacks must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_errors",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of error outcomes across all tasks.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_errors must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "uptime_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Seconds since the Apprentice instance entered the async context. 0.0 if not yet entered.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "uptime_seconds must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this report was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 model providing a comprehensive system-wide report. Includes per-task snapshots, global budget status, and aggregate statistics. Returned by report()."
+    },
+    {
+      "name": "RunContext",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this run invocation (UUID v4).",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task name being executed.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input data passed to run().",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_entry",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time run() was called.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_at_entry must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "phase_at_entry",
+          "type_ref": "PhaseLabel",
+          "required": true,
+          "default": "",
+          "description": "Emergent phase label at entry.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Description of the routing decision made (e.g., 'local_primary', 'remote_primary', 'remote_fallback').",
+          "validators": []
+        },
+        {
+          "name": "source_used",
+          "type_ref": "ModelSource",
+          "required": true,
+          "default": "",
+          "description": "Which backend actually produced the response.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback path was activated.",
+          "validators": []
+        },
+        {
+          "name": "fallback_reason",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Reason for fallback if triggered, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "budget_available_at_entry",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether remote budget was available when run() started.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred by this invocation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "cost_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "retries",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries performed.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "retries must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "type_ref": "RunStatus",
+          "required": true,
+          "default": "",
+          "description": "Final outcome status.",
+          "validators": []
+        },
+        {
+          "name": "error_kind",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ErrorKind value if an error occurred, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Error message if an error occurred, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "start_time_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when run() started.",
+          "validators": []
+        },
+        {
+          "name": "end_time_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when run() completed.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock duration in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "duration_ms must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal mutable context object that accumulates all decisions and timing information during a single run() invocation. Flushed to the audit log on completion (success or failure). Not part of the public API."
+    },
+    {
+      "name": "ComponentOverrides",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the config loader component.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the task registry component.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the remote API client component.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the local model client component.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the confidence engine component.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the sampling scheduler component.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the budget manager component.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the training data store component.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the router component.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the audit log component.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Typed keyword-only parameters for dependency injection overrides in the Apprentice constructor. All fields are optional — when None, the component is constructed from config. Used for test injection."
+    },
+    {
+      "name": "ApprenticeError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Categorized error kind for programmatic handling.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The task name that caused the error, if applicable.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The request_id of the run() invocation that caused the error, if applicable.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base exception class for all public Apprentice errors. All three public exception types derive from this. Contains a machine-readable error_kind and human-readable message. Extends Python's Exception."
+    },
+    {
+      "name": "BudgetExhaustedError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.BUDGET_EXHAUSTED.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task whose budget is exhausted.",
+          "validators": []
+        },
+        {
+          "name": "budget_limit_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The budget limit that was hit.",
+          "validators": []
+        },
+        {
+          "name": "budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Amount already consumed.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the failing run() call.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when a run() call requires remote model access but the task's budget is exhausted AND the local model is unavailable. If local model is available, the system degrades gracefully instead of raising. Derives from ApprenticeError."
+    },
+    {
+      "name": "TaskNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.TASK_NOT_FOUND.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was not found.",
+          "validators": []
+        },
+        {
+          "name": "available_tasks",
+          "type_ref": "StringList",
+          "required": true,
+          "default": "",
+          "description": "List of valid task names for diagnostic help.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when a task_name is not found in the task registry. Derives from ApprenticeError."
+    },
+    {
+      "name": "LocalModelUnavailableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error_kind",
+          "type_ref": "ErrorKind",
+          "required": true,
+          "default": "",
+          "description": "Always ErrorKind.LOCAL_MODEL_UNAVAILABLE.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task that needed the local model.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the failing run() call.",
+          "validators": []
+        },
+        {
+          "name": "budget_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Always true when this error is raised — confirms both conditions hold.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised ONLY when the local model is unavailable AND the budget is also exhausted, so no fallback to remote is possible. Derives from ApprenticeError."
+    },
+    {
+      "name": "StringList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "str",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of strings."
+    },
+    {
+      "name": "GlobalFlags",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "./apprentice.yaml",
+          "description": "Path to apprentice.yaml config file. Defaults to ./apprentice.yaml.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "If true, output machine-readable JSON to stdout instead of human-readable tables.",
+          "validators": []
+        },
+        {
+          "name": "verbose",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Verbosity level. 0=WARNING (default), 1=INFO (-v), 2=DEBUG (-vv). Clamped to [0, 2].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 2",
+              "error_message": "verbose must be 0, 1, or 2"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed global flags that apply to all CLI subcommands. Produced by argument parsing before subcommand dispatch."
+    },
+    {
+      "name": "RunArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to execute. Must match a task defined in config.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "input_raw",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Raw input: either a JSON string or a file path prefixed with '@' (e.g., @input.json). Parsed into a dict before passing to Apprentice.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "input_raw must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'run' CLI subcommand."
+    },
+    {
+      "name": "StatusArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_filter",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional task name to filter status output. If empty string, show all tasks.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'status' CLI subcommand."
+    },
+    {
+      "name": "ReportArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "output_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional file path to write report output. If empty string, write to stdout.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'report' CLI subcommand."
+    },
+    {
+      "name": "ParsedArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "global_flags",
+          "type_ref": "GlobalFlags",
+          "required": true,
+          "default": "",
+          "description": "Global flags parsed from top-level arguments.",
+          "validators": []
+        },
+        {
+          "name": "command",
+          "type_ref": "SubcommandName",
+          "required": true,
+          "default": "",
+          "description": "Which subcommand was invoked.",
+          "validators": []
+        },
+        {
+          "name": "run_args",
+          "type_ref": "RunArgs",
+          "required": false,
+          "default": "None",
+          "description": "Arguments for 'run' subcommand. Only populated when command is RUN.",
+          "validators": []
+        },
+        {
+          "name": "status_args",
+          "type_ref": "StatusArgs",
+          "required": false,
+          "default": "None",
+          "description": "Arguments for 'status' subcommand. Only populated when command is STATUS.",
+          "validators": []
+        },
+        {
+          "name": "report_args",
+          "type_ref": "ReportArgs",
+          "required": false,
+          "default": "None",
+          "description": "Arguments for 'report' subcommand. Only populated when command is REPORT.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Complete parsed CLI arguments combining global flags and subcommand-specific args. Exactly one of run_args, status_args, or report_args is populated based on command."
+    },
+    {
+      "name": "InputData",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The parsed input dictionary to pass to Apprentice.run().",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Deserialized input data for the 'run' subcommand after resolving file references and parsing JSON."
+    },
+    {
+      "name": "PhaseInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable phase label (e.g., 'bootstrapping', 'active_learning', 'supervised', 'autonomous').",
+          "validators": []
+        },
+        {
+          "name": "confidence_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score for the task, range [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_score must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "is_local_primary",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the local model is currently the primary responder for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Current phase information for a single task, derived from confidence scores. Used in CLI status/report output."
+    },
+    {
+      "name": "BudgetInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "budget_limit",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget allocated for this task (in USD).",
+          "validators": []
+        },
+        {
+          "name": "budget_spent",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget consumed so far.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "budget_spent must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining. Computed as budget_limit - budget_spent.",
+          "validators": []
+        },
+        {
+          "name": "is_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if budget is fully consumed. When true, only local model is used.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Budget consumption information for a single task. Used in CLI status/report output."
+    },
+    {
+      "name": "TaskStatusEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "PhaseInfo",
+          "required": true,
+          "default": "",
+          "description": "Current phase and confidence for this task.",
+          "validators": []
+        },
+        {
+          "name": "budget",
+          "type_ref": "BudgetInfo",
+          "required": true,
+          "default": "",
+          "description": "Budget consumption for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Status information for a single task. Combines phase and budget info for CLI display."
+    },
+    {
+      "name": "TaskStatusEntryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskStatusEntry",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of TaskStatusEntry objects."
+    },
+    {
+      "name": "RunResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task that was executed.",
+          "validators": []
+        },
+        {
+          "name": "output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The result payload from Apprentice.run(). Contents are task-dependent.",
+          "validators": []
+        },
+        {
+          "name": "success",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the task completed successfully.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error message if success is false, empty string otherwise.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'run' CLI subcommand. Wraps the TaskResponse from Apprentice with CLI-specific metadata."
+    },
+    {
+      "name": "StatusResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "TaskStatusEntryList",
+          "required": true,
+          "default": "",
+          "description": "List of task status entries. Filtered if --task was provided.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 timestamp of when the status was captured.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'status' CLI subcommand. Contains phase, confidence, and budget information per task."
+    },
+    {
+      "name": "ReportResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "TaskStatusEntryList",
+          "required": true,
+          "default": "",
+          "description": "Status of all configured tasks.",
+          "validators": []
+        },
+        {
+          "name": "total_budget_limit",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget across all tasks.",
+          "validators": []
+        },
+        {
+          "name": "total_budget_spent",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget spent across all tasks.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "total_budget_spent must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "system_uptime_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "How long the system has been operating, in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "system_uptime_seconds must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 timestamp of when the report was generated.",
+          "validators": []
+        },
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the config file that was loaded.",
+          "validators": []
+        },
+        {
+          "name": "written_to_file",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If report was written to --output file, the resolved path. Empty string if written to stdout.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'report' CLI subcommand. Full system report including all tasks, history, and audit trail."
+    },
+    {
+      "name": "CLIResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "RunResult",
+        "StatusResult",
+        "ReportResult"
+      ],
+      "description": "Discriminated union of the three possible CLI subcommand result types."
+    }
+  ],
+  "functions": [
+    {
+      "name": "__init__",
+      "description": "Synchronous constructor. Loads and validates config (from file path or ApprenticeConfig object), then constructs and wires all internal components via dependency injection. Component overrides enable test injection — any provided override replaces the default-constructed component. Fails fast on config errors with clear messages. Does NOT start async resources; the instance must be used as an async context manager before calling run().",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Either a file path to a YAML config file or a pre-validated ApprenticeConfig object. If a string path, the file must exist and be readable.",
+          "validators": []
+        },
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the config loader component.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the task registry component.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the remote API client component.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the local model client component.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the confidence engine component.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the sampling scheduler component.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the budget manager component.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the training data store component.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the router component.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the audit log component.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "config_file_not_found",
+          "condition": "config is a file path that does not exist on disk",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "config_parse_error",
+          "condition": "YAML file is malformed or cannot be parsed as valid YAML",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to parse config file: {details}"
+          }
+        },
+        {
+          "name": "config_validation_error",
+          "condition": "Config values fail Pydantic strict validation (missing required fields, invalid ranges, unknown fields)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Config validation failed: {details}"
+          }
+        },
+        {
+          "name": "component_construction_error",
+          "condition": "A default component fails to construct from config (e.g., invalid endpoint format, incompatible settings)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to construct component {component_name}: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid file path to a YAML file OR a valid ApprenticeConfig object",
+        "If config is a file path, the file must exist and be readable",
+        "Config must pass strict validation — unknown fields and invalid values are rejected"
+      ],
+      "postconditions": [
+        "self._config is a validated, frozen ApprenticeConfig instance",
+        "All 10 internal components are constructed and stored as self._<component_name>",
+        "self._running is False (async context not yet entered)",
+        "No async resources (httpx clients, file handles) are opened yet"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "YAML config file at path specified by config parameter",
+          "description": "Reads config file from disk if config is a string file path"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create",
+      "description": "Async classmethod convenience factory. Constructs an Apprentice instance AND enters the async context, returning a fully ready-to-use instance. Equivalent to: a = Apprentice(config, **overrides); await a.__aenter__(); return a. Caller is responsible for calling await a.close() or using try/finally.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Either a file path to a YAML config file or a pre-validated ApprenticeConfig object.",
+          "validators": []
+        },
+        {
+          "name": "config_loader",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the config loader component.",
+          "validators": []
+        },
+        {
+          "name": "task_registry",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the task registry component.",
+          "validators": []
+        },
+        {
+          "name": "remote_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the remote API client component.",
+          "validators": []
+        },
+        {
+          "name": "local_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the local model client component.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the confidence engine component.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the sampling scheduler component.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the budget manager component.",
+          "validators": []
+        },
+        {
+          "name": "training_data_store",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the training data store component.",
+          "validators": []
+        },
+        {
+          "name": "router",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the router component.",
+          "validators": []
+        },
+        {
+          "name": "audit_log",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Override for the audit log component.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "config_error",
+          "condition": "Any config error from __init__ (file not found, parse error, validation error, component construction error)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Config error: {details}"
+          }
+        },
+        {
+          "name": "async_resource_error",
+          "condition": "Failed to open async resources (e.g., cannot create httpx client, cannot open audit log file)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Failed to initialize async resources: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "Same preconditions as __init__",
+        "asyncio event loop is running (this is an async method)"
+      ],
+      "postconditions": [
+        "Returned instance has self._running == True",
+        "All async resources (httpx clients) are initialized and ready",
+        "Audit log file handle is opened",
+        "Caller must eventually call close() or use async with"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "__aenter__",
+      "description": "Async context manager entry. Initializes all async resources: creates httpx async clients for remote and local model endpoints, opens the audit log file handle, records the start time for uptime tracking. Sets self._running to True.",
+      "inputs": [],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "already_running",
+          "condition": "self._running is already True (double-enter on the same instance)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice async context already entered"
+          }
+        },
+        {
+          "name": "resource_init_failure",
+          "condition": "Cannot create httpx client or open audit log file due to system resource issues",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Failed to initialize async resources: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is False (not already entered)",
+        "__init__ has completed successfully",
+        "asyncio event loop is running"
+      ],
+      "postconditions": [
+        "self._running is True",
+        "httpx.AsyncClient instances are created and stored in remote_client and local_client",
+        "Audit log file handle is open for appending",
+        "self._start_time_utc is set to current UTC time",
+        "Instance is ready to accept run() calls"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "httpx.AsyncClient creation for remote and local endpoints",
+          "description": "Creates async HTTP client connections"
+        },
+        {
+          "kind": "writes_file",
+          "target": "Audit log file at path specified in config",
+          "description": "Opens audit log file handle for appending"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "__aexit__",
+      "description": "Async context manager exit. Flushes the audit log, closes all httpx async clients, releases all async resources, and sets self._running to False. Always executes cleanup regardless of exception type. Does NOT suppress exceptions (returns False).",
+      "inputs": [
+        {
+          "name": "exc_type",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Exception type if an exception is being propagated, None otherwise.",
+          "validators": []
+        },
+        {
+          "name": "exc_val",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Exception value if an exception is being propagated, None otherwise.",
+          "validators": []
+        },
+        {
+          "name": "exc_tb",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Traceback if an exception is being propagated, None otherwise.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [
+        {
+          "name": "cleanup_error",
+          "condition": "Error during resource cleanup (e.g., audit flush fails, httpx client close raises). Logged but not raised — cleanup is best-effort.",
+          "error_type": "None",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [
+        "self._running is True"
+      ],
+      "postconditions": [
+        "self._running is False",
+        "All httpx async clients are closed",
+        "Audit log is flushed and file handle is closed",
+        "All async resources are released",
+        "Return value is False (do not suppress exceptions)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Audit log file",
+          "description": "Flushes pending audit entries and closes file handle"
+        },
+        {
+          "kind": "network_call",
+          "target": "httpx.AsyncClient.aclose()",
+          "description": "Closes async HTTP client connections"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Logs cleanup errors if they occur"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "run",
+      "description": "Primary public method. Executes a task: looks up the task in the registry, creates a RunContext, queries confidence and budget state, routes to appropriate model backend (local or remote), handles fallbacks, records spend, stores training data, flushes the audit log entry, and returns a frozen TaskResponse. The caller has zero visibility into routing logic. Error decision matrix: (1) local_available=T, budget_available=T → route normally; (2) local_available=T, budget_available=F → local-only, log warning, status=degraded; (3) local_available=F, budget_available=T → remote-only with fallback cost; (4) local_available=F, budget_available=F → raise BudgetExhaustedError or LocalModelUnavailableError.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to execute. Must match a task registered in the task registry.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Input dictionary to pass to the model. Schema depends on the task definition.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskResponse",
+      "error_cases": [
+        {
+          "name": "not_running",
+          "condition": "self._running is False — run() called outside async context",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice.run() must be called within an async context (use 'async with Apprentice(...) as a:')"
+          }
+        },
+        {
+          "name": "task_not_found",
+          "condition": "task_name is not registered in the task registry",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "available_tasks": "list of registered task names"
+          }
+        },
+        {
+          "name": "budget_exhausted_no_local",
+          "condition": "Budget is exhausted for this task AND local model is unavailable. Both fallback paths are blocked.",
+          "error_type": "BudgetExhaustedError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "budget_limit_usd": "configured limit",
+            "budget_used_usd": "current spend"
+          }
+        },
+        {
+          "name": "local_unavailable_no_budget",
+          "condition": "Local model is unavailable AND budget is exhausted. Raised when routing intended to use local but it failed and remote fallback is impossible.",
+          "error_type": "LocalModelUnavailableError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "budget_exhausted": "true"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is empty or whitespace-only",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be a non-empty string"
+          }
+        },
+        {
+          "name": "invalid_input_data",
+          "condition": "input_data is not a dict (e.g., None, list, string)",
+          "error_type": "TypeError",
+          "error_data": {
+            "message": "input_data must be a dict, got {type}"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is True (async context has been entered)",
+        "task_name is a non-empty string",
+        "input_data is a non-null dict"
+      ],
+      "postconditions": [
+        "A RunContext has been created, populated, and flushed to the audit log",
+        "If remote model was used, spend has been recorded in the budget manager",
+        "If a response was collected, training data has been stored",
+        "Confidence engine has been updated with the outcome",
+        "Returned TaskResponse is a frozen Pydantic model with all fields populated",
+        "TaskResponse.request_id matches the RunContext.request_id",
+        "TaskResponse.source accurately reflects which backend produced the output",
+        "TaskResponse.status is SUCCESS for nominal path, DEGRADED for fallback path"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Remote model API via httpx",
+          "description": "Calls remote API if routing decision selects remote backend"
+        },
+        {
+          "kind": "network_call",
+          "target": "Local model server",
+          "description": "Calls local model server if routing decision selects local backend"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Budget manager",
+          "description": "Records spend if remote was used"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Training data store",
+          "description": "Stores input/output pair for future fine-tuning"
+        },
+        {
+          "kind": "writes_file",
+          "target": "Audit log",
+          "description": "Flushes RunContext to audit log"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Confidence engine",
+          "description": "Updates confidence engine with outcome"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "status",
+      "description": "Returns a frozen ConfidenceSnapshot for a specific task, providing a point-in-time view of the task's confidence score, emergent phase, sampling rate, budget consumption, and local model availability. Lightweight read-only query that does not mutate state.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to query status for.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "ConfidenceSnapshot",
+      "error_cases": [
+        {
+          "name": "not_running",
+          "condition": "self._running is False — status() called outside async context",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice.status() must be called within an async context"
+          }
+        },
+        {
+          "name": "task_not_found",
+          "condition": "task_name is not registered in the task registry",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "{task_name}",
+            "available_tasks": "list of registered task names"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is empty or whitespace-only",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "self._running is True (async context has been entered)",
+        "task_name is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned ConfidenceSnapshot is a frozen Pydantic model",
+        "ConfidenceSnapshot.task_name matches the requested task_name",
+        "ConfidenceSnapshot.phase is consistent with confidence_score and configured thresholds",
+        "ConfidenceSnapshot.budget_remaining_usd + budget_used_usd equals the task's configured budget_limit_usd",
+        "ConfidenceSnapshot.timestamp_utc is the current UTC time in ISO 8601 format"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "report",
+      "description": "Returns a frozen SystemReport with comprehensive system-wide statistics. Includes a ConfidenceSnapshot for every registered task, global budget aggregates, run counts by source, fallback and error tallies, and uptime. Synchronous method that reads from in-memory state only (no async I/O needed).",
+      "inputs": [],
+      "output_type": "SystemReport",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "Called on an improperly constructed instance (should not happen if __init__ completed)",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Apprentice instance is not properly initialized"
+          }
+        }
+      ],
+      "preconditions": [
+        "__init__ has completed successfully (report can be called before async context for basic config info, but run counts will be zero)"
+      ],
+      "postconditions": [
+        "Returned SystemReport is a frozen Pydantic model",
+        "SystemReport.task_snapshots contains exactly one entry per registered task",
+        "SystemReport.total_runs == SystemReport.total_local_runs + SystemReport.total_remote_runs",
+        "SystemReport.global_budget_used_usd equals the sum of all task_snapshots[i].budget_used_usd",
+        "SystemReport.uptime_seconds is 0.0 if async context has not been entered, otherwise current UTC minus _start_time_utc",
+        "SystemReport.timestamp_utc is the current UTC time in ISO 8601 format"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "close",
+      "description": "Explicit async cleanup method. Equivalent to __aexit__(None, None, None). Provided for use with the create() factory pattern where the caller manages lifecycle without 'async with'. Flushes audit log, closes httpx clients, releases resources, sets _running to False. Safe to call multiple times (idempotent).",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "cleanup_error",
+          "condition": "Error during resource cleanup. Logged but not raised — cleanup is best-effort.",
+          "error_type": "None",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "self._running is False",
+        "All async resources are released",
+        "Audit log is flushed",
+        "Safe to call again (no-op on subsequent calls)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Audit log file",
+          "description": "Flushes pending audit entries and closes file handle"
+        },
+        {
+          "kind": "network_call",
+          "target": "httpx.AsyncClient.aclose()",
+          "description": "Closes async HTTP client connections"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Logs cleanup errors if they occur"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "main",
+      "description": "Synchronous CLI entry point. Parses argv, loads config, constructs Apprentice, dispatches to the appropriate subcommand, formats output, and returns an exit code. Calls asyncio.run() exactly once to execute async Apprentice methods. Configures structured JSON logging to stderr before any other work. Handles SIGPIPE on Unix to prevent BrokenPipeError tracebacks.",
+      "inputs": [
+        {
+          "name": "argv",
+          "type_ref": "list",
+          "required": false,
+          "default": "None",
+          "description": "Raw command-line arguments. If None, uses sys.argv[1:].",
+          "validators": []
+        }
+      ],
+      "output_type": "int",
+      "error_cases": [
+        {
+          "name": "config_file_not_found",
+          "condition": "The config file specified by --config or the default ./apprentice.yaml does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Error message printed to stderr"
+          }
+        },
+        {
+          "name": "config_validation_error",
+          "condition": "The config file exists but fails pydantic validation (missing fields, wrong types, invalid values)",
+          "error_type": "ValueError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Validation error details printed to stderr"
+          }
+        },
+        {
+          "name": "usage_error",
+          "condition": "Invalid or missing arguments (no subcommand, missing task_name for run, etc.)",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2",
+            "output": "argparse usage message printed to stderr"
+          }
+        },
+        {
+          "name": "keyboard_interrupt",
+          "condition": "User presses Ctrl+C during execution",
+          "error_type": "KeyboardInterrupt",
+          "error_data": {
+            "exit_code": "130",
+            "output": "Empty or brief message to stderr"
+          }
+        },
+        {
+          "name": "apprentice_error",
+          "condition": "Any ApprenticeError raised during Apprentice construction or subcommand execution",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Error message printed to stderr"
+          }
+        },
+        {
+          "name": "invalid_input_json",
+          "condition": "The --input argument for 'run' is neither valid JSON nor a readable @file reference",
+          "error_type": "ValueError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Input parsing error printed to stderr"
+          }
+        },
+        {
+          "name": "sigpipe",
+          "condition": "Output pipe is broken (e.g., piped to head on Unix)",
+          "error_type": "BrokenPipeError",
+          "error_data": {
+            "exit_code": "0",
+            "output": "Silently exits without traceback"
+          }
+        }
+      ],
+      "preconditions": [
+        "Python >= 3.12 runtime is available",
+        "asyncio event loop is not already running (no nested asyncio.run())",
+        "Standard file descriptors (stdin, stdout, stderr) are available"
+      ],
+      "postconditions": [
+        "Returns 0 on success, 1 on application/config error, 2 on usage error, 130 on KeyboardInterrupt",
+        "All output written to stdout (results) or stderr (errors, logs) before return",
+        "No background tasks or threads are left running after return",
+        "asyncio event loop is fully closed after return"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Config YAML file",
+          "description": "Reads config file from disk"
+        },
+        {
+          "kind": "writes_file",
+          "target": "stdout",
+          "description": "Writes formatted results to stdout"
+        },
+        {
+          "kind": "writes_file",
+          "target": "stderr",
+          "description": "Writes errors and structured JSON logs to stderr"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Configures and emits structured JSON logging"
+        },
+        {
+          "kind": "network_call",
+          "target": "Remote model API and local model server",
+          "description": "Async calls during subcommand execution via Apprentice"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "parse_args",
+      "description": "Parses raw command-line arguments into a structured ParsedArgs model using argparse. Defines the top-level parser with global flags (--config, --json, --verbose) and three subcommands (run, status, report) via add_subparsers(dest='command', required=True). Pure function with no side effects except argparse's SystemExit on invalid input.",
+      "inputs": [
+        {
+          "name": "argv",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of string arguments to parse (typically sys.argv[1:]).",
+          "validators": []
+        }
+      ],
+      "output_type": "ParsedArgs",
+      "error_cases": [
+        {
+          "name": "no_subcommand",
+          "condition": "No subcommand is provided in argv",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "unknown_subcommand",
+          "condition": "An unrecognized subcommand is provided",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "missing_required_arg",
+          "condition": "Required argument is missing (e.g., task_name for run)",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "unrecognized_flag",
+          "condition": "An unknown flag is passed",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        }
+      ],
+      "preconditions": [
+        "argv is a list of strings"
+      ],
+      "postconditions": [
+        "Returned ParsedArgs has exactly one of run_args, status_args, or report_args populated based on the command field",
+        "global_flags.config_path is a non-empty string",
+        "global_flags.verbose is clamped to [0, 2]"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "load_config",
+      "description": "Loads and validates the Apprentice YAML configuration file from the given path. Reads the file, parses YAML, and validates against the ApprenticeConfig pydantic model with strict mode. Fails immediately with a clear error message on missing file or validation failure — never silently defaults.",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File system path to the YAML config file.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "path must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The specified config file path does not exist on disk",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The config file exists but is not readable by the current user",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Permission denied reading config: {path}"
+          }
+        },
+        {
+          "name": "invalid_yaml",
+          "condition": "The file contents are not valid YAML syntax",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid YAML in config file: {path}"
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "The YAML is valid but does not conform to the ApprenticeConfig schema (missing fields, wrong types, constraint violations)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Config validation failed: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is a non-empty string",
+        "Filesystem is accessible"
+      ],
+      "postconditions": [
+        "Returned ApprenticeConfig passes all pydantic validation rules",
+        "All required config fields are present and correctly typed",
+        "Config file was read but not modified"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "YAML config file at specified path",
+          "description": "Reads and parses the config file from disk"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_input",
+      "description": "Resolves the raw --input argument into a parsed dictionary. If the input string starts with '@', treats the remainder as a file path and reads JSON from that file. Otherwise, parses the string directly as JSON. Validates that the result is a JSON object (dict), not an array or scalar.",
+      "inputs": [
+        {
+          "name": "input_raw",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Raw input string: either inline JSON or '@path/to/file.json'.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "input_raw must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "InputData",
+      "error_cases": [
+        {
+          "name": "invalid_json_string",
+          "condition": "The input string (not starting with @) is not valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid JSON input: {details}"
+          }
+        },
+        {
+          "name": "not_json_object",
+          "condition": "The parsed JSON is valid but is not a JSON object (e.g., it's an array or scalar)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Input must be a JSON object, got {type}"
+          }
+        },
+        {
+          "name": "input_file_not_found",
+          "condition": "The input starts with @ but the referenced file does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Input file not found: {path}"
+          }
+        },
+        {
+          "name": "input_file_not_readable",
+          "condition": "The referenced input file exists but cannot be read",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Permission denied reading input file: {path}"
+          }
+        },
+        {
+          "name": "input_file_invalid_json",
+          "condition": "The referenced file exists and is readable but does not contain valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid JSON in input file {path}: {details}"
+          }
+        },
+        {
+          "name": "empty_file_reference",
+          "condition": "The input is exactly '@' with no file path following",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Empty file path after @"
+          }
+        }
+      ],
+      "preconditions": [
+        "input_raw is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned InputData.data is a dict (JSON object), never a list, string, number, or null",
+        "All JSON values are valid Python types (str, int, float, bool, None, list, dict)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "JSON input file if @ prefix is used",
+          "description": "Reads JSON from referenced file if input_raw starts with @"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "format_output",
+      "description": "Serializes a subcommand result (RunResult, StatusResult, or ReportResult) into a string suitable for terminal output. In JSON mode, produces compact JSON via pydantic's model_dump_json(). In human mode, produces a formatted table or structured text output with aligned columns and section headers.",
+      "inputs": [
+        {
+          "name": "result",
+          "type_ref": "CLIResult",
+          "required": true,
+          "default": "",
+          "description": "The subcommand result to format. One of RunResult, StatusResult, or ReportResult.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If true, output machine-readable JSON. If false, output human-readable formatted text.",
+          "validators": []
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "serialization_error",
+          "condition": "The result model contains values that cannot be serialized (should not happen with well-typed models)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to serialize result: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "result is a valid RunResult, StatusResult, or ReportResult instance"
+      ],
+      "postconditions": [
+        "Returned string is non-empty",
+        "In JSON mode, returned string is valid JSON parseable by json.loads()",
+        "In human mode, returned string contains no raw JSON — values are formatted for readability",
+        "Returned string does not include a trailing newline (caller adds newline when printing)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "configure_logging",
+      "description": "Configures the Python logging subsystem for structured JSON output to stderr. Sets the root logger level based on the verbose flag (0=WARNING, 1=INFO, 2=DEBUG). Installs a JSON formatter that produces one JSON object per log line with fields: timestamp, level, logger, message, and any extra context. Must be called once at the start of main() before any other work.",
+      "inputs": [
+        {
+          "name": "verbose",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Verbosity level: 0=WARNING, 1=INFO, 2=DEBUG.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 2",
+              "error_message": "verbose must be 0, 1, or 2"
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [],
+      "preconditions": [
+        "stderr file descriptor is available and writable",
+        "This function has not been called previously in this process (idempotent in effect but should only be called once)"
+      ],
+      "postconditions": [
+        "Root logger level is set to WARNING (verbose=0), INFO (verbose=1), or DEBUG (verbose=2)",
+        "All log output is directed to stderr, never stdout",
+        "Log format is structured JSON with one object per line",
+        "Each log line contains: timestamp (ISO 8601), level, logger name, message"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "Python logging subsystem (root logger)",
+          "description": "Configures root logger level, handlers, and formatters"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Installs JSON handler writing to stderr"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_run",
+      "description": "Executes the 'run' subcommand: resolves input, calls Apprentice.run(task_name, input_data) asynchronously, and wraps the TaskResponse into a RunResult. This is an async function called within asyncio.run() from main().",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A fully initialized Apprentice instance with _running == True.",
+          "validators": []
+        },
+        {
+          "name": "run_args",
+          "type_ref": "RunArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed arguments for the run subcommand including task_name and input_raw.",
+          "validators": []
+        }
+      ],
+      "output_type": "RunResult",
+      "error_cases": [
+        {
+          "name": "task_not_found",
+          "condition": "The specified task_name is not defined in the loaded config",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Unknown task: {task_name}"
+          }
+        },
+        {
+          "name": "input_resolution_failed",
+          "condition": "The input_raw string cannot be resolved to a valid dict (invalid JSON or missing file)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to resolve input: {details}"
+          }
+        },
+        {
+          "name": "execution_error",
+          "condition": "Apprentice.run() raises an error during task execution (budget exhausted, local unavailable, etc.)",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Task execution failed: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance with _running == True",
+        "run_args.task_name corresponds to a task defined in the loaded config",
+        "run_args.input_raw is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned RunResult.task_name matches run_args.task_name",
+        "If success is true, output contains the task response payload",
+        "If success is false, error_message contains a human-readable error description"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Input JSON file if @ prefix is used",
+          "description": "Resolves @file references in input_raw"
+        },
+        {
+          "kind": "network_call",
+          "target": "Remote model API or local model server via Apprentice.run()",
+          "description": "Delegates to Apprentice.run() which may make network calls"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Apprentice internal state (budget, confidence, training data, audit log)",
+          "description": "Apprentice.run() mutates internal state as a side effect"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_status",
+      "description": "Executes the 'status' subcommand: calls Apprentice.status() asynchronously, optionally filters by task name, and wraps the result into a StatusResult with ISO 8601 timestamp.",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A fully initialized Apprentice instance with _running == True.",
+          "validators": []
+        },
+        {
+          "name": "status_args",
+          "type_ref": "StatusArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed arguments for the status subcommand, including optional task_filter.",
+          "validators": []
+        }
+      ],
+      "output_type": "StatusResult",
+      "error_cases": [
+        {
+          "name": "filtered_task_not_found",
+          "condition": "The --task filter specifies a task name that doesn't exist in the config",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Unknown task: {task_name}"
+          }
+        },
+        {
+          "name": "status_retrieval_error",
+          "condition": "Apprentice.status() fails due to internal state corruption or other error",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Failed to retrieve status: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance with _running == True"
+      ],
+      "postconditions": [
+        "Returned StatusResult.tasks is non-empty if the system has any configured tasks (unless filtered to a non-existent task)",
+        "If status_args.task_filter is non-empty, returned tasks list contains at most one entry matching that task name",
+        "timestamp is a valid ISO 8601 datetime string"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_report",
+      "description": "Executes the 'report' subcommand: calls Apprentice.report(), wraps into ReportResult, and optionally writes to an output file. If --output is specified, writes the formatted output to that file and records the path in the result.",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "A fully initialized Apprentice instance.",
+          "validators": []
+        },
+        {
+          "name": "report_args",
+          "type_ref": "ReportArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed arguments for the report subcommand, including optional output_path.",
+          "validators": []
+        },
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the config file that was loaded, included in the report for auditability.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether to format the report as JSON (for file output when --output is specified).",
+          "validators": []
+        }
+      ],
+      "output_type": "ReportResult",
+      "error_cases": [
+        {
+          "name": "report_retrieval_error",
+          "condition": "Apprentice.report() fails due to internal error",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Failed to generate report: {details}"
+          }
+        },
+        {
+          "name": "output_file_write_error",
+          "condition": "Cannot write to the specified --output file path (permissions, directory doesn't exist, disk full)",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Failed to write report to {path}: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance",
+        "config_path is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned ReportResult.tasks contains entries for all configured tasks",
+        "total_budget_spent <= total_budget_limit",
+        "system_uptime_seconds >= 0",
+        "timestamp is a valid ISO 8601 datetime string",
+        "If report_args.output_path is non-empty, the file at that path contains the formatted report",
+        "written_to_file matches report_args.output_path if output was written to file"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Report output file at report_args.output_path",
+          "description": "Writes formatted report to file if --output is specified"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "apprentice_class",
+    "cli"
+  ],
+  "dependency_contracts": {
+    "apprentice_class": [
+      "ModelSource",
+      "PhaseLabel",
+      "RunStatus",
+      "ErrorKind",
+      "ApprenticeConfig",
+      "TaskConfig",
+      "ConfidenceThresholds",
+      "BudgetEnforcementConfig",
+      "TaskResponse",
+      "ResponseMetadata",
+      "ConfidenceSnapshot",
+      "SystemReport",
+      "RunContext",
+      "ComponentOverrides",
+      "ApprenticeError",
+      "BudgetExhaustedError",
+      "TaskNotFoundError",
+      "LocalModelUnavailableError",
+      "__init__",
+      "create",
+      "__aenter__",
+      "__aexit__",
+      "run",
+      "status",
+      "report",
+      "close"
+    ],
+    "cli": [
+      "ExitCode",
+      "OutputFormat",
+      "LogLevel",
+      "SubcommandName",
+      "GlobalFlags",
+      "RunArgs",
+      "StatusArgs",
+      "ReportArgs",
+      "ParsedArgs",
+      "InputData",
+      "PhaseInfo",
+      "BudgetInfo",
+      "RunResult",
+      "TaskStatusEntry",
+      "TaskStatusEntryList",
+      "StatusResult",
+      "ReportResult",
+      "CLIResult",
+      "ApprenticeConfig",
+      "main",
+      "parse_args",
+      "load_config",
+      "resolve_input",
+      "format_output",
+      "configure_logging",
+      "execute_run",
+      "execute_status",
+      "execute_report"
+    ]
+  },
+  "invariants": [
+    "self._config is always a fully validated, frozen ApprenticeConfig instance after __init__ completes",
+    "self._running is True if and only if the async context has been entered and not yet exited",
+    "run() and status() always raise RuntimeError if self._running is False",
+    "All 10 internal components are non-None after __init__ completes: _config_loader, _task_registry, _remote_client, _local_client, _confidence_engine, _sampling_scheduler, _budget_manager, _training_data_store, _router, _audit_log",
+    "Budget enforcement is hard: if budget_manager.can_spend() returns False for a task, no remote API call is made for that task",
+    "Every run() invocation creates exactly one RunContext, which is flushed to the audit log on completion regardless of success or failure",
+    "TaskResponse.source accurately reflects which model backend produced the output — never misattributed",
+    "Phase labels are always derived from confidence scores and thresholds — never manually assigned or overridden",
+    "Sampling rate is continuous (float in [0.0, 1.0]), never discrete tiers",
+    "All return types (TaskResponse, ConfidenceSnapshot, SystemReport) are frozen Pydantic v2 models — immutable after construction",
+    "No global state: all state flows through explicit parameters, injected dependencies, or instance attributes",
+    "Local model failure with available budget triggers graceful fallback to remote — never crashes",
+    "Budget exhaustion with available local model triggers graceful degradation to local-only — never crashes",
+    "Only when BOTH local model is unavailable AND budget is exhausted does the system raise an error",
+    "Component overrides provided in __init__ completely replace the default-constructed component — no partial merging",
+    "SystemReport.total_runs always equals SystemReport.total_local_runs + SystemReport.total_remote_runs",
+    "close() is idempotent — safe to call multiple times with no side effects after the first call",
+    "asyncio.run() is called exactly once per CLI main() invocation, never nested",
+    "CLI exit codes are deterministic: 0 for success, 1 for application/config error, 2 for usage error, 130 for keyboard interrupt",
+    "Config validation errors always fail at startup, never silently default",
+    "All CLI output goes to stdout; all errors and logs go to stderr",
+    "Structured JSON logging is configured before any other work in CLI main()",
+    "ConfidenceThresholds must satisfy: bootstrapping_upper < active_learning_upper < supervised_upper <= autonomous_lower",
+    "All enums use StrEnum except ExitCode which uses IntEnum",
+    "Source files respect the 300-line limit: types.py ~250 lines, errors.py ~60 lines, core.py ~120 lines, cli.py ~170 lines, __init__.py ~10 lines"
+  ],
+  "requires": [
+    "Python >= 3.12",
+    "pydantic >= 2.0",
+    "httpx (async)",
+    "pyyaml",
+    "argparse (stdlib)",
+    "asyncio (stdlib)",
+    "logging (stdlib)",
+    "json (stdlib)",
+    "uuid (stdlib)"
+  ]
+}

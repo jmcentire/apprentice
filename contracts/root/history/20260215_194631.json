@@ -1,0 +1,1660 @@
+{
+  "component_id": "root",
+  "name": "Root",
+  "description": "Composition Root and Public API Surface for the Apprentice system — Adaptive Model Distillation with Coaching. Serves dual purposes: (1) wires all 9 internal components together via dependency injection following a strict initialization DAG, and (2) defines the public API surface by re-exporting the Apprentice facade class, user-facing types (ApprenticeConfig, TaskResponse, ConfidenceSnapshot, SystemReport), and the error hierarchy (ApprenticeError, BudgetExhaustedError, TaskNotFoundError, LocalModelUnavailableError, AllSourcesUnavailableError). The root owns the component lifecycle (construction order, async resource management via AsyncExitStack, teardown in reverse order), the fine-tuning backend plugin registry (dict mapping FinetuningBackendName → Protocol implementation), and the public __all__ manifest. Inter-component communication uses Pydantic models passed directly (no serialization). State persistence uses model_dump(mode='json') → JSON files. Audit trail uses JSON Lines. CLI output supports human-readable text or JSON. Concurrency model is single-request sequential; budget_manager authorize/record_spend is atomic per request within that model. All internal component errors are caught and translated to user-facing ApprenticeError subtypes before reaching callers. Config validation is strict and fail-fast at startup. No global state — all state flows through the Apprentice instance and its injected dependencies.",
+  "version": 1,
+  "types": [
+    {
+      "name": "PublicExportManifest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "apprentice_class",
+          "type_ref": "str",
+          "required": true,
+          "default": "Apprentice",
+          "description": "Re-exported from unified_interface. Value: 'Apprentice'. The primary facade class.",
+          "validators": []
+        },
+        {
+          "name": "config_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "ApprenticeConfig",
+          "description": "Re-exported from config_and_registry. Value: 'ApprenticeConfig'. Root config model.",
+          "validators": []
+        },
+        {
+          "name": "task_response_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "TaskResponse",
+          "description": "Re-exported from unified_interface. Value: 'TaskResponse'. The response model returned by run().",
+          "validators": []
+        },
+        {
+          "name": "confidence_snapshot_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "ConfidenceSnapshot",
+          "description": "Re-exported from unified_interface. Value: 'ConfidenceSnapshot'. Returned by status().",
+          "validators": []
+        },
+        {
+          "name": "system_report_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "SystemReport",
+          "description": "Re-exported from unified_interface. Value: 'SystemReport'. Returned by report().",
+          "validators": []
+        },
+        {
+          "name": "base_error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "ApprenticeError",
+          "description": "Re-exported from unified_interface. Value: 'ApprenticeError'. Base exception.",
+          "validators": []
+        },
+        {
+          "name": "budget_exhausted_error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "BudgetExhaustedError",
+          "description": "Re-exported from unified_interface. Value: 'BudgetExhaustedError'.",
+          "validators": []
+        },
+        {
+          "name": "task_not_found_error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "TaskNotFoundError",
+          "description": "Re-exported from unified_interface. Value: 'TaskNotFoundError'.",
+          "validators": []
+        },
+        {
+          "name": "local_model_unavailable_error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "LocalModelUnavailableError",
+          "description": "Re-exported from unified_interface. Value: 'LocalModelUnavailableError'.",
+          "validators": []
+        },
+        {
+          "name": "all_sources_unavailable_error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "AllSourcesUnavailableError",
+          "description": "Defined at root level. Value: 'AllSourcesUnavailableError'. Terminal degradation state.",
+          "validators": []
+        },
+        {
+          "name": "main_function",
+          "type_ref": "str",
+          "required": true,
+          "default": "main",
+          "description": "Re-exported from unified_interface. Value: 'main'. CLI entry point.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Documents the public __all__ manifest of the apprentice package. These are the symbols importable via 'from apprentice import X'. The root __init__.py re-exports these from their owning components — it does not redefine them. This struct is for contract documentation only; the actual __all__ is a list of strings in __init__.py."
+    },
+    {
+      "name": "InitializationPhase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "CONFIG_PARSE",
+        "REGISTRY_BUILD",
+        "BUDGET_MANAGER_INIT",
+        "CONFIDENCE_ENGINE_INIT",
+        "EXTERNAL_INTERFACES_INIT",
+        "SAMPLING_SCHEDULER_INIT",
+        "ROUTER_INIT",
+        "TRAINING_PIPELINE_INIT",
+        "REPORTING_INIT",
+        "UNIFIED_INTERFACE_INIT"
+      ],
+      "inner_types": [],
+      "description": "Phases of the component initialization DAG. Components are initialized in strict order; each phase must complete before the next begins. Teardown occurs in reverse order."
+    },
+    {
+      "name": "ComponentStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "NOT_STARTED",
+        "INITIALIZING",
+        "READY",
+        "FAILED",
+        "SHUTTING_DOWN",
+        "SHUTDOWN"
+      ],
+      "inner_types": [],
+      "description": "Status of a single component during initialization or runtime."
+    },
+    {
+      "name": "ComponentId",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "CONFIG_AND_REGISTRY",
+        "BUDGET_MANAGER",
+        "CONFIDENCE_ENGINE",
+        "EXTERNAL_INTERFACES",
+        "SAMPLING_SCHEDULER",
+        "ROUTER",
+        "TRAINING_PIPELINE",
+        "REPORTING",
+        "UNIFIED_INTERFACE"
+      ],
+      "inner_types": [],
+      "description": "Identifiers for all 9 internal components managed by the root composition root."
+    },
+    {
+      "name": "ComponentStatusEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "component_id",
+          "type_ref": "ComponentId",
+          "required": true,
+          "default": "",
+          "description": "Which component this status entry describes.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "ComponentStatus",
+          "required": true,
+          "default": "",
+          "description": "Current lifecycle status of the component.",
+          "validators": []
+        },
+        {
+          "name": "initialization_phase",
+          "type_ref": "InitializationPhase",
+          "required": true,
+          "default": "",
+          "description": "The initialization phase this component belongs to.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Error message if status is FAILED, empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "initialized_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when the component was successfully initialized. Empty string if not yet initialized.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Status of a single component within the composition root. Used for diagnostics and health reporting."
+    },
+    {
+      "name": "ComponentStatusList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ComponentStatusEntry",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of ComponentStatusEntry objects, one per managed component."
+    },
+    {
+      "name": "FinetuningBackendName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "OPENAI",
+        "ANYSCALE",
+        "LOCAL_LORA",
+        "AXOLOTL",
+        "CUSTOM"
+      ],
+      "inner_types": [],
+      "description": "Supported fine-tuning backend identifiers for plugin resolution. Maps to Protocol implementations in the backend registry."
+    },
+    {
+      "name": "BackendRegistryEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend_name",
+          "type_ref": "FinetuningBackendName",
+          "required": true,
+          "default": "",
+          "description": "The backend identifier from config.",
+          "validators": []
+        },
+        {
+          "name": "implementation",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The Protocol-conformant backend implementation instance. Must satisfy the fine-tuning orchestrator's backend protocol.",
+          "validators": []
+        },
+        {
+          "name": "is_remote",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if this backend makes remote API calls (openai, anyscale). False for local backends (local_lora, axolotl).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single entry in the fine-tuning backend plugin registry. Maps a backend name to its Protocol-conformant implementation."
+    },
+    {
+      "name": "BackendRegistry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "entries",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from backend name string to BackendRegistryEntry. Keys are FinetuningBackendName string values.",
+          "validators": []
+        },
+        {
+          "name": "active_backend_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The backend name selected by config (finetuning.backend). Must be a key in entries.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable dict-based registry mapping FinetuningBackendName to backend implementations. Constructed at root initialization time from config and available plugins. The root is responsible for this resolution — training_pipeline is backend-agnostic."
+    },
+    {
+      "name": "SerializationBoundary",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "CONFIG_YAML_TO_PYDANTIC",
+        "INTER_COMPONENT_PYDANTIC",
+        "STATE_PYDANTIC_TO_JSON",
+        "AUDIT_ENTRY_TO_JSONL",
+        "CLI_OUTPUT_TEXT_OR_JSON"
+      ],
+      "inner_types": [],
+      "description": "Categorized serialization boundaries in the system. Documents where data crosses format boundaries."
+    },
+    {
+      "name": "LifecycleEvent",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "INITIALIZATION_STARTED",
+        "COMPONENT_INITIALIZED",
+        "COMPONENT_INIT_FAILED",
+        "ALL_COMPONENTS_READY",
+        "SHUTDOWN_STARTED",
+        "COMPONENT_SHUTDOWN",
+        "COMPONENT_SHUTDOWN_FAILED",
+        "SHUTDOWN_COMPLETE"
+      ],
+      "inner_types": [],
+      "description": "Events in the root lifecycle that are logged for auditability."
+    },
+    {
+      "name": "LifecycleLogEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "event",
+          "type_ref": "LifecycleEvent",
+          "required": true,
+          "default": "",
+          "description": "The lifecycle event that occurred.",
+          "validators": []
+        },
+        {
+          "name": "component_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "root",
+          "description": "The component this event pertains to, or 'root' for system-wide events.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the event.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "0.0",
+          "description": "Duration in milliseconds of the operation (e.g., component init time). 0.0 if not applicable.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Error detail if the event is a failure. Empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": true,
+          "default": "{}",
+          "description": "Additional structured context.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured log entry for a lifecycle event. Emitted as JSON to stderr via stdlib logging."
+    },
+    {
+      "name": "AllSourcesUnavailableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message describing both unavailability conditions.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task that could not be served.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the failing run() call.",
+          "validators": []
+        },
+        {
+          "name": "local_unavailable_reason",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Why the local model is unavailable (e.g., 'server_not_running', 'no_model_loaded', 'inference_timeout').",
+          "validators": []
+        },
+        {
+          "name": "budget_exhausted_detail",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Detail about budget exhaustion (e.g., remaining budget, limit, period).",
+          "validators": []
+        },
+        {
+          "name": "budget_limit_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The budget limit that was hit.",
+          "validators": []
+        },
+        {
+          "name": "budget_used_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Amount already consumed.",
+          "validators": []
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when this error occurred.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Terminal degradation error raised when BOTH the local model is unavailable AND the remote API budget is exhausted. This is the only state in which the system cannot serve a request at all. Derives from ApprenticeError (unified_interface). Defined at root level because it represents a system-wide condition spanning multiple components. This is an Exception subclass in implementation."
+    },
+    {
+      "name": "InitializationError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable summary of the initialization failure.",
+          "validators": []
+        },
+        {
+          "name": "failed_phase",
+          "type_ref": "InitializationPhase",
+          "required": true,
+          "default": "",
+          "description": "The initialization phase at which the failure occurred.",
+          "validators": []
+        },
+        {
+          "name": "failed_component_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The component that failed to initialize.",
+          "validators": []
+        },
+        {
+          "name": "component_statuses",
+          "type_ref": "ComponentStatusList",
+          "required": true,
+          "default": "",
+          "description": "Status of all components at the time of failure.",
+          "validators": []
+        },
+        {
+          "name": "cause",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "String representation of the underlying exception that caused the failure.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Error raised when the composition root fails to initialize one or more components. Contains the phase at which initialization failed and details about which components succeeded vs. failed. This is an Exception subclass in implementation."
+    },
+    {
+      "name": "ShutdownError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable summary of shutdown errors.",
+          "validators": []
+        },
+        {
+          "name": "component_errors",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from component_id string to error message string for each component that failed during shutdown.",
+          "validators": []
+        },
+        {
+          "name": "components_shutdown_successfully",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of component_id strings that shut down cleanly.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Error raised (or logged) when one or more components fail during shutdown. Shutdown proceeds through all components regardless — errors are accumulated. This is an Exception subclass but is typically logged rather than raised."
+    },
+    {
+      "name": "RequestCorrelation",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "UUID v4 string uniquely identifying this request. Generated at run() entry.",
+          "validators": []
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task being processed.",
+          "validators": []
+        },
+        {
+          "name": "created_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when this correlation context was created.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Correlation context threaded through the entire request processing pipeline. Created at run() entry, passed to every component call for audit trail correlation."
+    },
+    {
+      "name": "BudgetReservationCycle",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request this cycle pertains to.",
+          "validators": []
+        },
+        {
+          "name": "estimated_cost",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Decimal string of the estimated cost reserved via authorize().",
+          "validators": []
+        },
+        {
+          "name": "authorization_granted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether authorize() returned allowed=True.",
+          "validators": []
+        },
+        {
+          "name": "api_call_succeeded",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the remote API call succeeded.",
+          "validators": []
+        },
+        {
+          "name": "actual_cost",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Decimal string of the actual cost reported by the API. Empty if API call failed before cost was incurred.",
+          "validators": []
+        },
+        {
+          "name": "reconciliation_action",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "One of: 'record_spend' (API succeeded), 'release_reservation' (API failed before cost), 'none' (authorization denied).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Documents the complete budget reservation lifecycle for a single remote API call. The root orchestration layer (router) must follow this exact sequence: authorize → API call → record_spend (on success) OR release_reservation (on failure before cost is incurred). A crash between authorize and record_spend conservatively counts the estimated cost (write-ahead guarantee)."
+    },
+    {
+      "name": "CleanupPolicy",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "order",
+          "type_ref": "str",
+          "required": true,
+          "default": "unified_interface → reporting → training_pipeline → router → sampling_scheduler → external_interfaces → confidence_engine → budget_manager → config_and_registry",
+          "description": "Reverse of initialization DAG order.",
+          "validators": []
+        },
+        {
+          "name": "error_handling",
+          "type_ref": "str",
+          "required": true,
+          "default": "Log error at CRITICAL level, continue to next component. Accumulate all errors in ShutdownError.",
+          "description": "Policy for errors during shutdown.",
+          "validators": []
+        },
+        {
+          "name": "async_exit_stack",
+          "type_ref": "str",
+          "required": true,
+          "default": "contextlib.AsyncExitStack",
+          "description": "AsyncExitStack manages async resources (httpx clients, file handles). Closed after all component shutdown.",
+          "validators": []
+        },
+        {
+          "name": "force_persist_on_shutdown",
+          "type_ref": "bool",
+          "required": true,
+          "default": "true",
+          "description": "Whether to force-persist budget_manager and confidence_engine state on shutdown.",
+          "validators": []
+        },
+        {
+          "name": "audit_flush_on_shutdown",
+          "type_ref": "bool",
+          "required": true,
+          "default": "true",
+          "description": "Whether to flush the audit log on shutdown.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Documents the cleanup/shutdown policy for the composition root. Shutdown proceeds through ALL components in reverse initialization order. Errors during individual component shutdown are logged but do not prevent other components from shutting down."
+    },
+    {
+      "name": "DependencyWiring",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_and_registry_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "path: Path, env: Mapping[str, str]",
+          "description": "YAML file path and env mapping.",
+          "validators": []
+        },
+        {
+          "name": "budget_manager_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "config: BudgetConfig (from config_and_registry)",
+          "description": "BudgetConfig extracted from ApprenticeConfig.",
+          "validators": []
+        },
+        {
+          "name": "confidence_engine_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "config: ConfidenceEngineConfig, evaluator_registry: dict, logger: Logger",
+          "description": "Config, evaluator registry, and logger.",
+          "validators": []
+        },
+        {
+          "name": "external_interfaces_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "remote_config: RemoteAdapterConfig, local_config: LocalAdapterConfig, http_client: httpx.AsyncClient (optional)",
+          "description": "Remote and local adapter configs, optional injected HTTP clients.",
+          "validators": []
+        },
+        {
+          "name": "sampling_scheduler_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "config: SamplingSchedulerConfig, random_source: Callable (optional)",
+          "description": "Scheduler config and optional random source for testing.",
+          "validators": []
+        },
+        {
+          "name": "router_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "budget_manager, confidence_engine, sampling_scheduler, local_backend, remote_backend, training_data_collector, audit_logger",
+          "description": "All upstream components as Protocol interfaces.",
+          "validators": []
+        },
+        {
+          "name": "training_pipeline_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "config: PipelineConfig, data_store, orchestrator (with backend from BackendRegistry), validator",
+          "description": "Config, data store, orchestrator (with resolved backend plugin), and validator.",
+          "validators": []
+        },
+        {
+          "name": "reporting_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "audit_config: AuditConfig, confidence_source, budget_source, audit_source",
+          "description": "Audit config, data source protocols for confidence/budget/audit.",
+          "validators": []
+        },
+        {
+          "name": "unified_interface_receives",
+          "type_ref": "str",
+          "required": true,
+          "default": "config: str | ApprenticeConfig, **component_overrides",
+          "description": "Config path or object, plus all component overrides.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Documents the dependency injection wiring performed by the composition root. Each component receives its dependencies as constructor parameters — no component constructs its own dependencies internally."
+    },
+    {
+      "name": "ConcurrencyModel",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "single_request_sequential",
+          "description": "The concurrency model.",
+          "validators": []
+        },
+        {
+          "name": "budget_atomicity",
+          "type_ref": "str",
+          "required": true,
+          "default": "authorize_then_spend is atomic — no race conditions in single-threaded model",
+          "description": "Budget operations are atomic within a single request.",
+          "validators": []
+        },
+        {
+          "name": "dual_send_concurrency",
+          "type_ref": "str",
+          "required": true,
+          "default": "asyncio.gather(return_exceptions=True) for dual-send",
+          "description": "Local and remote model calls are concurrent within a single request.",
+          "validators": []
+        },
+        {
+          "name": "future_consideration",
+          "type_ref": "str",
+          "required": true,
+          "default": "Add asyncio.Lock in budget_manager.authorize() and record_spend() for cross-request atomicity",
+          "description": "If concurrent request handling is needed later.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Documents the concurrency model of the system. Single-request sequential by default. Budget manager's authorize → record_spend cycle is atomic within a single request. No concurrent calls to budget_manager.authorize() or record_spend() are supported."
+    }
+  ],
+  "functions": [
+    {
+      "name": "initialize_composition_root",
+      "description": "Constructs and wires all 9 components following the strict initialization DAG: config_and_registry → budget_manager → confidence_engine → external_interfaces → sampling_scheduler → router → training_pipeline → reporting → unified_interface. Each phase must complete before the next begins. Uses AsyncExitStack for async resource management. Resolves the fine-tuning backend plugin from config via the BackendRegistry. Component overrides (for testing) replace the default-constructed component entirely. Emits structured lifecycle log entries at each phase. On failure at any phase, tears down already-initialized components in reverse order before raising InitializationError.",
+      "inputs": [
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the apprentice.yaml configuration file.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "config_path must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "env",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Environment variable mapping for resolving env:VAR_NAME references. Defaults to os.environ if not provided.",
+          "validators": []
+        },
+        {
+          "name": "component_overrides",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional dict mapping ComponentId string values to pre-constructed component instances for dependency injection in tests. Keys are ComponentId enum string values, values are component instances.",
+          "validators": []
+        }
+      ],
+      "output_type": "dict",
+      "error_cases": [
+        {
+          "name": "config_file_not_found",
+          "condition": "config_path does not exist on disk",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "CONFIG_PARSE",
+            "failed_component_id": "CONFIG_AND_REGISTRY"
+          }
+        },
+        {
+          "name": "config_validation_failed",
+          "condition": "YAML is valid but config fails strict Pydantic validation (missing fields, invalid types, cross-field constraint violations)",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "CONFIG_PARSE",
+            "failed_component_id": "CONFIG_AND_REGISTRY"
+          }
+        },
+        {
+          "name": "env_var_not_found",
+          "condition": "An env:VAR_NAME reference in config cannot be resolved from the env mapping",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "CONFIG_PARSE",
+            "failed_component_id": "CONFIG_AND_REGISTRY"
+          }
+        },
+        {
+          "name": "budget_state_corrupted",
+          "condition": "Budget manager state file exists but fails validation",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "BUDGET_MANAGER_INIT",
+            "failed_component_id": "BUDGET_MANAGER"
+          }
+        },
+        {
+          "name": "budget_state_dir_not_writable",
+          "condition": "Budget state file parent directory does not exist or is not writable",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "BUDGET_MANAGER_INIT",
+            "failed_component_id": "BUDGET_MANAGER"
+          }
+        },
+        {
+          "name": "confidence_engine_config_invalid",
+          "condition": "Confidence engine config or phase thresholds fail validation",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "CONFIDENCE_ENGINE_INIT",
+            "failed_component_id": "CONFIDENCE_ENGINE"
+          }
+        },
+        {
+          "name": "remote_adapter_api_key_missing",
+          "condition": "The environment variable for the remote API key is not set",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "EXTERNAL_INTERFACES_INIT",
+            "failed_component_id": "EXTERNAL_INTERFACES"
+          }
+        },
+        {
+          "name": "unsupported_finetuning_backend",
+          "condition": "Config references a fine-tuning backend name that has no registered plugin implementation",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "TRAINING_PIPELINE_INIT",
+            "failed_component_id": "TRAINING_PIPELINE"
+          }
+        },
+        {
+          "name": "audit_log_path_not_writable",
+          "condition": "Audit log file path parent directory does not exist or is not writable",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "REPORTING_INIT",
+            "failed_component_id": "REPORTING"
+          }
+        },
+        {
+          "name": "component_protocol_mismatch",
+          "condition": "A component override does not conform to the expected Protocol interface",
+          "error_type": "InitializationError",
+          "error_data": {
+            "failed_phase": "CONFIG_PARSE",
+            "failed_component_id": "root"
+          }
+        }
+      ],
+      "preconditions": [
+        "config_path points to an existing, readable YAML file",
+        "If env is provided, it is a Mapping[str, str]",
+        "If component_overrides is provided, each value conforms to the expected Protocol for that component",
+        "asyncio event loop is running (for async components)"
+      ],
+      "postconditions": [
+        "All 9 components are constructed and fully initialized",
+        "All dependency injection wiring is complete — each component holds references to its dependencies",
+        "The fine-tuning backend plugin has been resolved from config and injected into the training pipeline",
+        "AsyncExitStack holds all async resources (httpx clients, file handles)",
+        "Budget manager state has been loaded from disk (or fresh state created)",
+        "Confidence engine state has been loaded from disk (or empty state created)",
+        "Audit log file handle is open for appending",
+        "A structured lifecycle log entry has been emitted for each successfully initialized component",
+        "Returned dict maps ComponentId string values to constructed component instances"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Reads config file from disk",
+        "Reads budget state file from disk if it exists",
+        "Reads confidence engine state files from disk if they exist",
+        "Creates httpx.AsyncClient instances for remote and local model endpoints",
+        "Opens audit log file handle for appending",
+        "Creates state file directories if they do not exist",
+        "Emits structured JSON lifecycle log entries to stderr"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config_path",
+          "description": "Reads apprentice.yaml config file"
+        },
+        {
+          "kind": "reads_file",
+          "target": "budget_state_file",
+          "description": "Loads persisted budget state if it exists"
+        },
+        {
+          "kind": "reads_file",
+          "target": "confidence_persistence_dir",
+          "description": "Loads persisted confidence engine window state if it exists"
+        },
+        {
+          "kind": "writes_file",
+          "target": "budget_state_file",
+          "description": "Creates fresh budget state file if none exists"
+        },
+        {
+          "kind": "writes_file",
+          "target": "audit_log_path",
+          "description": "Opens audit log file for appending"
+        },
+        {
+          "kind": "network_call",
+          "target": "httpx.AsyncClient",
+          "description": "Creates async HTTP clients for remote and local endpoints"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Emits structured JSON lifecycle log entries"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "shutdown_composition_root",
+      "description": "Tears down all components in reverse initialization order: unified_interface → reporting → training_pipeline → router → sampling_scheduler → external_interfaces → confidence_engine → budget_manager → config_and_registry. For each component: persists state if applicable (budget_manager.force_persist, confidence_engine.persist_state), then closes async resources. Errors during individual component shutdown are logged at CRITICAL level but do NOT prevent other components from shutting down. All accumulated errors are collected in a ShutdownError. The AsyncExitStack is closed after all component-level shutdown. Audit log is flushed before the audit logger itself is closed.",
+      "inputs": [
+        {
+          "name": "components",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from ComponentId string values to component instances, as returned by initialize_composition_root.",
+          "validators": []
+        },
+        {
+          "name": "exit_stack",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The AsyncExitStack managing async resources. Will be closed at the end of shutdown.",
+          "validators": []
+        }
+      ],
+      "output_type": "ShutdownError",
+      "error_cases": [
+        {
+          "name": "budget_persist_failure",
+          "condition": "budget_manager.force_persist() raises an error during shutdown",
+          "error_type": "ShutdownError",
+          "error_data": {
+            "message": "Failed to persist budget state during shutdown"
+          }
+        },
+        {
+          "name": "confidence_persist_failure",
+          "condition": "confidence_engine.persist_state() raises an error during shutdown",
+          "error_type": "ShutdownError",
+          "error_data": {
+            "message": "Failed to persist confidence engine state during shutdown"
+          }
+        },
+        {
+          "name": "audit_flush_failure",
+          "condition": "Audit log flush fails during shutdown",
+          "error_type": "ShutdownError",
+          "error_data": {
+            "message": "Failed to flush audit log during shutdown"
+          }
+        },
+        {
+          "name": "httpx_close_failure",
+          "condition": "httpx.AsyncClient.aclose() raises an error",
+          "error_type": "ShutdownError",
+          "error_data": {
+            "message": "Failed to close HTTP client during shutdown"
+          }
+        },
+        {
+          "name": "exit_stack_close_failure",
+          "condition": "AsyncExitStack.__aexit__ raises an error",
+          "error_type": "ShutdownError",
+          "error_data": {
+            "message": "AsyncExitStack cleanup failed during shutdown"
+          }
+        }
+      ],
+      "preconditions": [
+        "components dict contains entries for all initialized components",
+        "exit_stack is a valid AsyncExitStack (may be empty if no async resources were registered)"
+      ],
+      "postconditions": [
+        "All async resources (httpx clients, file handles) are closed",
+        "Budget manager state has been force-persisted to disk (if budget_manager was initialized)",
+        "Confidence engine state has been persisted to disk (if confidence_engine was initialized)",
+        "Audit log has been flushed (if reporting/audit was initialized)",
+        "AsyncExitStack has been closed",
+        "If any component failed during shutdown, the returned ShutdownError contains details. If all succeeded, returned ShutdownError.component_errors is empty",
+        "Structured lifecycle log entries have been emitted for each component shutdown"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Writes budget state to disk",
+        "Writes confidence engine state to disk",
+        "Flushes and closes audit log file",
+        "Closes httpx async clients",
+        "Closes AsyncExitStack",
+        "Emits structured JSON lifecycle log entries to stderr"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "budget_state_file",
+          "description": "Force-persists budget state"
+        },
+        {
+          "kind": "writes_file",
+          "target": "confidence_persistence_dir",
+          "description": "Persists confidence engine window state"
+        },
+        {
+          "kind": "writes_file",
+          "target": "audit_log_path",
+          "description": "Flushes audit log to disk"
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Emits structured JSON lifecycle log entries"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_finetuning_backend",
+      "description": "Resolves a fine-tuning backend plugin implementation from the configured backend name. Uses a simple dict registry mapping FinetuningBackendName string values to constructor functions. The root is responsible for this resolution — the training_pipeline component is backend-agnostic and receives only the resolved implementation. For built-in backends (openai, anyscale, local_lora, axolotl), the registry contains factory functions that construct the backend from config. For 'custom' backends, the registry looks up a custom entry point or raises an error if none is registered.",
+      "inputs": [
+        {
+          "name": "backend_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The fine-tuning backend name from config (e.g., 'openai', 'local_lora', 'custom').",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "backend_name must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "finetuning_config",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The fine-tuning configuration dict from ApprenticeConfig. Contains backend-specific settings (api_key, api_base_url, model_base, etc.).",
+          "validators": []
+        },
+        {
+          "name": "custom_backends",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional mapping of custom backend names to their implementations. Used for plugin registration.",
+          "validators": []
+        }
+      ],
+      "output_type": "BackendRegistryEntry",
+      "error_cases": [
+        {
+          "name": "unknown_backend",
+          "condition": "backend_name does not match any built-in or registered custom backend",
+          "error_type": "str",
+          "error_data": {
+            "message": "Unsupported fine-tuning backend: {backend_name}. Available backends: openai, anyscale, local_lora, axolotl, custom"
+          }
+        },
+        {
+          "name": "missing_api_key_for_remote",
+          "condition": "Backend is remote (openai, anyscale) but finetuning_config lacks api_key",
+          "error_type": "str",
+          "error_data": {
+            "message": "Remote fine-tuning backend '{backend_name}' requires api_key in config"
+          }
+        },
+        {
+          "name": "missing_api_base_url_for_remote",
+          "condition": "Backend is remote but finetuning_config lacks api_base_url",
+          "error_type": "str",
+          "error_data": {
+            "message": "Remote fine-tuning backend '{backend_name}' requires api_base_url in config"
+          }
+        },
+        {
+          "name": "custom_backend_not_registered",
+          "condition": "backend_name is 'custom' but no custom backend is registered in custom_backends",
+          "error_type": "str",
+          "error_data": {
+            "message": "Custom fine-tuning backend requested but no implementation registered"
+          }
+        }
+      ],
+      "preconditions": [
+        "backend_name is a valid FinetuningBackendName string value or a registered custom backend name",
+        "finetuning_config contains all required fields for the specified backend (e.g., api_key for remote backends)"
+      ],
+      "postconditions": [
+        "Returned BackendRegistryEntry.implementation conforms to the fine-tuning orchestrator's backend Protocol",
+        "Returned BackendRegistryEntry.backend_name matches the input backend_name",
+        "Returned BackendRegistryEntry.is_remote is correctly set based on the backend type"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "orchestrate_request",
+      "description": "Top-level request orchestration function documenting the exact call sequence for processing a single run() invocation through all components. This is the contract for how the router (and by extension the Apprentice facade) coordinates all components for a single request. Sequence: (1) Create RequestCorrelation with UUID v4, (2) Look up task in TaskRegistry, (3) Query confidence_engine.get_snapshot for phase/confidence, (4) Query sampling_scheduler.should_sample for routing decision, (5) Query budget_manager.authorize if remote call needed, (6) Execute routing action via router.route (may dual-send via asyncio.gather), (7) If remote was called: budget_manager.record_spend or release_reservation, (8) If coaching sample: confidence_engine.record_comparison, (9) If training data available: training_pipeline.add_example, (10) Budget_manager.record_local_request if served locally, (11) Emit audit log entry via reporting audit logger, (12) Return TaskResponse. All steps carry the RequestCorrelation for audit trail correlation.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task to execute. Must be registered in the TaskRegistry.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input payload for the task. Schema is task-specific.",
+          "validators": []
+        },
+        {
+          "name": "correlation",
+          "type_ref": "RequestCorrelation",
+          "required": true,
+          "default": "",
+          "description": "Correlation context for audit trail threading.",
+          "validators": []
+        }
+      ],
+      "output_type": "dict",
+      "error_cases": [
+        {
+          "name": "task_not_found",
+          "condition": "task_name is not registered in the TaskRegistry",
+          "error_type": "str",
+          "error_data": {
+            "message": "Task not found in registry: {task_name}"
+          }
+        },
+        {
+          "name": "all_sources_unavailable",
+          "condition": "Local model is unavailable AND budget is exhausted — terminal degradation",
+          "error_type": "AllSourcesUnavailableError",
+          "error_data": {
+            "message": "All model sources unavailable: local model is down and budget is exhausted"
+          }
+        },
+        {
+          "name": "budget_check_internal_error",
+          "condition": "budget_manager.authorize raises an unexpected internal error",
+          "error_type": "str",
+          "error_data": {
+            "message": "Budget manager internal error during authorization"
+          }
+        },
+        {
+          "name": "confidence_engine_error",
+          "condition": "confidence_engine.get_snapshot raises an unexpected error",
+          "error_type": "str",
+          "error_data": {
+            "message": "Confidence engine error during snapshot retrieval"
+          }
+        },
+        {
+          "name": "both_backends_failed",
+          "condition": "Both local and remote backends fail during dual-send and no fallback path is viable",
+          "error_type": "AllSourcesUnavailableError",
+          "error_data": {
+            "message": "Both local and remote model backends failed"
+          }
+        }
+      ],
+      "preconditions": [
+        "All 9 components are initialized and ready",
+        "task_name is registered in the TaskRegistry",
+        "input_data is a non-null dict",
+        "correlation.request_id is a valid UUID v4 string"
+      ],
+      "postconditions": [
+        "Returned dict contains a valid TaskResponse (from unified_interface)",
+        "If remote model was called: budget_manager.authorize was called before the API call",
+        "If remote model was called and succeeded: budget_manager.record_spend was called with actual cost",
+        "If remote model was called and failed before cost: budget_manager.release_reservation was called",
+        "If served locally: budget_manager.record_local_request was called with estimated remote cost",
+        "If coaching sample with both outputs: confidence_engine.record_comparison was called",
+        "If remote response obtained in Phase 1/2: training_pipeline.add_example was called",
+        "An audit entry was emitted via the reporting audit logger",
+        "The entire call chain used the same correlation.request_id for tracing"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "May call remote model API (network call, incurs cost)",
+        "May call local model server (network call)",
+        "Records spend or reservation release in budget manager",
+        "May record local request savings in budget manager",
+        "May record comparison in confidence engine",
+        "May add training example to training pipeline",
+        "Emits audit log entry"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "remote_api",
+          "description": "Remote model API call if routing decision includes remote"
+        },
+        {
+          "kind": "network_call",
+          "target": "local_model_server",
+          "description": "Local model inference if routing decision includes local"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "budget_manager",
+          "description": "Authorize/record_spend/release_reservation/record_local_request"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "confidence_engine",
+          "description": "record_comparison for coaching samples"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "training_pipeline",
+          "description": "add_example for training data collection"
+        },
+        {
+          "kind": "logging",
+          "target": "audit_log",
+          "description": "Structured audit entry for the routing decision"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_component_statuses",
+      "description": "Returns the current status of all 9 managed components. Used for health checks, diagnostics, and the CLI 'status' subcommand. Reads from in-memory state only — no I/O.",
+      "inputs": [
+        {
+          "name": "components",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping from ComponentId string values to component instances.",
+          "validators": []
+        }
+      ],
+      "output_type": "ComponentStatusList",
+      "error_cases": [],
+      "preconditions": [
+        "initialize_composition_root has been called (components dict may be partial if initialization failed mid-way)"
+      ],
+      "postconditions": [
+        "Returned list contains exactly 9 entries, one per ComponentId",
+        "Each entry's status accurately reflects the current state of that component",
+        "Components not yet initialized have status NOT_STARTED",
+        "Components that failed initialization have status FAILED with error_message populated"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "create_request_correlation",
+      "description": "Creates a new RequestCorrelation context for a run() invocation. Generates a UUID v4 request_id, captures the task_name, and records the current UTC timestamp. This correlation is threaded through every component call in the request processing pipeline for end-to-end audit trail correlation.",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task being processed.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "RequestCorrelation",
+      "error_cases": [
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is empty or whitespace-only",
+          "error_type": "str",
+          "error_data": {
+            "message": "task_name must be a non-empty string"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_name is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned RequestCorrelation.request_id is a valid UUID v4 string",
+        "Returned RequestCorrelation.task_name equals the input task_name",
+        "Returned RequestCorrelation.created_at_utc is the current UTC time in ISO 8601 format"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_component_override",
+      "description": "Validates that a user-provided component override conforms to the expected Protocol for that component. Called during initialize_composition_root for each entry in component_overrides. Uses runtime Protocol checking (hasattr-based) to verify the override has the required methods. Does not verify method signatures — that is deferred to runtime call sites.",
+      "inputs": [
+        {
+          "name": "component_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The ComponentId string value identifying which component is being overridden.",
+          "validators": []
+        },
+        {
+          "name": "override_instance",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The override instance to validate.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [
+        {
+          "name": "unknown_component_id",
+          "condition": "component_id does not match any ComponentId variant",
+          "error_type": "str",
+          "error_data": {
+            "message": "Unknown component_id: {component_id}"
+          }
+        }
+      ],
+      "preconditions": [
+        "component_id is a valid ComponentId string value"
+      ],
+      "postconditions": [
+        "Returns True if override_instance has all required methods for the specified component",
+        "Returns False if any required method is missing"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "build_backend_registry",
+      "description": "Constructs the BackendRegistry from the application config. Registers all built-in fine-tuning backend factory functions and any custom backends provided. The active backend is selected from config.finetuning.backend. Called once during initialization. The registry is immutable after construction.",
+      "inputs": [
+        {
+          "name": "finetuning_config",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The fine-tuning configuration section from ApprenticeConfig, containing backend name, model_base, api_key, etc.",
+          "validators": []
+        },
+        {
+          "name": "custom_backends",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional mapping of custom backend name strings to implementation instances.",
+          "validators": []
+        }
+      ],
+      "output_type": "BackendRegistry",
+      "error_cases": [
+        {
+          "name": "active_backend_not_available",
+          "condition": "The active backend name from config is not in the registry (e.g., custom without registration)",
+          "error_type": "str",
+          "error_data": {
+            "message": "Active fine-tuning backend '{backend}' is not registered"
+          }
+        }
+      ],
+      "preconditions": [
+        "finetuning_config has been validated by Pydantic at config parse time",
+        "finetuning_config contains a 'backend' key with a valid backend name"
+      ],
+      "postconditions": [
+        "Returned BackendRegistry.active_backend_name matches finetuning_config['backend']",
+        "Returned BackendRegistry.entries contains entries for all built-in backends plus any custom backends",
+        "The entry for the active backend has a valid implementation instance"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "budget_manager",
+    "confidence_engine",
+    "config_and_registry",
+    "external_interfaces",
+    "reporting",
+    "router",
+    "sampling_scheduler",
+    "training_pipeline",
+    "unified_interface"
+  ],
+  "dependency_contracts": {
+    "config_and_registry": [
+      "load_config",
+      "TaskRegistry.__init__",
+      "TaskRegistry.get_task",
+      "create_task_request",
+      "create_task_response",
+      "create_confidence_snapshot",
+      "create_budget_state",
+      "record_cost",
+      "create_audit_entry",
+      "create_sampling_decision",
+      "create_training_example",
+      "create_comparison_pair",
+      "create_model_version",
+      "serialize_model",
+      "deserialize_model",
+      "validate_model",
+      "resolve_env_var",
+      "validate_cross_field_constraints",
+      "get_model_json_schema"
+    ],
+    "budget_manager": [
+      "__init__",
+      "authorize",
+      "record_spend",
+      "release_reservation",
+      "record_local_request",
+      "remaining_budget",
+      "get_report",
+      "force_persist",
+      "reset_state"
+    ],
+    "confidence_engine": [
+      "__init__",
+      "record_comparison",
+      "get_snapshot",
+      "get_all_snapshots",
+      "persist_state",
+      "load_state",
+      "get_task_ids",
+      "get_window_size"
+    ],
+    "external_interfaces": [
+      "create_remote_adapter",
+      "create_local_adapter",
+      "complete",
+      "health",
+      "close",
+      "get_source_info",
+      "promote_model",
+      "map_remote_error",
+      "map_local_unavailable",
+      "map_local_success_to_response",
+      "map_remote_response"
+    ],
+    "sampling_scheduler": [
+      "AdaptiveSamplingScheduler.__init__",
+      "should_sample",
+      "exponential_decay",
+      "linear_decay",
+      "step_decay"
+    ],
+    "router": [
+      "route",
+      "compute_routing_action",
+      "execute_dual_send",
+      "build_audit_entry"
+    ],
+    "training_pipeline": [
+      "initialize",
+      "add_example",
+      "should_trigger",
+      "run_pipeline",
+      "get_status",
+      "get_run_history",
+      "reset_consecutive_failures"
+    ],
+    "reporting": [
+      "AuditConfig.__init__",
+      "AuditEntry.to_json_line",
+      "JsonLinesAuditLogger.__init__",
+      "JsonLinesAuditLogger.log",
+      "JsonLinesAuditLogger.entries_by_task",
+      "JsonLinesAuditLogger.entries_by_type",
+      "JsonLinesAuditLogger.entries_in_range",
+      "generate_report",
+      "format_report",
+      "deliver_webhook",
+      "validate_report_config"
+    ],
+    "unified_interface": [
+      "__init__",
+      "create",
+      "__aenter__",
+      "__aexit__",
+      "run",
+      "status",
+      "report",
+      "close",
+      "main",
+      "parse_args",
+      "load_config",
+      "resolve_input",
+      "format_output",
+      "configure_logging",
+      "execute_run",
+      "execute_status",
+      "execute_report"
+    ]
+  },
+  "invariants": [
+    "The composition root is the ONLY place where component instances are constructed and wired together — no component constructs its own dependencies internally",
+    "Component initialization follows the strict DAG order: config_and_registry → budget_manager → confidence_engine → external_interfaces → sampling_scheduler → router → training_pipeline → reporting → unified_interface. Teardown is reverse order.",
+    "All 9 components are non-None after successful initialization. If any component fails to initialize, all previously initialized components are torn down before the error propagates.",
+    "Budget enforcement is hard: if budget_manager.authorize() returns allowed=False, no remote API call is made. The system either degrades to local-only or raises AllSourcesUnavailableError if local is also unavailable.",
+    "Every remote API call follows the complete budget reservation cycle: authorize (reserve) → API call → record_spend (on success) OR release_reservation (on failure before cost). A crash between authorize and record_spend conservatively counts the estimated cost.",
+    "AllSourcesUnavailableError is the ONLY condition under which the system cannot serve a request. It occurs when BOTH local model is unavailable AND remote API budget is exhausted.",
+    "Local model failures are graceful — fall back to remote if budget allows, never crash",
+    "Budget exhaustion is graceful — fall back to local-only if local is available, never crash",
+    "Phase labels are always derived from confidence scores and thresholds — never manually assigned or overridden",
+    "Sampling frequency is continuous (float in [0.0, 1.0]), not discrete tiers",
+    "Every run() invocation creates exactly one RequestCorrelation with a UUID v4 request_id that is threaded through all component calls for audit trail correlation",
+    "Every run() invocation produces exactly one audit log entry, regardless of success or failure",
+    "Audit logging failures are captured but never block or delay the response to the caller",
+    "No global state — all state flows through the Apprentice instance and its injected dependencies",
+    "Config validation is strict and fail-fast at startup. If config is invalid, the system fails immediately with clear error messages. No silent defaults.",
+    "The fine-tuning backend plugin is resolved by the root (via BackendRegistry) and injected into training_pipeline. The training_pipeline is backend-agnostic.",
+    "Component overrides provided in __init__ or initialize_composition_root completely replace the default-constructed component — no partial merging",
+    "Shutdown proceeds through ALL components regardless of individual component errors. Errors are accumulated in ShutdownError, logged at CRITICAL level, but do not prevent other components from shutting down.",
+    "State is persisted on shutdown: budget_manager.force_persist() and confidence_engine.persist_state() are called during teardown",
+    "Inter-component communication uses Pydantic models passed directly — no serialization between components. Serialization only occurs at persistence boundaries (JSON files) and output boundaries (CLI, audit log).",
+    "All timestamps throughout the system are timezone-aware UTC datetimes serialized as ISO 8601 strings. No naive datetimes.",
+    "All monetary values use Decimal (stdlib) — never float — to avoid floating-point drift over thousands of micro-transactions",
+    "The public API surface (__all__) re-exports types from their owning components — the root does not redefine them. Only AllSourcesUnavailableError and InitializationError are defined at root level.",
+    "Files implementing the root component must stay under 300 lines: __init__.py ~10 lines (re-exports), composition.py ~250 lines (initialization/shutdown), errors.py ~40 lines (root-level errors)"
+  ],
+  "requires": [
+    "budget_manager",
+    "confidence_engine",
+    "config_and_registry",
+    "external_interfaces",
+    "reporting",
+    "router",
+    "sampling_scheduler",
+    "training_pipeline",
+    "unified_interface"
+  ]
+}

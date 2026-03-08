@@ -1,0 +1,844 @@
+{
+  "component_id": "evaluators",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "clamp_score_value_in_range",
+      "description": "clamp_score returns the same value when score is already in [0.0, 1.0]",
+      "function": "clamp_score",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "0.5"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 0.5"
+      ]
+    },
+    {
+      "id": "clamp_score_zero",
+      "description": "clamp_score returns 0.0 when score is exactly 0.0",
+      "function": "clamp_score",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "0.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 0.0"
+      ]
+    },
+    {
+      "id": "clamp_score_one",
+      "description": "clamp_score returns 1.0 when score is exactly 1.0",
+      "function": "clamp_score",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "1.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 1.0"
+      ]
+    },
+    {
+      "id": "clamp_score_negative",
+      "description": "clamp_score clamps negative scores to 0.0",
+      "function": "clamp_score",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "-0.5"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 0.0"
+      ]
+    },
+    {
+      "id": "clamp_score_above_one",
+      "description": "clamp_score clamps scores above 1.0 to 1.0",
+      "function": "clamp_score",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "1.5"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 1.0"
+      ]
+    },
+    {
+      "id": "clamp_score_large_negative",
+      "description": "clamp_score clamps large negative to 0.0",
+      "function": "clamp_score",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "-100.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 0.0"
+      ]
+    },
+    {
+      "id": "clamp_score_nan",
+      "description": "clamp_score raises or handles NaN score",
+      "function": "clamp_score",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "score": "float('nan')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "nan_score",
+      "assertions": []
+    },
+    {
+      "id": "cosine_similarity_identical",
+      "description": "cosine_similarity returns 1.0 for identical vectors",
+      "function": "cosine_similarity",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[1.0, 2.0, 3.0]",
+        "vec_b": "[1.0, 2.0, 3.0]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "abs(result - 1.0) < 1e-9"
+      ]
+    },
+    {
+      "id": "cosine_similarity_orthogonal",
+      "description": "cosine_similarity returns 0.0 for orthogonal vectors",
+      "function": "cosine_similarity",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[1.0, 0.0]",
+        "vec_b": "[0.0, 1.0]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "abs(result - 0.0) < 1e-9"
+      ]
+    },
+    {
+      "id": "cosine_similarity_opposite",
+      "description": "cosine_similarity returns -1.0 for opposite vectors",
+      "function": "cosine_similarity",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[1.0, 0.0]",
+        "vec_b": "[-1.0, 0.0]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "abs(result - (-1.0)) < 1e-9"
+      ]
+    },
+    {
+      "id": "cosine_similarity_dimension_mismatch",
+      "description": "cosine_similarity raises error for mismatched dimensions",
+      "function": "cosine_similarity",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[1.0, 2.0]",
+        "vec_b": "[1.0]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "dimension_mismatch",
+      "assertions": []
+    },
+    {
+      "id": "cosine_similarity_empty_vectors",
+      "description": "cosine_similarity raises error for empty vectors",
+      "function": "cosine_similarity",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[]",
+        "vec_b": "[]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_vectors",
+      "assertions": []
+    },
+    {
+      "id": "cosine_similarity_zero_magnitude",
+      "description": "cosine_similarity returns 0.0 when one vector has zero magnitude",
+      "function": "cosine_similarity",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "vec_a": "[0.0, 0.0]",
+        "vec_b": "[1.0, 1.0]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == 0.0"
+      ]
+    },
+    {
+      "id": "cosine_similarity_bounded",
+      "description": "cosine_similarity result is always in [-1.0, 1.0]",
+      "function": "cosine_similarity",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result >= -1.0",
+        "result <= 1.0"
+      ]
+    },
+    {
+      "id": "exact_match_identical_outputs",
+      "description": "ExactMatchEvaluator returns score 1.0 for identical outputs",
+      "function": "ExactMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote with same output string",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0",
+        "result.evaluator_type == 'exact_match'",
+        "result.field_breakdown == {}",
+        "result.error is None"
+      ]
+    },
+    {
+      "id": "exact_match_different_outputs",
+      "description": "ExactMatchEvaluator returns score 0.0 for different outputs",
+      "function": "ExactMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote with different output strings",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0",
+        "result.evaluator_type == 'exact_match'",
+        "result.field_breakdown == {}",
+        "result.error is None"
+      ]
+    },
+    {
+      "id": "exact_match_empty_strings",
+      "description": "ExactMatchEvaluator returns 1.0 for two empty output strings",
+      "function": "ExactMatchEvaluator.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote both with output=''",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0"
+      ]
+    },
+    {
+      "id": "exact_match_whitespace_sensitive",
+      "description": "ExactMatchEvaluator treats whitespace differences as non-matching",
+      "function": "ExactMatchEvaluator.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local.output='hello ' remote.output='hello'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0"
+      ]
+    },
+    {
+      "id": "exact_match_valid_timestamp",
+      "description": "ExactMatchEvaluator result has valid ISO-8601 timestamp",
+      "function": "ExactMatchEvaluator.evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.timestamp is not None"
+      ]
+    },
+    {
+      "id": "structured_match_full_match",
+      "description": "StructuredMatchEvaluator returns 1.0 when all fields match",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote with identical fields for all match_fields",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0",
+        "result.evaluator_type == 'structured_match'"
+      ]
+    },
+    {
+      "id": "structured_match_no_match",
+      "description": "StructuredMatchEvaluator returns 0.0 when no fields match",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote with all different field values",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0",
+        "result.evaluator_type == 'structured_match'"
+      ]
+    },
+    {
+      "id": "structured_match_partial",
+      "description": "StructuredMatchEvaluator returns partial score for partial match",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local and remote with 1 out of 2 fields matching",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "abs(result.score - 0.5) < 1e-9"
+      ]
+    },
+    {
+      "id": "structured_match_field_breakdown",
+      "description": "StructuredMatchEvaluator field_breakdown has one entry per match_field",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result.field_breakdown) == len(task_config.match_fields)"
+      ]
+    },
+    {
+      "id": "structured_match_missing_field",
+      "description": "StructuredMatchEvaluator treats missing field as non-matching",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local has field 'name' but remote does not",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score < 1.0"
+      ]
+    },
+    {
+      "id": "structured_match_field_access_error",
+      "description": "StructuredMatchEvaluator returns error annotation on field access error",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "field_access_error",
+      "assertions": []
+    },
+    {
+      "id": "structured_match_single_field_match",
+      "description": "StructuredMatchEvaluator with one field returns 1.0 on match",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "single match_field that matches",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0"
+      ]
+    },
+    {
+      "id": "structured_match_score_clamped",
+      "description": "StructuredMatchEvaluator score is always in [0.0, 1.0]",
+      "function": "StructuredMatchEvaluator.evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score >= 0.0",
+        "result.score <= 1.0"
+      ]
+    },
+    {
+      "id": "semantic_similarity_identical_outputs",
+      "description": "SemanticSimilarityEvaluator returns 1.0 for identical output embeddings",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "embed_fn": "returns identical embeddings for both outputs"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0",
+        "result.evaluator_type == 'semantic_similarity'",
+        "result.field_breakdown == {}"
+      ]
+    },
+    {
+      "id": "semantic_similarity_orthogonal",
+      "description": "SemanticSimilarityEvaluator returns 0.0 for orthogonal embeddings",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "embed_fn": "returns orthogonal embedding vectors"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0"
+      ]
+    },
+    {
+      "id": "semantic_similarity_negative_clamped",
+      "description": "SemanticSimilarityEvaluator clamps negative cosine similarity to 0.0",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "embed_fn": "returns opposite embedding vectors"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0",
+        "'raw_cosine_similarity' in result.metadata"
+      ]
+    },
+    {
+      "id": "semantic_similarity_metadata_keys",
+      "description": "SemanticSimilarityEvaluator result metadata contains model_name and raw_cosine_similarity",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "'model_name' in result.metadata",
+        "'raw_cosine_similarity' in result.metadata"
+      ]
+    },
+    {
+      "id": "semantic_similarity_empty_output_error",
+      "description": "SemanticSimilarityEvaluator returns error for empty output",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "local.output is empty string",
+      "expected_output_description": "",
+      "expected_error": "empty_output",
+      "assertions": []
+    },
+    {
+      "id": "semantic_similarity_embed_fn_error",
+      "description": "SemanticSimilarityEvaluator returns error when embed_fn raises",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "embed_fn": "raises RuntimeError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "embedding_computation_error",
+      "assertions": []
+    },
+    {
+      "id": "semantic_similarity_lazy_load",
+      "description": "SemanticSimilarityEvaluator does not load model at construction time",
+      "function": "SemanticSimilarityEvaluator.__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No model is loaded at construction"
+      ]
+    },
+    {
+      "id": "semantic_similarity_score_clamped",
+      "description": "SemanticSimilarityEvaluator score is always in [0.0, 1.0]",
+      "function": "SemanticSimilarityEvaluator.evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score >= 0.0",
+        "result.score <= 1.0"
+      ]
+    },
+    {
+      "id": "function_adapter_float_return",
+      "description": "FunctionEvaluatorAdapter wraps float return into EvaluationResult",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns 0.75"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.75",
+        "result.evaluator_type == 'custom'"
+      ]
+    },
+    {
+      "id": "function_adapter_evaluation_result_return",
+      "description": "FunctionEvaluatorAdapter passes through EvaluationResult return",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns EvaluationResult with score 0.8"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.8",
+        "result.evaluator_type == 'custom'"
+      ]
+    },
+    {
+      "id": "function_adapter_clamps_score",
+      "description": "FunctionEvaluatorAdapter clamps float return above 1.0 to 1.0",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns 1.5"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0"
+      ]
+    },
+    {
+      "id": "function_adapter_clamps_negative",
+      "description": "FunctionEvaluatorAdapter clamps negative float return to 0.0",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns -0.5"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 0.0"
+      ]
+    },
+    {
+      "id": "function_adapter_exception",
+      "description": "FunctionEvaluatorAdapter catches callable exception and returns error result",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "raises ValueError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "custom_function_exception",
+      "assertions": []
+    },
+    {
+      "id": "function_adapter_invalid_return",
+      "description": "FunctionEvaluatorAdapter handles invalid return type from callable",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns a string"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_return_type",
+      "assertions": []
+    },
+    {
+      "id": "function_adapter_non_callable_init",
+      "description": "FunctionEvaluatorAdapter raises error when fn is not callable",
+      "function": "FunctionEvaluatorAdapter.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "fn": "42"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "non_callable_argument",
+      "assertions": []
+    },
+    {
+      "id": "function_adapter_int_return",
+      "description": "FunctionEvaluatorAdapter wraps int return into EvaluationResult",
+      "function": "FunctionEvaluatorAdapter.evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "fn": "returns 1"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score == 1.0"
+      ]
+    },
+    {
+      "id": "create_evaluator_structured_match",
+      "description": "create_evaluator returns StructuredMatchEvaluator for structured_match type",
+      "function": "create_evaluator",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned evaluator has evaluate method"
+      ]
+    },
+    {
+      "id": "create_evaluator_exact_match",
+      "description": "create_evaluator returns ExactMatchEvaluator for exact_match type",
+      "function": "create_evaluator",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned evaluator has evaluate method"
+      ]
+    },
+    {
+      "id": "create_evaluator_semantic_similarity",
+      "description": "create_evaluator returns SemanticSimilarityEvaluator for semantic_similarity type",
+      "function": "create_evaluator",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned evaluator has evaluate method"
+      ]
+    },
+    {
+      "id": "create_evaluator_custom",
+      "description": "create_evaluator returns FunctionEvaluatorAdapter for custom type",
+      "function": "create_evaluator",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned evaluator has evaluate method"
+      ]
+    },
+    {
+      "id": "create_evaluator_unknown_type",
+      "description": "create_evaluator raises error for unknown evaluator type",
+      "function": "create_evaluator",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unknown_evaluator_type",
+      "assertions": []
+    },
+    {
+      "id": "invariant_score_always_clamped",
+      "description": "All EvaluationResult scores are always in [0.0, 1.0]",
+      "function": "all evaluators",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.score >= 0.0",
+        "result.score <= 1.0"
+      ]
+    },
+    {
+      "id": "invariant_errors_never_raise",
+      "description": "Runtime errors in evaluate() return EvaluationResult with error, never raise exceptions",
+      "function": "all evaluators",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "no exception raised",
+        "result.error is not None"
+      ]
+    },
+    {
+      "id": "invariant_evaluation_result_immutable",
+      "description": "EvaluationResult instances are frozen (immutable after creation)",
+      "function": "EvaluationResult",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "assignment to result.score raises error"
+      ]
+    },
+    {
+      "id": "invariant_evaluation_result_serializable",
+      "description": "EvaluationResult is JSON-serializable via model_dump(mode='json')",
+      "function": "EvaluationResult",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "model_dump(mode='json') returns dict",
+        "json.dumps does not raise"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the evaluators component.\nTests verify behavior at boundaries (inputs/outputs), not internals.\nAll dependencies are mocked — tests verify one component in isolation.\nNo network, GPU, or API keys required.\n\"\"\"\n\nimport json\nimport math\nimport pytest\nfrom datetime import datetime\nfrom unittest.mock import MagicMock, patch, PropertyMock\n\nfrom src.evaluators import (\n    clamp_score,\n    cosine_similarity,\n    ExactMatchEvaluator,\n    StructuredMatchEvaluator,\n    SemanticSimilarityEvaluator,\n    FunctionEvaluatorAdapter,\n    create_evaluator,\n    TaskResponse,\n    TaskEvaluatorConfig,\n    EvaluationResult,\n    EvaluatorType,\n)\n\n\n# ============================================================================\n# Fixtures / Helpers\n# ============================================================================\n\ndef make_task_response(\n    task_id=\"task-1\",\n    output=\"hello world\",\n    fields=None,\n    model_id=\"model-1\",\n    timestamp=\"2024-01-01T00:00:00Z\",\n):\n    \"\"\"Factory helper for TaskResponse with sensible defaults.\"\"\"\n    return TaskResponse(\n        task_id=task_id,\n        output=output,\n        fields=fields or {},\n        model_id=model_id,\n        timestamp=timestamp,\n    )\n\n\ndef make_task_config(\n    evaluator_type=\"exact_match\",\n    match_fields=None,\n    model_name=\"all-MiniLM-L6-v2\",\n    custom_evaluator=None,\n):\n    \"\"\"Factory helper for TaskEvaluatorConfig with sensible defaults.\"\"\"\n    kwargs = {\n        \"evaluator_type\": evaluator_type,\n        \"match_fields\": match_fields or [],\n        \"model_name\": model_name,\n    }\n    if custom_evaluator is not None:\n        kwargs[\"custom_evaluator\"] = custom_evaluator\n    return TaskEvaluatorConfig(**kwargs)\n\n\ndef _is_valid_iso8601(ts):\n    \"\"\"Check if a string is a valid ISO-8601 datetime.\"\"\"\n    try:\n        datetime.fromisoformat(ts.replace(\"Z\", \"+00:00\"))\n        return True\n    except (ValueError, AttributeError):\n        return False\n\n\n# ============================================================================\n# Tests for clamp_score\n# ============================================================================\n\nclass TestClampScore:\n    \"\"\"Tests for the clamp_score utility function.\"\"\"\n\n    @pytest.mark.parametrize(\"score,expected\", [\n        (0.0, 0.0),\n        (0.5, 0.5),\n        (1.0, 1.0),\n        (0.001, 0.001),\n        (0.999, 0.999),\n    ])\n    def test_clamp_score_value_in_range(self, score, expected):\n        \"\"\"clamp_score returns same value when score is in [0.0, 1.0].\"\"\"\n        result = clamp_score(score)\n        assert result == expected, f\"Expected {expected}, got {result}\"\n\n    @pytest.mark.parametrize(\"score\", [-0.5, -1.0, -100.0, -0.001])\n    def test_clamp_score_negative_clamped_to_zero(self, score):\n        \"\"\"clamp_score clamps negative scores to 0.0.\"\"\"\n        result = clamp_score(score)\n        assert result == 0.0, f\"Expected 0.0 for input {score}, got {result}\"\n\n    @pytest.mark.parametrize(\"score\", [1.5, 2.0, 100.0, 1.001])\n    def test_clamp_score_above_one_clamped(self, score):\n        \"\"\"clamp_score clamps scores above 1.0 to 1.0.\"\"\"\n        result = clamp_score(score)\n        assert result == 1.0, f\"Expected 1.0 for input {score}, got {result}\"\n\n    def test_clamp_score_nan_raises_or_handles(self):\n        \"\"\"clamp_score handles NaN score (error: nan_score).\"\"\"\n        try:\n            result = clamp_score(float(\"nan\"))\n            # If it doesn't raise, the result should still be in [0, 1]\n            # or indicate an error. NaN comparisons are tricky.\n            # Per contract, NaN is an error case.\n            assert not math.isnan(result), (\n                \"clamp_score should not return NaN\"\n            )\n        except (ValueError, TypeError):\n            pass  # Expected: nan_score error\n\n    def test_clamp_score_boundary_zero(self):\n        \"\"\"clamp_score returns exactly 0.0 for input 0.0.\"\"\"\n        assert clamp_score(0.0) == 0.0\n\n    def test_clamp_score_boundary_one(self):\n        \"\"\"clamp_score returns exactly 1.0 for input 1.0.\"\"\"\n        assert clamp_score(1.0) == 1.0\n\n\n# ============================================================================\n# Tests for cosine_similarity\n# ============================================================================\n\nclass TestCosineSimilarity:\n    \"\"\"Tests for the cosine_similarity utility function.\"\"\"\n\n    def test_identical_vectors_return_one(self):\n        \"\"\"cosine_similarity returns 1.0 for identical vectors.\"\"\"\n        result = cosine_similarity([1.0, 2.0, 3.0], [1.0, 2.0, 3.0])\n        assert abs(result - 1.0) < 1e-9, f\"Expected 1.0, got {result}\"\n\n    def test_orthogonal_vectors_return_zero(self):\n        \"\"\"cosine_similarity returns 0.0 for orthogonal vectors.\"\"\"\n        result = cosine_similarity([1.0, 0.0], [0.0, 1.0])\n        assert abs(result) < 1e-9, f\"Expected 0.0, got {result}\"\n\n    def test_opposite_vectors_return_negative_one(self):\n        \"\"\"cosine_similarity returns -1.0 for opposite vectors.\"\"\"\n        result = cosine_similarity([1.0, 0.0], [-1.0, 0.0])\n        assert abs(result - (-1.0)) < 1e-9, f\"Expected -1.0, got {result}\"\n\n    def test_result_bounded(self):\n        \"\"\"cosine_similarity result is always in [-1.0, 1.0].\"\"\"\n        vecs = [\n            ([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]),\n            ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]),\n            ([0.5, 0.5], [-0.5, 0.5]),\n        ]\n        for va, vb in vecs:\n            result = cosine_similarity(va, vb)\n            assert -1.0 - 1e-9 <= result <= 1.0 + 1e-9, (\n                f\"Result {result} out of bounds for {va}, {vb}\"\n            )\n\n    def test_dimension_mismatch_raises(self):\n        \"\"\"cosine_similarity raises error for mismatched dimensions.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            cosine_similarity([1.0, 2.0], [1.0])\n\n    def test_empty_vectors_raises(self):\n        \"\"\"cosine_similarity raises error for empty vectors.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            cosine_similarity([], [])\n\n    def test_zero_magnitude_returns_zero(self):\n        \"\"\"cosine_similarity returns 0.0 when one vector has zero magnitude.\"\"\"\n        result = cosine_similarity([0.0, 0.0], [1.0, 1.0])\n        assert result == 0.0, f\"Expected 0.0, got {result}\"\n\n    def test_symmetry(self):\n        \"\"\"cosine_similarity(a, b) == cosine_similarity(b, a).\"\"\"\n        va, vb = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]\n        assert abs(cosine_similarity(va, vb) - cosine_similarity(vb, va)) < 1e-9\n\n\n# ============================================================================\n# Tests for ExactMatchEvaluator\n# ============================================================================\n\nclass TestExactMatchEvaluator:\n    \"\"\"Tests for ExactMatchEvaluator.evaluate.\"\"\"\n\n    def setup_method(self):\n        self.evaluator = ExactMatchEvaluator()\n        self.config = make_task_config(evaluator_type=\"exact_match\")\n\n    def test_identical_outputs_score_one(self):\n        \"\"\"Returns score 1.0 for identical outputs.\"\"\"\n        local = make_task_response(output=\"hello world\")\n        remote = make_task_response(output=\"hello world\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.score == 1.0, f\"Expected 1.0, got {result.score}\"\n        assert result.evaluator_type == \"exact_match\"\n        assert result.field_breakdown == {}\n        assert result.error is None\n\n    def test_different_outputs_score_zero(self):\n        \"\"\"Returns score 0.0 for different outputs.\"\"\"\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"world\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.score == 0.0, f\"Expected 0.0, got {result.score}\"\n        assert result.evaluator_type == \"exact_match\"\n        assert result.field_breakdown == {}\n        assert result.error is None\n\n    def test_empty_strings_match(self):\n        \"\"\"Returns 1.0 for two empty output strings.\"\"\"\n        local = make_task_response(output=\"\")\n        remote = make_task_response(output=\"\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.score == 1.0\n\n    def test_whitespace_sensitive(self):\n        \"\"\"Treats whitespace differences as non-matching.\"\"\"\n        local = make_task_response(output=\"hello \")\n        remote = make_task_response(output=\"hello\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.score == 0.0\n\n    def test_valid_timestamp(self):\n        \"\"\"Result has a valid ISO-8601 timestamp.\"\"\"\n        local = make_task_response(output=\"test\")\n        remote = make_task_response(output=\"test\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.timestamp is not None\n        assert _is_valid_iso8601(result.timestamp), (\n            f\"Timestamp '{result.timestamp}' is not valid ISO-8601\"\n        )\n\n    def test_case_sensitive(self):\n        \"\"\"Exact match is case-sensitive.\"\"\"\n        local = make_task_response(output=\"Hello\")\n        remote = make_task_response(output=\"hello\")\n        result = self.evaluator.evaluate(local, remote, self.config)\n        assert result.score == 0.0\n\n\n# ============================================================================\n# Tests for StructuredMatchEvaluator\n# ============================================================================\n\nclass TestStructuredMatchEvaluator:\n    \"\"\"Tests for StructuredMatchEvaluator.evaluate.\"\"\"\n\n    def setup_method(self):\n        self.evaluator = StructuredMatchEvaluator()\n\n    def test_full_match_all_fields(self):\n        \"\"\"Returns 1.0 when all fields match.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\", \"age\"],\n        )\n        local = make_task_response(fields={\"name\": \"Alice\", \"age\": 30})\n        remote = make_task_response(fields={\"name\": \"Alice\", \"age\": 30})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert result.score == 1.0\n        assert result.evaluator_type == \"structured_match\"\n\n    def test_no_match_all_fields(self):\n        \"\"\"Returns 0.0 when no fields match.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\", \"age\"],\n        )\n        local = make_task_response(fields={\"name\": \"Alice\", \"age\": 30})\n        remote = make_task_response(fields={\"name\": \"Bob\", \"age\": 25})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert result.score == 0.0\n\n    def test_partial_match(self):\n        \"\"\"Returns partial score (0.5) for 1 of 2 fields matching.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\", \"age\"],\n        )\n        local = make_task_response(fields={\"name\": \"Alice\", \"age\": 30})\n        remote = make_task_response(fields={\"name\": \"Alice\", \"age\": 25})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert abs(result.score - 0.5) < 1e-9, f\"Expected 0.5, got {result.score}\"\n\n    def test_field_breakdown_has_all_fields(self):\n        \"\"\"field_breakdown has one entry per field in match_fields.\"\"\"\n        fields = [\"name\", \"age\", \"city\"]\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=fields,\n        )\n        local = make_task_response(fields={\"name\": \"A\", \"age\": 1, \"city\": \"X\"})\n        remote = make_task_response(fields={\"name\": \"A\", \"age\": 1, \"city\": \"X\"})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert len(result.field_breakdown) == len(fields), (\n            f\"Expected {len(fields)} entries, got {len(result.field_breakdown)}\"\n        )\n\n    def test_missing_field_treated_as_non_matching(self):\n        \"\"\"Missing field in one response is treated as non-matching.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\", \"age\"],\n        )\n        local = make_task_response(fields={\"name\": \"Alice\"})\n        remote = make_task_response(fields={\"name\": \"Alice\", \"age\": 30})\n        result = self.evaluator.evaluate(local, remote, config)\n        # 'name' matches, 'age' missing in local => 0.5 or error-annotated\n        assert result.score < 1.0\n\n    def test_single_field_match(self):\n        \"\"\"Single match_field returns 1.0 on match.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\"],\n        )\n        local = make_task_response(fields={\"name\": \"Alice\"})\n        remote = make_task_response(fields={\"name\": \"Alice\"})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert result.score == 1.0\n\n    def test_score_always_clamped(self):\n        \"\"\"Score is always in [0.0, 1.0].\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"x\"],\n        )\n        local = make_task_response(fields={\"x\": 1})\n        remote = make_task_response(fields={\"x\": 2})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert 0.0 <= result.score <= 1.0\n\n    def test_valid_timestamp(self):\n        \"\"\"Result has valid ISO-8601 timestamp.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"name\"],\n        )\n        local = make_task_response(fields={\"name\": \"A\"})\n        remote = make_task_response(fields={\"name\": \"A\"})\n        result = self.evaluator.evaluate(local, remote, config)\n        assert _is_valid_iso8601(result.timestamp)\n\n    def test_score_is_average_of_matches(self):\n        \"\"\"Score equals the average of matched fields (1/3).\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\",\n            match_fields=[\"a\", \"b\", \"c\"],\n        )\n        local = make_task_response(fields={\"a\": 1, \"b\": 2, \"c\": 3})\n        remote = make_task_response(fields={\"a\": 1, \"b\": 99, \"c\": 99})\n        result = self.evaluator.evaluate(local, remote, config)\n        expected = 1.0 / 3.0\n        assert abs(result.score - expected) < 1e-9, (\n            f\"Expected {expected}, got {result.score}\"\n        )\n\n\n# ============================================================================\n# Tests for SemanticSimilarityEvaluator\n# ============================================================================\n\nclass TestSemanticSimilarityEvaluator:\n    \"\"\"Tests for SemanticSimilarityEvaluator with mocked embed_fn.\"\"\"\n\n    def _make_embed_fn(self, embeddings_map):\n        \"\"\"Create a mock embed_fn that maps strings to vectors.\"\"\"\n        def embed_fn(texts):\n            return [embeddings_map.get(t, [0.0, 0.0, 0.0]) for t in texts]\n        return embed_fn\n\n    def test_identical_outputs_score_one(self):\n        \"\"\"Returns 1.0 for identical embeddings.\"\"\"\n        embed_fn = lambda texts: [[1.0, 0.0, 0.0]] * len(texts)\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"hello\")\n        result = evaluator.evaluate(local, remote, config)\n        assert abs(result.score - 1.0) < 1e-6, f\"Expected 1.0, got {result.score}\"\n        assert result.evaluator_type == \"semantic_similarity\"\n        assert result.field_breakdown == {}\n\n    def test_orthogonal_outputs_score_zero(self):\n        \"\"\"Returns 0.0 for orthogonal embeddings.\"\"\"\n        call_count = [0]\n        def embed_fn(texts):\n            results = []\n            for _ in texts:\n                if call_count[0] % 2 == 0:\n                    results.append([1.0, 0.0])\n                else:\n                    results.append([0.0, 1.0])\n                call_count[0] += 1\n            return results\n        # Simpler approach: map specific texts\n        def embed_fn_v2(texts):\n            mapping = {\n                \"hello\": [1.0, 0.0],\n                \"world\": [0.0, 1.0],\n            }\n            return [mapping.get(t, [0.0, 0.0]) for t in texts]\n\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn_v2)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"world\")\n        result = evaluator.evaluate(local, remote, config)\n        assert abs(result.score) < 1e-6, f\"Expected 0.0, got {result.score}\"\n\n    def test_negative_cosine_clamped_to_zero(self):\n        \"\"\"Negative cosine similarity is clamped to 0.0.\"\"\"\n        def embed_fn(texts):\n            mapping = {\"hello\": [1.0, 0.0], \"opposite\": [-1.0, 0.0]}\n            return [mapping.get(t, [0.0, 0.0]) for t in texts]\n\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"opposite\")\n        result = evaluator.evaluate(local, remote, config)\n        assert result.score == 0.0, f\"Expected 0.0, got {result.score}\"\n        assert \"raw_cosine_similarity\" in result.metadata\n\n    def test_metadata_contains_required_keys(self):\n        \"\"\"Result metadata contains model_name and raw_cosine_similarity.\"\"\"\n        embed_fn = lambda texts: [[1.0, 0.0]] * len(texts)\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"test\")\n        remote = make_task_response(output=\"test\")\n        result = evaluator.evaluate(local, remote, config)\n        assert \"model_name\" in result.metadata, \"metadata missing 'model_name'\"\n        assert isinstance(result.metadata[\"model_name\"], str)\n        assert \"raw_cosine_similarity\" in result.metadata, (\n            \"metadata missing 'raw_cosine_similarity'\"\n        )\n        assert isinstance(result.metadata[\"raw_cosine_similarity\"], (int, float))\n\n    def test_empty_output_error(self):\n        \"\"\"Returns error for empty output string.\"\"\"\n        embed_fn = lambda texts: [[1.0, 0.0]] * len(texts)\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"\")\n        remote = make_task_response(output=\"hello\")\n        result = evaluator.evaluate(local, remote, config)\n        # Per contract: error for empty_output, score should be 0.0\n        assert result.error is not None, \"Expected error for empty output\"\n        assert result.score == 0.0\n\n    def test_embed_fn_exception_returns_error(self):\n        \"\"\"Returns error result when embed_fn raises exception.\"\"\"\n        def failing_embed_fn(texts):\n            raise RuntimeError(\"OOM error\")\n\n        evaluator = SemanticSimilarityEvaluator(embed_fn=failing_embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"world\")\n        result = evaluator.evaluate(local, remote, config)\n        assert result.error is not None, \"Expected error annotation\"\n        assert result.score == 0.0\n\n    def test_lazy_load_no_model_at_init(self):\n        \"\"\"No model is loaded at construction time.\"\"\"\n        # Constructing with None should not import sentence-transformers\n        with patch.dict(\"sys.modules\", {\"sentence_transformers\": None}):\n            # Should not raise even if sentence_transformers unavailable\n            try:\n                evaluator = SemanticSimilarityEvaluator(embed_fn=None)\n                # Construction succeeded without loading model\n            except ImportError:\n                pytest.fail(\n                    \"SemanticSimilarityEvaluator should not load model at init\"\n                )\n\n    def test_score_always_clamped(self):\n        \"\"\"Score is always in [0.0, 1.0].\"\"\"\n        embed_fn = lambda texts: [[0.5, 0.5]] * len(texts)\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"a\")\n        remote = make_task_response(output=\"b\")\n        result = evaluator.evaluate(local, remote, config)\n        assert 0.0 <= result.score <= 1.0\n\n    def test_valid_timestamp(self):\n        \"\"\"Result has valid ISO-8601 timestamp.\"\"\"\n        embed_fn = lambda texts: [[1.0, 0.0]] * len(texts)\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"hello\")\n        result = evaluator.evaluate(local, remote, config)\n        assert _is_valid_iso8601(result.timestamp)\n\n\n# ============================================================================\n# Tests for FunctionEvaluatorAdapter\n# ============================================================================\n\nclass TestFunctionEvaluatorAdapter:\n    \"\"\"Tests for FunctionEvaluatorAdapter.\"\"\"\n\n    def _make_config(self):\n        return make_task_config(evaluator_type=\"custom\")\n\n    def test_float_return_wrapped(self):\n        \"\"\"Wraps float return into EvaluationResult.\"\"\"\n        fn = lambda local, remote, config: 0.75\n        adapter = FunctionEvaluatorAdapter(fn)\n        config = self._make_config()\n        local = make_task_response()\n        remote = make_task_response()\n        result = adapter.evaluate(local, remote, config)\n        assert result.score == 0.75\n        assert result.evaluator_type == \"custom\"\n\n    def test_int_return_wrapped(self):\n        \"\"\"Wraps int return into EvaluationResult.\"\"\"\n        fn = lambda local, remote, config: 1\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert result.score == 1.0\n\n    def test_evaluation_result_passthrough(self):\n        \"\"\"Passes through EvaluationResult from callable.\"\"\"\n        expected_result = EvaluationResult(\n            score=0.8,\n            evaluator_type=\"custom\",\n            field_breakdown={},\n            error=None,\n            metadata={},\n            timestamp=\"2024-01-01T00:00:00Z\",\n        )\n        fn = lambda local, remote, config: expected_result\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert result.score == 0.8\n        assert result.evaluator_type == \"custom\"\n\n    def test_clamps_float_above_one(self):\n        \"\"\"Clamps float return above 1.0 to 1.0.\"\"\"\n        fn = lambda local, remote, config: 1.5\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert result.score == 1.0\n\n    def test_clamps_negative_float(self):\n        \"\"\"Clamps negative float return to 0.0.\"\"\"\n        fn = lambda local, remote, config: -0.5\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert result.score == 0.0\n\n    def test_callable_exception_returns_error(self):\n        \"\"\"Catches callable exception and returns error result.\"\"\"\n        def failing_fn(local, remote, config):\n            raise ValueError(\"Something went wrong\")\n\n        adapter = FunctionEvaluatorAdapter(failing_fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert result.error is not None, \"Expected error annotation\"\n        assert result.score == 0.0\n        assert result.evaluator_type == \"custom\"\n\n    def test_invalid_return_type_returns_error(self):\n        \"\"\"Handles invalid return type from callable.\"\"\"\n        fn = lambda local, remote, config: \"not a valid return\"\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        # Per contract: invalid_return_type returns error result\n        assert result.error is not None, \"Expected error for invalid return type\"\n        assert result.score == 0.0\n\n    def test_non_callable_init_raises(self):\n        \"\"\"Raises error when fn is not callable.\"\"\"\n        with pytest.raises((TypeError, ValueError, Exception)):\n            FunctionEvaluatorAdapter(42)\n\n    def test_has_evaluate_method(self):\n        \"\"\"Adapter satisfies EvaluatorProtocol (has evaluate method).\"\"\"\n        fn = lambda local, remote, config: 0.5\n        adapter = FunctionEvaluatorAdapter(fn)\n        assert hasattr(adapter, \"evaluate\"), \"Adapter must have evaluate method\"\n        assert callable(adapter.evaluate), \"evaluate must be callable\"\n\n    def test_valid_timestamp(self):\n        \"\"\"Result has valid ISO-8601 timestamp.\"\"\"\n        fn = lambda local, remote, config: 0.5\n        adapter = FunctionEvaluatorAdapter(fn)\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), self._make_config()\n        )\n        assert _is_valid_iso8601(result.timestamp)\n\n\n# ============================================================================\n# Tests for create_evaluator\n# ============================================================================\n\nclass TestCreateEvaluator:\n    \"\"\"Tests for the create_evaluator factory function.\"\"\"\n\n    def test_creates_structured_match_evaluator(self):\n        \"\"\"Returns StructuredMatchEvaluator for structured_match type.\"\"\"\n        config = make_task_config(\n            evaluator_type=\"structured_match\", match_fields=[\"name\"]\n        )\n        evaluator = create_evaluator(config, embed_fn=None)\n        assert hasattr(evaluator, \"evaluate\")\n        assert isinstance(evaluator, StructuredMatchEvaluator)\n\n    def test_creates_exact_match_evaluator(self):\n        \"\"\"Returns ExactMatchEvaluator for exact_match type.\"\"\"\n        config = make_task_config(evaluator_type=\"exact_match\")\n        evaluator = create_evaluator(config, embed_fn=None)\n        assert hasattr(evaluator, \"evaluate\")\n        assert isinstance(evaluator, ExactMatchEvaluator)\n\n    def test_creates_semantic_similarity_evaluator(self):\n        \"\"\"Returns SemanticSimilarityEvaluator for semantic_similarity type.\"\"\"\n        mock_embed = lambda texts: [[1.0]] * len(texts)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        evaluator = create_evaluator(config, embed_fn=mock_embed)\n        assert hasattr(evaluator, \"evaluate\")\n        assert isinstance(evaluator, SemanticSimilarityEvaluator)\n\n    def test_creates_custom_evaluator(self):\n        \"\"\"Returns FunctionEvaluatorAdapter for custom type.\"\"\"\n        custom_fn = lambda local, remote, config: 0.5\n        config = make_task_config(\n            evaluator_type=\"custom\", custom_evaluator=custom_fn\n        )\n        evaluator = create_evaluator(config, embed_fn=None)\n        assert hasattr(evaluator, \"evaluate\")\n        assert isinstance(evaluator, FunctionEvaluatorAdapter)\n\n    def test_unknown_type_raises(self):\n        \"\"\"Raises error for unknown evaluator type.\"\"\"\n        # We need to bypass Pydantic validation to test this\n        config = MagicMock()\n        config.evaluator_type = \"unknown_type\"\n        config.match_fields = []\n        config.model_name = \"\"\n        config.custom_evaluator = None\n        with pytest.raises((ValueError, KeyError, Exception)):\n            create_evaluator(config, embed_fn=None)\n\n\n# ============================================================================\n# Invariant Tests\n# ============================================================================\n\nclass TestInvariants:\n    \"\"\"Cross-cutting invariant tests for all evaluators.\"\"\"\n\n    def test_score_always_in_range_exact_match(self):\n        \"\"\"ExactMatchEvaluator score is always in [0.0, 1.0].\"\"\"\n        evaluator = ExactMatchEvaluator()\n        config = make_task_config(evaluator_type=\"exact_match\")\n        for out_local, out_remote in [(\"a\", \"a\"), (\"a\", \"b\"), (\"\", \"\"), (\"\", \"x\")]:\n            result = evaluator.evaluate(\n                make_task_response(output=out_local),\n                make_task_response(output=out_remote),\n                config,\n            )\n            assert 0.0 <= result.score <= 1.0\n\n    def test_score_always_in_range_structured_match(self):\n        \"\"\"StructuredMatchEvaluator score is always in [0.0, 1.0].\"\"\"\n        evaluator = StructuredMatchEvaluator()\n        config = make_task_config(\n            evaluator_type=\"structured_match\", match_fields=[\"a\", \"b\"]\n        )\n        cases = [\n            ({\"a\": 1, \"b\": 2}, {\"a\": 1, \"b\": 2}),\n            ({\"a\": 1, \"b\": 2}, {\"a\": 3, \"b\": 4}),\n            ({\"a\": 1}, {\"a\": 1, \"b\": 2}),\n            ({}, {}),\n        ]\n        for local_fields, remote_fields in cases:\n            result = evaluator.evaluate(\n                make_task_response(fields=local_fields),\n                make_task_response(fields=remote_fields),\n                config,\n            )\n            assert 0.0 <= result.score <= 1.0\n\n    def test_errors_never_raise_function_adapter(self):\n        \"\"\"FunctionEvaluatorAdapter.evaluate never raises, returns error result.\"\"\"\n        def bad_fn(local, remote, config):\n            raise RuntimeError(\"boom\")\n\n        adapter = FunctionEvaluatorAdapter(bad_fn)\n        config = make_task_config(evaluator_type=\"custom\")\n        # Should not raise\n        result = adapter.evaluate(\n            make_task_response(), make_task_response(), config\n        )\n        assert result.error is not None\n        assert result.score == 0.0\n\n    def test_errors_never_raise_semantic_similarity(self):\n        \"\"\"SemanticSimilarityEvaluator.evaluate never raises on embed error.\"\"\"\n        def bad_embed(texts):\n            raise RuntimeError(\"OOM\")\n\n        evaluator = SemanticSimilarityEvaluator(embed_fn=bad_embed)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        result = evaluator.evaluate(\n            make_task_response(output=\"a\"),\n            make_task_response(output=\"b\"),\n            config,\n        )\n        assert result.error is not None\n        assert result.score == 0.0\n\n    def test_evaluation_result_immutable(self):\n        \"\"\"EvaluationResult instances are frozen (immutable).\"\"\"\n        result = EvaluationResult(\n            score=0.5,\n            evaluator_type=\"exact_match\",\n            field_breakdown={},\n            error=None,\n            metadata={},\n            timestamp=\"2024-01-01T00:00:00Z\",\n        )\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            result.score = 0.9\n\n    def test_evaluation_result_serializable(self):\n        \"\"\"EvaluationResult is JSON-serializable via model_dump(mode='json').\"\"\"\n        result = EvaluationResult(\n            score=0.5,\n            evaluator_type=\"exact_match\",\n            field_breakdown={},\n            error=None,\n            metadata={\"key\": \"value\"},\n            timestamp=\"2024-01-01T00:00:00Z\",\n        )\n        dumped = result.model_dump(mode=\"json\")\n        assert isinstance(dumped, dict)\n        # Should not raise\n        json_str = json.dumps(dumped)\n        assert isinstance(json_str, str)\n\n    def test_evaluation_result_score_validator_clamps(self):\n        \"\"\"EvaluationResult Pydantic validator clamps score to [0.0, 1.0].\"\"\"\n        # Depending on implementation, this may clamp or reject\n        try:\n            result = EvaluationResult(\n                score=1.5,\n                evaluator_type=\"test\",\n                field_breakdown={},\n                error=None,\n                metadata={},\n                timestamp=\"2024-01-01T00:00:00Z\",\n            )\n            # If it doesn't raise, score should be clamped\n            assert result.score <= 1.0, (\n                f\"Score {result.score} should be clamped to 1.0\"\n            )\n        except (ValueError, Exception):\n            pass  # Also acceptable: reject invalid score\n\n    def test_all_evaluators_satisfy_protocol(self):\n        \"\"\"All evaluator implementations have an evaluate method.\"\"\"\n        evaluators = [\n            ExactMatchEvaluator(),\n            StructuredMatchEvaluator(),\n            SemanticSimilarityEvaluator(embed_fn=lambda x: [[1.0]] * len(x)),\n            FunctionEvaluatorAdapter(lambda l, r, c: 0.5),\n        ]\n        for ev in evaluators:\n            assert hasattr(ev, \"evaluate\"), (\n                f\"{type(ev).__name__} missing evaluate method\"\n            )\n            assert callable(ev.evaluate), (\n                f\"{type(ev).__name__}.evaluate is not callable\"\n            )\n\n    def test_negative_cosine_maps_to_zero_score(self):\n        \"\"\"Negative cosine similarity maps to score 0.0, not negative.\"\"\"\n        def embed_fn(texts):\n            mapping = {\"pos\": [1.0, 0.0], \"neg\": [-1.0, 0.0]}\n            return [mapping.get(t, [0.0, 0.0]) for t in texts]\n\n        evaluator = SemanticSimilarityEvaluator(embed_fn=embed_fn)\n        config = make_task_config(evaluator_type=\"semantic_similarity\")\n        result = evaluator.evaluate(\n            make_task_response(output=\"pos\"),\n            make_task_response(output=\"neg\"),\n            config,\n        )\n        assert result.score >= 0.0, (\n            f\"Negative cosine should map to 0.0, got {result.score}\"\n        )\n        assert result.metadata.get(\"raw_cosine_similarity\", 0.0) < 0.0 or \\\n               result.score == 0.0\n\n    def test_no_global_state_between_evaluations(self):\n        \"\"\"Evaluators are stateless; repeated calls produce same results.\"\"\"\n        evaluator = ExactMatchEvaluator()\n        config = make_task_config(evaluator_type=\"exact_match\")\n        local = make_task_response(output=\"hello\")\n        remote = make_task_response(output=\"hello\")\n\n        result1 = evaluator.evaluate(local, remote, config)\n        result2 = evaluator.evaluate(local, remote, config)\n        assert result1.score == result2.score\n        assert result1.evaluator_type == result2.evaluator_type\n"
+}

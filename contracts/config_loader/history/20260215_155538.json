@@ -1,0 +1,1550 @@
+{
+  "component_id": "config_loader",
+  "name": "Config Loader",
+  "description": "Reads apprentice.yaml, parses YAML via pyyaml, validates all fields against Pydantic v2 models with strict mode. Handles env var references (env:VAR_NAME pattern) for API keys and secrets, resolving them at parse time via Pydantic BeforeValidator using validation context. Returns a fully typed, frozen/immutable ApprenticeConfig object. Fails at startup with clear, field-path-aware messages for missing required fields, invalid types, unknown evaluator types, unsupported backend combinations, missing env vars, and YAML syntax errors. No defaults for critical fields — everything must be explicit. Implemented as three cohesive units: models.py (Pydantic v2 schema), loader.py (pure loading function), errors.py (domain exceptions).",
+  "version": 1,
+  "types": [
+    {
+      "name": "str",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": ""
+    },
+    {
+      "name": "int",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": ""
+    },
+    {
+      "name": "float",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": ""
+    },
+    {
+      "name": "bool",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": ""
+    },
+    {
+      "name": "Path",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "pathlib.Path representing a filesystem path"
+    },
+    {
+      "name": "SecretStr",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic SecretStr — masks value in repr/logs, accessible via .get_secret_value()"
+    },
+    {
+      "name": "EnvMapping",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Mapping[str, str] — an immutable string-to-string mapping, typically os.environ or a test override"
+    },
+    {
+      "name": "EvaluatorTypeName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "exact_match",
+        "semantic_similarity",
+        "llm_judge",
+        "regex_match",
+        "json_schema_match"
+      ],
+      "inner_types": [],
+      "description": "Discriminated evaluator type identifiers. Each maps to a specific evaluator implementation."
+    },
+    {
+      "name": "FinetuningBackendName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "openai",
+        "anyscale",
+        "local_lora",
+        "axolotl",
+        "custom"
+      ],
+      "inner_types": [],
+      "description": "Supported fine-tuning backend identifiers. Used as discriminator for backend plugin selection."
+    },
+    {
+      "name": "LogLevel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "inner_types": [],
+      "description": "Standard Python logging levels for audit configuration."
+    },
+    {
+      "name": "ProviderConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "api_base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL of the remote LLM API endpoint.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "api_base_url must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "api_key",
+          "type_ref": "SecretStr",
+          "required": true,
+          "default": "",
+          "description": "API key for the remote provider. Specified as env:VAR_NAME in YAML, resolved from environment at parse time via BeforeValidator, then wrapped in SecretStr.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier for the remote provider (e.g. 'gpt-4o', 'claude-3-sonnet').",
+          "validators": []
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "30",
+          "description": "HTTP request timeout in seconds for remote API calls.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 600",
+              "error_message": "timeout_seconds must be between 1 and 600"
+            }
+          ]
+        },
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Maximum retry attempts for transient remote API failures.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 10",
+              "error_message": "max_retries must be between 0 and 10"
+            }
+          ]
+        },
+        {
+          "name": "retry_base_delay_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Base delay in seconds for exponential backoff on retries.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.1 <= value <= 60.0",
+              "error_message": "retry_base_delay_seconds must be between 0.1 and 60.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the remote LLM API provider. api_key is resolved from env var reference at parse time and wrapped in SecretStr. No defaults for api_key or model — must be explicit."
+    },
+    {
+      "name": "LocalModelConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "endpoint",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "URL of the local model inference server (e.g. 'http://localhost:8080/v1').",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "endpoint must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name/identifier of the local model to use for inference.",
+          "validators": []
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "60",
+          "description": "HTTP request timeout in seconds for local model calls.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 600",
+              "error_message": "timeout_seconds must be between 1 and 600"
+            }
+          ]
+        },
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Retry attempts for local model server calls (low since fallback to remote exists).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 5",
+              "error_message": "max_retries must be between 0 and 5"
+            }
+          ]
+        },
+        {
+          "name": "health_check_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "/health",
+          "description": "HTTP path for local model server health check endpoint.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the local model server. No defaults for model_name or endpoint — must be explicit."
+    },
+    {
+      "name": "MatchFieldSpec",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the field in the task output schema to match on.",
+          "validators": []
+        },
+        {
+          "name": "weight",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Weight of this match field in aggregate confidence scoring.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 10.0",
+              "error_message": "weight must be between 0.0 (exclusive) and 10.0"
+            }
+          ]
+        },
+        {
+          "name": "case_sensitive",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether string comparison is case-sensitive for this field.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Specification for a single match field used by evaluators to compare expected vs actual outputs."
+    },
+    {
+      "name": "ConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "local_ready",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at or above which the system begins routing to the local model (Phase 2 → Phase 3 transition). No default — must be explicitly set per task.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "local_ready must be between 0.0 (exclusive) and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "local_only",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at or above which the system routes exclusively to local model (full Phase 3). Must be >= local_ready. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "local_only must be between 0.0 (exclusive) and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "degraded_threshold",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.3",
+          "description": "Confidence score below which a warning is logged indicating degraded quality.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "degraded_threshold must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence score thresholds that govern phase transitions for a task. Phase transitions are emergent from these scores, not manually triggered."
+    },
+    {
+      "name": "EvaluatorConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorTypeName",
+          "required": true,
+          "default": "",
+          "description": "Evaluator implementation type. Determines which evaluator class is instantiated.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "MatchFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Fields in the task output schema to evaluate. Must reference fields that exist in the parent task's output_schema.",
+          "validators": []
+        },
+        {
+          "name": "semantic_model",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model name for semantic_similarity evaluator. Required when type is 'semantic_similarity', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "judge_prompt_template",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Prompt template for llm_judge evaluator. Required when type is 'llm_judge', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "regex_pattern",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Regex pattern for regex_match evaluator. Required when type is 'regex_match', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "json_schema_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Path to JSON schema file for json_schema_match evaluator. Required when type is 'json_schema_match', ignored otherwise.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for a single evaluator instance attached to a task. Uses discriminated union on 'type' field to select evaluator implementation."
+    },
+    {
+      "name": "MatchFieldSpecList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "MatchFieldSpec",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of match field specifications."
+    },
+    {
+      "name": "EvaluatorConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "EvaluatorConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of evaluator configurations for a task."
+    },
+    {
+      "name": "TaskFieldSpec",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Field name in the task input/output.",
+          "validators": []
+        },
+        {
+          "name": "type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Type of the field (e.g. 'str', 'int', 'float', 'bool', 'list[str]').",
+          "validators": []
+        },
+        {
+          "name": "required",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether this field is required in task input/output.",
+          "validators": []
+        },
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable description of this field.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Schema definition for a single field in a task's input or output schema."
+    },
+    {
+      "name": "TaskFieldSpecList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskFieldSpec",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of task field specifications."
+    },
+    {
+      "name": "TaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this task type. Used as registry key.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]{1,62}[a-z0-9]$",
+              "error_message": "task_name must be 3-64 chars, snake_case, start with letter, end with alphanumeric"
+            }
+          ]
+        },
+        {
+          "name": "prompt_template",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Jinja2-style prompt template. Placeholders must correspond to input_schema field names.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "1 <= len <= 10000",
+              "error_message": "prompt_template must be between 1 and 10000 characters"
+            }
+          ]
+        },
+        {
+          "name": "input_schema",
+          "type_ref": "TaskFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Schema for task input fields. At least one field required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "input_schema must contain at least one field"
+            }
+          ]
+        },
+        {
+          "name": "output_schema",
+          "type_ref": "TaskFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Schema for task output fields. Evaluator match_fields must reference fields defined here.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "output_schema must contain at least one field"
+            }
+          ]
+        },
+        {
+          "name": "evaluators",
+          "type_ref": "EvaluatorConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of evaluators for this task. At least one evaluator required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "evaluators must contain at least one evaluator"
+            }
+          ]
+        },
+        {
+          "name": "thresholds",
+          "type_ref": "ConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Confidence thresholds governing phase transitions for this task.",
+          "validators": []
+        },
+        {
+          "name": "sampling_rate_initial",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Initial sampling rate for dual-inference (fraction of requests sent to both local and remote). 1.0 means all requests sampled.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "sampling_rate_initial must be between 0.0 (exclusive) and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "min_training_examples",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Minimum number of training examples before first fine-tuning run is triggered.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100000",
+              "error_message": "min_training_examples must be between 1 and 100000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for a single task type. Defines schema, prompt template, evaluators, match fields, and confidence thresholds. No defaults for critical fields — task_name, prompt_template, input_schema, output_schema, evaluators, and thresholds must all be explicit."
+    },
+    {
+      "name": "TaskConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of task configurations."
+    },
+    {
+      "name": "BudgetConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_daily_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Maximum daily spend in USD across all remote API calls. No default — must be explicit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.01 <= value <= 100000.0",
+              "error_message": "max_daily_cost_usd must be between $0.01 and $100,000"
+            }
+          ]
+        },
+        {
+          "name": "max_monthly_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Maximum monthly spend in USD. No default — must be explicit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.01 <= value <= 1000000.0",
+              "error_message": "max_monthly_cost_usd must be between $0.01 and $1,000,000"
+            }
+          ]
+        },
+        {
+          "name": "rolling_window_hours",
+          "type_ref": "int",
+          "required": false,
+          "default": "24",
+          "description": "Rolling window size in hours for daily cost tracking.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 720",
+              "error_message": "rolling_window_hours must be between 1 and 720"
+            }
+          ]
+        },
+        {
+          "name": "cost_per_input_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per input token for the remote provider model. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "cost_per_input_token must be positive and at most $1.0"
+            }
+          ]
+        },
+        {
+          "name": "cost_per_output_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per output token for the remote provider model. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "cost_per_output_token must be positive and at most $1.0"
+            }
+          ]
+        },
+        {
+          "name": "budget_state_path",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/budget_state.json",
+          "description": "File path for persisting budget state as JSON.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Hard budget enforcement configuration. Budget enforcement is hard — the system stops spending, never exceeds limits."
+    },
+    {
+      "name": "FinetuningConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend",
+          "type_ref": "FinetuningBackendName",
+          "required": true,
+          "default": "",
+          "description": "Fine-tuning backend to use. Determines which plugin is loaded.",
+          "validators": []
+        },
+        {
+          "name": "model_base",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base model identifier for fine-tuning (e.g. 'meta-llama/Llama-3-8B').",
+          "validators": []
+        },
+        {
+          "name": "batch_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Number of training examples per fine-tuning batch.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "batch_size must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "trigger_interval_hours",
+          "type_ref": "int",
+          "required": false,
+          "default": "24",
+          "description": "Minimum hours between fine-tuning runs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 720",
+              "error_message": "trigger_interval_hours must be between 1 and 720"
+            }
+          ]
+        },
+        {
+          "name": "api_key",
+          "type_ref": "SecretStr",
+          "required": false,
+          "default": "",
+          "description": "API key for remote fine-tuning backends (e.g. OpenAI). Specified as env:VAR_NAME in YAML. Not required for local backends.",
+          "validators": []
+        },
+        {
+          "name": "api_base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Base URL for remote fine-tuning API. Required for remote backends, ignored for local.",
+          "validators": []
+        },
+        {
+          "name": "output_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/models/",
+          "description": "Directory for storing fine-tuned model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "max_concurrent_jobs",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Maximum concurrent fine-tuning jobs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10",
+              "error_message": "max_concurrent_jobs must be between 1 and 10"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the fine-tuning orchestrator. Backend is selected via discriminated union pattern. No defaults for backend or model_base — must be explicit."
+    },
+    {
+      "name": "AuditConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/audit.log",
+          "description": "File path for the audit log output.",
+          "validators": []
+        },
+        {
+          "name": "log_level",
+          "type_ref": "LogLevel",
+          "required": false,
+          "default": "INFO",
+          "description": "Minimum log level for audit entries.",
+          "validators": []
+        },
+        {
+          "name": "log_to_stdout",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "Whether to also emit audit log entries to stdout.",
+          "validators": []
+        },
+        {
+          "name": "max_file_size_mb",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum audit log file size in MB before rotation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "max_file_size_mb must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "backup_count",
+          "type_ref": "int",
+          "required": false,
+          "default": "5",
+          "description": "Number of rotated audit log backup files to retain.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 100",
+              "error_message": "backup_count must be between 0 and 100"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the structured audit logging system. Uses Python stdlib logging with JSON formatter."
+    },
+    {
+      "name": "TrainingDataStoreConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "storage_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/training_data/",
+          "description": "Directory for persisting training examples as JSON files.",
+          "validators": []
+        },
+        {
+          "name": "max_examples_per_task",
+          "type_ref": "int",
+          "required": false,
+          "default": "50000",
+          "description": "Maximum training examples retained per task before oldest are evicted.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "100 <= value <= 10000000",
+              "error_message": "max_examples_per_task must be between 100 and 10,000,000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the training data store, which persists training examples for fine-tuning."
+    },
+    {
+      "name": "ApprenticeConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderConfig",
+          "required": true,
+          "default": "",
+          "description": "Remote LLM provider configuration. No defaults — must be fully specified.",
+          "validators": []
+        },
+        {
+          "name": "local_model",
+          "type_ref": "LocalModelConfig",
+          "required": true,
+          "default": "",
+          "description": "Local model server configuration. No defaults for endpoint/model_name.",
+          "validators": []
+        },
+        {
+          "name": "tasks",
+          "type_ref": "TaskConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of configured task types. At least one task required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "At least one task must be configured"
+            }
+          ]
+        },
+        {
+          "name": "budget",
+          "type_ref": "BudgetConfig",
+          "required": true,
+          "default": "",
+          "description": "Budget enforcement configuration. No defaults for cost limits.",
+          "validators": []
+        },
+        {
+          "name": "finetuning",
+          "type_ref": "FinetuningConfig",
+          "required": true,
+          "default": "",
+          "description": "Fine-tuning orchestrator configuration. No defaults for backend/model_base.",
+          "validators": []
+        },
+        {
+          "name": "audit",
+          "type_ref": "AuditConfig",
+          "required": false,
+          "default": "",
+          "description": "Audit logging configuration. Has sensible defaults for all fields.",
+          "validators": []
+        },
+        {
+          "name": "training_data",
+          "type_ref": "TrainingDataStoreConfig",
+          "required": false,
+          "default": "",
+          "description": "Training data store configuration. Has sensible defaults for all fields.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Root configuration model. Frozen and immutable after construction. ConfigDict(frozen=True, strict=True, extra='forbid'). Cross-field model_validator(mode='after') validates: (1) backend combinations are supported, (2) evaluator types referenced by tasks are valid, (3) match fields reference fields in task output_schema, (4) thresholds.local_only >= thresholds.local_ready, (5) budget.max_monthly_cost_usd >= budget.max_daily_cost_usd, (6) semantic_similarity evaluators have semantic_model set, (7) llm_judge evaluators have judge_prompt_template set."
+    },
+    {
+      "name": "ConfigError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Filesystem path of the config file that caused the error.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Dot-notation path to the specific field that caused the error (e.g. 'tasks.0.evaluators.0.type').",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base domain exception for all config-related errors. Contains structured context for clear error reporting."
+    },
+    {
+      "name": "ConfigFileNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message including the missing file path.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path that was not found.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when the specified config file does not exist at the given path. Subclass of ConfigError."
+    },
+    {
+      "name": "ConfigParseError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of the YAML syntax error.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the file with YAML syntax errors.",
+          "validators": []
+        },
+        {
+          "name": "line",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Line number where the YAML parse error occurred, if available.",
+          "validators": []
+        },
+        {
+          "name": "column",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Column number where the YAML parse error occurred, if available.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when YAML parsing fails due to syntax errors. Subclass of ConfigError."
+    },
+    {
+      "name": "ConfigValidationError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Summary error message.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the config file.",
+          "validators": []
+        },
+        {
+          "name": "validation_errors",
+          "type_ref": "ValidationErrorDetailList",
+          "required": true,
+          "default": "",
+          "description": "Structured list of individual validation errors from Pydantic.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when Pydantic validation fails — missing required fields, invalid types, cross-field constraint violations, etc. Subclass of ConfigError. Wraps the structured Pydantic error list."
+    },
+    {
+      "name": "ValidationErrorDetail",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Dot-notation path to the field (e.g. 'tasks.0.thresholds.local_ready').",
+          "validators": []
+        },
+        {
+          "name": "error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Pydantic error type code (e.g. 'missing', 'string_type', 'value_error').",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message for this specific validation failure.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single structured validation error from Pydantic, with field path and error context."
+    },
+    {
+      "name": "ValidationErrorDetailList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ValidationErrorDetail",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of individual validation error details."
+    },
+    {
+      "name": "EnvVarNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message including the missing env var name.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the config file.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Dot-notation path to the field referencing the missing env var.",
+          "validators": []
+        },
+        {
+          "name": "env_var_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the environment variable that was not found.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when an env:VAR_NAME reference in the config cannot be resolved because the environment variable is not set. Subclass of ConfigError."
+    }
+  ],
+  "functions": [
+    {
+      "name": "load_config",
+      "description": "Main entry point: loads and validates an Apprentice configuration from a YAML file. Pure function with no internal state. Reads the file, parses YAML via yaml.safe_load(), resolves env:VAR_NAME references using the provided env mapping (or os.environ by default), constructs and validates ApprenticeConfig via Pydantic v2 with strict mode, and returns a frozen/immutable config object. All exceptions from the loading pipeline are caught and re-raised as domain-specific ConfigError subclasses with file path, field path, and clear messages.",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "Path",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the apprentice.yaml configuration file.",
+          "validators": []
+        },
+        {
+          "name": "env",
+          "type_ref": "EnvMapping",
+          "required": false,
+          "default": "None",
+          "description": "String-to-string mapping for environment variable resolution. Defaults to os.environ at call time (not at definition time) for testability. Pass a dict in tests to avoid depending on real env vars.",
+          "validators": []
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The file at the specified path does not exist",
+          "error_type": "ConfigFileNotFoundError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "file_not_readable",
+          "condition": "The file exists but cannot be read due to permissions or I/O error",
+          "error_type": "ConfigError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Cannot read config file: {path}: {detail}"
+          }
+        },
+        {
+          "name": "yaml_syntax_error",
+          "condition": "The file content is not valid YAML (syntax error in YAML)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "YAML syntax error in {path}: {detail}",
+            "line": "error.problem_mark.line if available",
+            "column": "error.problem_mark.column if available"
+          }
+        },
+        {
+          "name": "empty_config_file",
+          "condition": "The YAML file is empty or contains only comments (yaml.safe_load returns None)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file is empty: {path}"
+          }
+        },
+        {
+          "name": "yaml_not_a_mapping",
+          "condition": "The top-level YAML content is not a mapping/dict (e.g. it's a list or scalar)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file root must be a YAML mapping, got {type}: {path}"
+          }
+        },
+        {
+          "name": "missing_required_field",
+          "condition": "A required field is missing from the config (e.g. provider.api_key, tasks, budget.max_daily_cost_usd)",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: {count} error(s)"
+          }
+        },
+        {
+          "name": "invalid_field_type",
+          "condition": "A field value has the wrong type (e.g. string where int expected, due to strict mode)",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: {count} error(s)"
+          }
+        },
+        {
+          "name": "extra_field_forbidden",
+          "condition": "An unrecognized/extra field is present in the config (extra='forbid')",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unknown field '{field_name}'"
+          }
+        },
+        {
+          "name": "unknown_evaluator_type",
+          "condition": "A task references an evaluator type not in the EvaluatorTypeName enum",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unknown evaluator type '{type}'"
+          }
+        },
+        {
+          "name": "unknown_backend",
+          "condition": "The finetuning backend is not in the FinetuningBackendName enum",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unsupported finetuning backend '{backend}'"
+          }
+        },
+        {
+          "name": "match_field_not_in_output_schema",
+          "condition": "An evaluator's match_field references a field name not present in the task's output_schema",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: match field '{field}' not found in output_schema of task '{task}'"
+          }
+        },
+        {
+          "name": "threshold_ordering_violation",
+          "condition": "A task's thresholds.local_only < thresholds.local_ready",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: local_only must be >= local_ready for task '{task}'"
+          }
+        },
+        {
+          "name": "monthly_less_than_daily",
+          "condition": "budget.max_monthly_cost_usd < budget.max_daily_cost_usd",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: max_monthly_cost_usd must be >= max_daily_cost_usd"
+          }
+        },
+        {
+          "name": "semantic_similarity_missing_model",
+          "condition": "An evaluator of type 'semantic_similarity' does not have semantic_model set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: semantic_similarity evaluator requires 'semantic_model' for task '{task}'"
+          }
+        },
+        {
+          "name": "llm_judge_missing_template",
+          "condition": "An evaluator of type 'llm_judge' does not have judge_prompt_template set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: llm_judge evaluator requires 'judge_prompt_template' for task '{task}'"
+          }
+        },
+        {
+          "name": "duplicate_task_names",
+          "condition": "Two or more tasks have the same task_name",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: duplicate task name '{task_name}'"
+          }
+        },
+        {
+          "name": "unsupported_backend_combination",
+          "condition": "The finetuning backend requires fields that are missing (e.g. remote backend without api_key or api_base_url)",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: backend '{backend}' requires '{field}'"
+          }
+        },
+        {
+          "name": "env_var_not_found",
+          "condition": "An env:VAR_NAME reference cannot be resolved because the environment variable is not set in the provided env mapping",
+          "error_type": "EnvVarNotFoundError",
+          "error_data": {
+            "path": "str(path)",
+            "env_var_name": "VAR_NAME",
+            "field_path": "dotted.field.path",
+            "message": "Environment variable '{var}' not found (referenced by {field_path} in {path})"
+          }
+        },
+        {
+          "name": "regex_match_missing_pattern",
+          "condition": "An evaluator of type 'regex_match' does not have regex_pattern set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: regex_match evaluator requires 'regex_pattern' for task '{task}'"
+          }
+        },
+        {
+          "name": "json_schema_match_missing_path",
+          "condition": "An evaluator of type 'json_schema_match' does not have json_schema_path set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: json_schema_match evaluator requires 'json_schema_path' for task '{task}'"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is a non-empty Path object",
+        "If env is provided, it must be a Mapping[str, str]"
+      ],
+      "postconditions": [
+        "Returned ApprenticeConfig is frozen/immutable — no field can be modified after construction",
+        "All env:VAR_NAME references have been resolved to actual values",
+        "All SecretStr fields contain resolved secret values accessible via .get_secret_value()",
+        "All cross-field validations have passed (thresholds ordering, backend compatibility, match field existence, evaluator-specific required fields)",
+        "All task_name values in tasks list are unique",
+        "Returned config is fully valid and ready for dependency injection into all downstream components"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "path (the apprentice.yaml config file)",
+          "description": "Reads the YAML config file from disk with utf-8-sig encoding"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_env_var",
+      "description": "Resolves an env:VAR_NAME reference string by looking up the variable name in the provided environment mapping. Used internally as a Pydantic BeforeValidator. If the input string does not start with 'env:', it is returned unchanged. If it does, the VAR_NAME portion is extracted and looked up in the env mapping. This function is exposed for testing but is primarily called within Pydantic's validation pipeline via validation context.",
+      "inputs": [
+        {
+          "name": "value",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The raw string value from the YAML config. May be a literal value or an 'env:VAR_NAME' reference.",
+          "validators": []
+        },
+        {
+          "name": "env",
+          "type_ref": "EnvMapping",
+          "required": true,
+          "default": "",
+          "description": "Environment variable mapping to resolve references against.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Dot-notation field path for error reporting context.",
+          "validators": []
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "env_var_not_set",
+          "condition": "The value starts with 'env:' but the referenced environment variable is not present in the env mapping",
+          "error_type": "EnvVarNotFoundError",
+          "error_data": {
+            "env_var_name": "VAR_NAME",
+            "field_path": "field_path",
+            "message": "Environment variable '{var}' not found"
+          }
+        },
+        {
+          "name": "empty_var_name",
+          "condition": "The value is exactly 'env:' with no variable name following the colon",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "message": "Empty environment variable name in 'env:' reference at {field_path}"
+          }
+        }
+      ],
+      "preconditions": [
+        "value is a non-null string",
+        "env is a valid Mapping[str, str]"
+      ],
+      "postconditions": [
+        "If value did not start with 'env:', the returned string equals the input value unchanged",
+        "If value started with 'env:' and the variable was found, the returned string is the resolved environment variable value",
+        "The returned string is never empty when the input env var reference resolved to a non-empty value"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function — no side effects"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_cross_field_constraints",
+      "description": "Performs all cross-field validations on a fully constructed ApprenticeConfig. Invoked as a @model_validator(mode='after') on ApprenticeConfig. Validates: threshold ordering (local_only >= local_ready), budget consistency (monthly >= daily), match fields exist in output schemas, evaluator-specific required fields are present, backend+field compatibility, and task name uniqueness. Returns the config if valid, raises ConfigValidationError with all collected violations if not.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "ApprenticeConfig",
+          "required": true,
+          "default": "",
+          "description": "The fully constructed ApprenticeConfig to validate cross-field constraints on.",
+          "validators": []
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "cross_field_violations",
+          "condition": "One or more cross-field constraints are violated",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "message": "Cross-field validation failed with {count} error(s)"
+          }
+        }
+      ],
+      "preconditions": [
+        "All individual field validations have already passed (this runs in mode='after')",
+        "config is a fully constructed ApprenticeConfig instance"
+      ],
+      "postconditions": [
+        "For every task: thresholds.local_only >= thresholds.local_ready",
+        "budget.max_monthly_cost_usd >= budget.max_daily_cost_usd",
+        "For every evaluator in every task: all match_field names exist in that task's output_schema",
+        "Every semantic_similarity evaluator has a non-empty semantic_model",
+        "Every llm_judge evaluator has a non-empty judge_prompt_template",
+        "Every regex_match evaluator has a non-empty regex_pattern",
+        "Every json_schema_match evaluator has a non-empty json_schema_path",
+        "All task_name values are unique across the tasks list",
+        "Remote finetuning backends (openai, anyscale) have api_key and api_base_url set",
+        "The returned config is the same object, unmodified (frozen model)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure validation — no side effects"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "ApprenticeConfig is frozen/immutable after construction — no mutation is possible",
+    "All SecretStr fields mask their values in repr and str — secrets never appear in logs or error messages",
+    "All env:VAR_NAME references are resolved at parse time — no deferred resolution at runtime",
+    "Config validation is exhaustive — if load_config returns without error, the config is fully valid for all downstream components",
+    "No silent defaults for critical fields — api keys, model names, task definitions, budget limits, and backend selection must always be explicitly specified",
+    "Extra/unknown fields in YAML always cause validation failure (extra='forbid') — no silent field dropping",
+    "Strict type coercion — '3' as a string is not accepted where int is expected (strict=True)",
+    "All task_name values in the config are unique",
+    "Cross-field constraints are enforced atomically — either all pass or the entire config is rejected",
+    "The loader function is pure and stateless — calling it twice with the same inputs produces identical results",
+    "YAML parsing uses safe_load only — no arbitrary Python object deserialization"
+  ],
+  "requires": [
+    "pydantic>=2.0",
+    "pyyaml"
+  ]
+}

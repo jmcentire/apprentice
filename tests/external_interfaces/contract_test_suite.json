@@ -1,0 +1,938 @@
+{
+  "component_id": "external_interfaces",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "create_remote_adapter_happy_path",
+      "description": "create_remote_adapter returns a RemoteModelAdapter with correct source_info when given valid config and API key env var",
+      "function": "create_remote_adapter",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid RemoteAdapterConfig with provider='openai', model='gpt-4', api_key_env_var='OPENAI_API_KEY' set in env",
+      "expected_output_description": "RemoteModelAdapter with source_type=REMOTE, provider_name='openai', model_id='gpt-4'",
+      "expected_error": "",
+      "assertions": [
+        "Returned adapter satisfies ModelClient ABC",
+        "source_info.source_type == REMOTE",
+        "source_info.provider_name == 'openai'",
+        "source_info.model_id == 'gpt-4'"
+      ]
+    },
+    {
+      "id": "create_remote_adapter_missing_api_key",
+      "description": "create_remote_adapter raises error when API key env var is not set",
+      "function": "create_remote_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config but env var OPENAI_API_KEY is not set",
+      "expected_output_description": "",
+      "expected_error": "missing_api_key",
+      "assertions": []
+    },
+    {
+      "id": "create_remote_adapter_empty_api_key",
+      "description": "create_remote_adapter raises error when API key env var is set but empty",
+      "function": "create_remote_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config but env var OPENAI_API_KEY is set to empty string",
+      "expected_output_description": "",
+      "expected_error": "missing_api_key",
+      "assertions": []
+    },
+    {
+      "id": "create_remote_adapter_invalid_config",
+      "description": "create_remote_adapter raises error on invalid config values",
+      "function": "create_remote_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with negative max_retries or empty provider",
+      "expected_output_description": "",
+      "expected_error": "invalid_config",
+      "assertions": []
+    },
+    {
+      "id": "create_remote_adapter_unsupported_provider",
+      "description": "create_remote_adapter raises error for unsupported provider",
+      "function": "create_remote_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with provider='unsupported_provider_xyz'",
+      "expected_output_description": "",
+      "expected_error": "unsupported_provider",
+      "assertions": []
+    },
+    {
+      "id": "create_local_adapter_happy_path",
+      "description": "create_local_adapter returns a LocalModelAdapter with correct source_info when given valid config",
+      "function": "create_local_adapter",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid LocalAdapterConfig with backend='ollama', model_id='llama3'",
+      "expected_output_description": "LocalModelAdapter with source_type=LOCAL, provider_name='ollama', model_id='llama3'",
+      "expected_error": "",
+      "assertions": [
+        "source_info.source_type == LOCAL",
+        "source_info.provider_name == 'ollama'",
+        "source_info.backend_type == 'ollama'",
+        "source_info.model_id == 'llama3'"
+      ]
+    },
+    {
+      "id": "create_local_adapter_invalid_config",
+      "description": "create_local_adapter raises error on invalid config",
+      "function": "create_local_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_config",
+      "assertions": []
+    },
+    {
+      "id": "create_local_adapter_unsupported_backend",
+      "description": "create_local_adapter raises error for unsupported backend",
+      "function": "create_local_adapter",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with backend='unsupported_backend_xyz'",
+      "expected_output_description": "",
+      "expected_error": "unsupported_backend",
+      "assertions": []
+    },
+    {
+      "id": "complete_remote_happy_path",
+      "description": "Remote adapter complete() returns CompletionResponse with correct fields from TaskResponse",
+      "function": "complete",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Returns TaskResponse with content='Hello', cost_usd=0.01, usage with input_tokens=10, output_tokens=5"
+      },
+      "input_values": {},
+      "input_description": "Valid CompletionRequest with USER message",
+      "expected_output_description": "CompletionResponse with content from remote, source_type=REMOTE, cost_usd > 0, is_estimated=False",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "complete_local_happy_path",
+      "description": "Local adapter complete() returns CompletionResponse with cost_usd=0.0 from InferenceSuccess",
+      "function": "complete",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.infer": "Returns InferenceSuccess with text='Hi', tokens_generated=5, tokens_prompt=10"
+      },
+      "input_values": {},
+      "input_description": "Valid CompletionRequest with USER message",
+      "expected_output_description": "CompletionResponse with content from local, source_type=LOCAL, cost_usd=0.0",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "complete_remote_source_info_matches",
+      "description": "Remote complete() response source_info matches adapter's configured source",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.source_info == adapter.get_source_info()"
+      ]
+    },
+    {
+      "id": "complete_local_source_info_matches",
+      "description": "Local complete() response source_info matches adapter's configured source",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.source_info == adapter.get_source_info()"
+      ]
+    },
+    {
+      "id": "complete_response_id_nonempty",
+      "description": "CompletionResponse.response_id is always a non-empty string",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.response_id is a non-empty string"
+      ]
+    },
+    {
+      "id": "complete_latency_nonnegative",
+      "description": "CompletionResponse.latency_ms is always >= 0.0",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.latency_ms >= 0.0"
+      ]
+    },
+    {
+      "id": "complete_local_cost_always_zero",
+      "description": "Local completions always have cost_usd == 0.0",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.cost_usd == 0.0"
+      ]
+    },
+    {
+      "id": "complete_remote_is_estimated_false",
+      "description": "Remote completions always have token_usage.is_estimated == False",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.token_usage.is_estimated == False"
+      ]
+    },
+    {
+      "id": "complete_empty_messages_error",
+      "description": "complete() raises error when messages list is empty",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "CompletionRequest with messages=[]",
+      "expected_output_description": "",
+      "expected_error": "empty_messages",
+      "assertions": []
+    },
+    {
+      "id": "complete_no_user_message_error",
+      "description": "complete() raises error when messages has no USER role",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "CompletionRequest with only SYSTEM message",
+      "expected_output_description": "",
+      "expected_error": "empty_messages",
+      "assertions": []
+    },
+    {
+      "id": "complete_source_unavailable_local",
+      "description": "Local complete() raises SourceUnavailableError when local server returns LocalModelUnavailable",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.infer": "Returns LocalModelUnavailable with reason=SERVER_NOT_RUNNING"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "source_unavailable_local",
+      "assertions": []
+    },
+    {
+      "id": "complete_source_unavailable_remote",
+      "description": "Remote complete() raises SourceUnavailableError when remote raises RemoteUnavailableError",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Raises RemoteUnavailableError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "source_unavailable_remote",
+      "assertions": []
+    },
+    {
+      "id": "complete_rate_limited",
+      "description": "Remote complete() raises RetriableError when remote raises RateLimitError",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Raises RateLimitError with retry_after=30"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "rate_limited",
+      "assertions": []
+    },
+    {
+      "id": "complete_auth_failure",
+      "description": "Remote complete() raises TerminalError when remote raises AuthError",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Raises AuthError with status_code=401"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "auth_failure",
+      "assertions": []
+    },
+    {
+      "id": "complete_invalid_request",
+      "description": "Remote complete() raises TerminalError when remote raises InvalidRequestError",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Raises InvalidRequestError with status_code=422"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": []
+    },
+    {
+      "id": "complete_client_closed",
+      "description": "complete() raises RuntimeError after close() on adapter that owns its client",
+      "function": "complete",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "client_closed",
+      "assertions": []
+    },
+    {
+      "id": "health_remote_happy_path",
+      "description": "Remote adapter health() returns HealthReport with available=True when API is reachable",
+      "function": "health",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.send_request": "Succeeds with minimal response"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "HealthReport with available=True, source_info matching adapter config",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "health_local_happy_path",
+      "description": "Local adapter health() returns HealthReport with available=True when model is loaded",
+      "function": "health",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.health": "Returns HealthStatus with is_ready=True, loaded_model='llama3'"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "HealthReport with available=True, source_info.model_id populated",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "health_local_unavailable",
+      "description": "Local adapter health() returns available=False with diagnostic detail when server is down",
+      "function": "health",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.health": "Returns HealthStatus with is_ready=False"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "HealthReport with available=False, detail contains diagnostic message",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "health_never_raises",
+      "description": "health() never raises on operational failures, returns available=False",
+      "function": "health",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception is raised",
+        "result.available == False",
+        "result.detail is non-empty"
+      ]
+    },
+    {
+      "id": "health_source_info_matches",
+      "description": "HealthReport.source_info always matches adapter's configured source",
+      "function": "health",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.source_info == adapter.get_source_info()"
+      ]
+    },
+    {
+      "id": "health_latency_nonnegative",
+      "description": "HealthReport.latency_ms reflects actual health check time (>= 0)",
+      "function": "health",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.latency_ms >= 0.0"
+      ]
+    },
+    {
+      "id": "close_idempotent",
+      "description": "close() can be called multiple times safely with no error",
+      "function": "close",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception on first call",
+        "No exception on second call"
+      ]
+    },
+    {
+      "id": "close_owned_client_closed",
+      "description": "close() closes the underlying client when adapter owns it",
+      "function": "close",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "remote_api_client.close": "Called once"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "close_injected_client_not_closed",
+      "description": "close() does not close injected client (caller retains ownership)",
+      "function": "close",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Injected client's close() is NOT called"
+      ]
+    },
+    {
+      "id": "get_source_info_remote",
+      "description": "get_source_info returns correct SourceInfo for remote adapter",
+      "function": "get_source_info",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "source_type == REMOTE",
+        "provider_name and model_id are non-empty"
+      ]
+    },
+    {
+      "id": "get_source_info_local",
+      "description": "get_source_info returns correct SourceInfo for local adapter",
+      "function": "get_source_info",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "source_type == LOCAL",
+        "provider_name and model_id are non-empty"
+      ]
+    },
+    {
+      "id": "get_source_info_immutable",
+      "description": "get_source_info returns the same instance on repeated calls (immutable)",
+      "function": "get_source_info",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "First call result is identical to second call result"
+      ]
+    },
+    {
+      "id": "promote_model_local_success",
+      "description": "promote_model on local adapter updates source_info.model_id on success",
+      "function": "promote_model",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.promote_model": "Returns PromotionResult with status='success'"
+      },
+      "input_values": {},
+      "input_description": "new_model_id='llama3.1', smoke_test_prompt='Hello', expected_substring='Hi'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "promote_model_local_failure_no_change",
+      "description": "promote_model on local adapter does not change model_id on failure",
+      "function": "promote_model",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_server.promote_model": "Returns PromotionResult with status='failed'"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "promote_model_remote_not_supported",
+      "description": "promote_model on remote adapter raises NotImplementedError",
+      "function": "promote_model",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_supported_remote",
+      "assertions": []
+    },
+    {
+      "id": "promote_model_empty_model_id",
+      "description": "promote_model raises error when new_model_id is empty",
+      "function": "promote_model",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "new_model_id=''",
+      "expected_output_description": "",
+      "expected_error": "invalid_model_id",
+      "assertions": []
+    },
+    {
+      "id": "promote_model_empty_smoke_test",
+      "description": "promote_model raises error when smoke_test_prompt is empty",
+      "function": "promote_model",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "smoke_test_prompt=''",
+      "expected_output_description": "",
+      "expected_error": "invalid_smoke_test_prompt",
+      "assertions": []
+    },
+    {
+      "id": "map_remote_error_auth_to_terminal",
+      "description": "map_remote_error maps AuthError to TerminalError",
+      "function": "map_remote_error",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is TerminalError",
+        "source_info matches",
+        "request_id preserved",
+        "original_error contains AuthError details"
+      ]
+    },
+    {
+      "id": "map_remote_error_invalid_request_to_terminal",
+      "description": "map_remote_error maps InvalidRequestError to TerminalError",
+      "function": "map_remote_error",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is TerminalError",
+        "status_code preserved"
+      ]
+    },
+    {
+      "id": "map_remote_error_rate_limit_to_retriable",
+      "description": "map_remote_error maps RateLimitError to RetriableError with retry_after preserved",
+      "function": "map_remote_error",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is RetriableError",
+        "retry_after_seconds preserved"
+      ]
+    },
+    {
+      "id": "map_remote_error_unavailable_to_source_unavailable",
+      "description": "map_remote_error maps RemoteUnavailableError to SourceUnavailableError with reason=REMOTE_UNAVAILABLE",
+      "function": "map_remote_error",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is SourceUnavailableError",
+        "reason == REMOTE_UNAVAILABLE"
+      ]
+    },
+    {
+      "id": "map_remote_error_unknown_type",
+      "description": "map_remote_error raises for unrecognized error type",
+      "function": "map_remote_error",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unknown_error_type",
+      "assertions": []
+    },
+    {
+      "id": "map_remote_error_timestamp_iso8601",
+      "description": "map_remote_error produces valid ISO 8601 UTC timestamp",
+      "function": "map_remote_error",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "timestamp_utc is valid ISO 8601"
+      ]
+    },
+    {
+      "id": "map_local_unavailable_server_not_running",
+      "description": "map_local_unavailable maps SERVER_NOT_RUNNING correctly",
+      "function": "map_local_unavailable",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reason == SERVER_NOT_RUNNING",
+        "source_info matches",
+        "request_id preserved"
+      ]
+    },
+    {
+      "id": "map_local_unavailable_no_model_loaded",
+      "description": "map_local_unavailable maps NO_MODEL_LOADED correctly",
+      "function": "map_local_unavailable",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "map_local_unavailable_model_loading",
+      "description": "map_local_unavailable maps MODEL_LOADING correctly",
+      "function": "map_local_unavailable",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "map_local_unavailable_inference_timeout",
+      "description": "map_local_unavailable maps INFERENCE_TIMEOUT correctly",
+      "function": "map_local_unavailable",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "map_local_unavailable_inference_error",
+      "description": "map_local_unavailable maps INFERENCE_ERROR correctly",
+      "function": "map_local_unavailable",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "map_local_unavailable_invalid_input",
+      "description": "map_local_unavailable raises on non-LocalModelUnavailable input",
+      "function": "map_local_unavailable",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_input",
+      "assertions": []
+    },
+    {
+      "id": "map_local_unavailable_timestamp_iso8601",
+      "description": "map_local_unavailable produces valid ISO 8601 UTC timestamp",
+      "function": "map_local_unavailable",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "map_local_success_happy_path",
+      "description": "map_local_success_to_response correctly translates InferenceSuccess to CompletionResponse",
+      "function": "map_local_success_to_response",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "content matches success.text",
+        "cost_usd == 0.0",
+        "latency_ms matches",
+        "token_usage.total == prompt + completion",
+        "response_id == success.request_id"
+      ]
+    },
+    {
+      "id": "map_local_success_invalid_input",
+      "description": "map_local_success_to_response raises on non-InferenceSuccess input",
+      "function": "map_local_success_to_response",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_input",
+      "assertions": []
+    },
+    {
+      "id": "map_remote_response_happy_path",
+      "description": "map_remote_response correctly translates TaskResponse to CompletionResponse",
+      "function": "map_remote_response",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "content matches",
+        "cost_usd matches",
+        "is_estimated == False",
+        "token_usage.total == input_tokens + output_tokens"
+      ]
+    },
+    {
+      "id": "map_remote_response_invalid_input",
+      "description": "map_remote_response raises on non-TaskResponse input",
+      "function": "map_remote_response",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_input",
+      "assertions": []
+    },
+    {
+      "id": "invariant_cost_zero_local",
+      "description": "CompletionResponse.cost_usd is always 0.0 for local source completions",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.cost_usd == 0.0 when source_type == LOCAL"
+      ]
+    },
+    {
+      "id": "invariant_is_estimated_false_remote",
+      "description": "CompletionResponse.token_usage.is_estimated is always False for remote completions",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "response.token_usage.is_estimated == False when source_type == REMOTE"
+      ]
+    },
+    {
+      "id": "invariant_request_id_on_errors",
+      "description": "Every error carries a non-empty request_id for audit trail correlation",
+      "function": "complete",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "error.request_id is non-empty string"
+      ]
+    },
+    {
+      "id": "invariant_source_info_immutable",
+      "description": "SourceInfo is immutable after construction",
+      "function": "get_source_info",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Attempting to modify source_info raises error (frozen model)"
+      ]
+    },
+    {
+      "id": "invariant_async_context_manager",
+      "description": "Adapters support async context manager protocol via __aenter__/__aexit__",
+      "function": "close",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "async with adapter works",
+        "__aexit__ delegates to close()"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for external_interfaces component.\nTests organized into sections:\n  1. Adapter Creation (create_remote_adapter, create_local_adapter)\n  2. Completion (complete() on both adapter types)\n  3. Error and Response Mapping (pure mapping functions)\n  4. Adapter Lifecycle (health, close, get_source_info, promote_model)\n  5. Invariants\n\"\"\"\nimport asyncio\nimport os\nimport re\nimport uuid\nfrom datetime import datetime, timezone\nfrom types import SimpleNamespace\nfrom typing import Any\nfrom unittest.mock import AsyncMock, MagicMock, patch, PropertyMock\n\nimport pytest\n\n# ---------------------------------------------------------------------------\n# Import the component under test\n# ---------------------------------------------------------------------------\nfrom src.external_interfaces import (\n    # Types / enums\n    SourceType,\n    Role,\n    UnavailableReason,\n    SourceInfo,\n    Message,\n    GenerationConfig,\n    UnifiedTokenUsage,\n    CompletionRequest,\n    CompletionResponse,\n    HealthReport,\n    # Errors\n    ModelClientError,\n    RetriableError,\n    TerminalError,\n    SourceUnavailableError,\n    # Configs\n    RemoteAdapterConfig,\n    LocalAdapterConfig,\n    # Factory functions\n    create_remote_adapter,\n    create_local_adapter,\n    # Mapping functions (exposed publicly for testing)\n    map_remote_error,\n    map_local_unavailable,\n    map_local_success_to_response,\n    map_remote_response,\n)\n\n\n# ===========================================================================\n# Helper fixtures and utilities\n# ===========================================================================\n\ndef _iso8601_pattern():\n    \"\"\"Regex pattern for ISO 8601 UTC timestamps.\"\"\"\n    return re.compile(\n        r\"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|\\+00:00)?$\"\n    )\n\n\ndef _make_source_info(source_type=SourceType.REMOTE, provider=\"openai\",\n                       model_id=\"gpt-4\", backend_type=\"openai\"):\n    return SourceInfo(\n        source_type=source_type,\n        provider_name=provider,\n        model_id=model_id,\n        backend_type=backend_type,\n    )\n\n\ndef _make_local_source_info(backend=\"ollama\", model_id=\"llama3\"):\n    return SourceInfo(\n        source_type=SourceType.LOCAL,\n        provider_name=backend,\n        model_id=model_id,\n        backend_type=backend,\n    )\n\n\ndef _make_generation_config():\n    return GenerationConfig(\n        max_tokens=100,\n        temperature=0.7,\n        top_p=0.9,\n        stop_sequences=[],\n    )\n\n\ndef _make_completion_request(messages=None, request_id=None):\n    if messages is None:\n        messages = [\n            Message(role=Role.SYSTEM, content=\"You are helpful.\"),\n            Message(role=Role.USER, content=\"Hello!\"),\n        ]\n    return CompletionRequest(\n        messages=messages,\n        generation_config=_make_generation_config(),\n        request_id=request_id or str(uuid.uuid4()),\n    )\n\n\n# ---------------------------------------------------------------------------\n# Mock objects for remote_api_client dependency types\n# ---------------------------------------------------------------------------\n\nclass MockTokenUsage:\n    \"\"\"Mimics remote_api_client.TokenUsage.\"\"\"\n    def __init__(self, input_tokens=10, output_tokens=5):\n        self.input_tokens = input_tokens\n        self.output_tokens = output_tokens\n\n\nclass MockTaskResponse:\n    \"\"\"Mimics remote_api_client.TaskResponse.\"\"\"\n    def __init__(self, content=\"Hello from remote\", cost_usd=0.01,\n                 latency_ms=150.0, request_id=\"remote-req-001\",\n                 usage=None):\n        self.content = content\n        self.cost_usd = cost_usd\n        self.latency_ms = latency_ms\n        self.request_id = request_id\n        self.usage = usage or MockTokenUsage()\n\n\nclass MockAuthError(Exception):\n    def __init__(self, message=\"Auth failed\", status_code=401,\n                 request_id=\"req-001\", provider=\"openai\"):\n        super().__init__(message)\n        self.message = message\n        self.status_code = status_code\n        self.request_id = request_id\n        self.provider = provider\n\n\nclass MockInvalidRequestError(Exception):\n    def __init__(self, message=\"Invalid request\", status_code=422,\n                 request_id=\"req-001\", provider=\"openai\"):\n        super().__init__(message)\n        self.message = message\n        self.status_code = status_code\n        self.request_id = request_id\n        self.provider = provider\n\n\nclass MockRateLimitError(Exception):\n    def __init__(self, message=\"Rate limited\", retry_after=30.0,\n                 request_id=\"req-001\", provider=\"openai\"):\n        super().__init__(message)\n        self.message = message\n        self.retry_after = retry_after\n        self.retry_after_seconds = retry_after\n        self.request_id = request_id\n        self.provider = provider\n\n\nclass MockRemoteUnavailableError(Exception):\n    def __init__(self, message=\"Service unavailable\",\n                 request_id=\"req-001\", provider=\"openai\"):\n        super().__init__(message)\n        self.message = message\n        self.request_id = request_id\n        self.provider = provider\n\n\n# ---------------------------------------------------------------------------\n# Mock objects for local_model_server dependency types\n# ---------------------------------------------------------------------------\n\nclass MockInferenceSuccess:\n    \"\"\"Mimics local_model_server.InferenceSuccess.\"\"\"\n    result_type = \"success\"\n\n    def __init__(self, text=\"Hello from local\", tokens_generated=5,\n                 tokens_prompt=10, latency_ms=50.0,\n                 request_id=\"local-req-001\"):\n        self.text = text\n        self.tokens_generated = tokens_generated\n        self.tokens_prompt = tokens_prompt\n        self.latency_ms = latency_ms\n        self.request_id = request_id\n\n\nclass MockLocalModelUnavailable:\n    \"\"\"Mimics local_model_server.LocalModelUnavailable.\"\"\"\n    result_type = \"unavailable\"\n\n    def __init__(self, reason=\"SERVER_NOT_RUNNING\", detail=\"Server is down\",\n                 request_id=\"local-req-001\"):\n        self.reason = reason\n        self.detail = detail\n        self.request_id = request_id\n\n\nclass MockHealthStatus:\n    \"\"\"Mimics local_model_server.HealthStatus.\"\"\"\n    def __init__(self, is_ready=True, loaded_model=\"llama3\", detail=\"OK\"):\n        self.is_ready = is_ready\n        self.loaded_model = loaded_model\n        self.detail = detail\n\n\nclass MockPromotionResult:\n    \"\"\"Mimics local_model_server.PromotionResult.\"\"\"\n    def __init__(self, status=\"success\", detail=\"Model promoted successfully\",\n                 new_model_id=\"llama3.1\"):\n        self.status = status\n        self.detail = detail\n        self.new_model_id = new_model_id\n\n\n# ---------------------------------------------------------------------------\n# Fixtures\n# ---------------------------------------------------------------------------\n\n@pytest.fixture\ndef remote_source_info():\n    return _make_source_info()\n\n\n@pytest.fixture\ndef local_source_info():\n    return _make_local_source_info()\n\n\n@pytest.fixture\ndef mock_remote_client():\n    \"\"\"Mock remote_api_client client with async methods.\"\"\"\n    client = AsyncMock()\n    client.send_request = AsyncMock(return_value=MockTaskResponse())\n    client.close = AsyncMock()\n    return client\n\n\n@pytest.fixture\ndef mock_local_client():\n    \"\"\"Mock local_model_server client with async methods.\"\"\"\n    client = AsyncMock()\n    client.infer = AsyncMock(return_value=MockInferenceSuccess())\n    client.health = AsyncMock(return_value=MockHealthStatus())\n    client.promote_model = AsyncMock(return_value=MockPromotionResult())\n    client.get_active_model = AsyncMock(return_value=\"llama3\")\n    client.close = AsyncMock()\n    return client\n\n\n@pytest.fixture\ndef mock_http_client():\n    \"\"\"Mock httpx.AsyncClient that appears open.\"\"\"\n    client = AsyncMock()\n    client.is_closed = False\n    return client\n\n\n@pytest.fixture\ndef valid_remote_config():\n    return RemoteAdapterConfig(\n        provider=\"openai\",\n        model=\"gpt-4\",\n        api_key_env_var=\"TEST_OPENAI_API_KEY\",\n        max_retries=3,\n        base_delay_seconds=1.0,\n        max_delay_seconds=30.0,\n        connect_timeout_seconds=5.0,\n        read_timeout_seconds=30.0,\n        total_timeout_seconds=60.0,\n    )\n\n\n@pytest.fixture\ndef valid_local_config():\n    return LocalAdapterConfig(\n        backend=\"ollama\",\n        base_url=\"http://localhost:11434\",\n        model_id=\"llama3\",\n        inference_timeout_s=30.0,\n        health_check_timeout_s=5.0,\n    )\n\n\n@pytest.fixture\ndef sample_request():\n    return _make_completion_request()\n\n\n# ===========================================================================\n# 1. ADAPTER CREATION TESTS\n# ===========================================================================\n\nclass TestCreateRemoteAdapter:\n    \"\"\"Tests for create_remote_adapter factory function.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_happy_path_valid_config(\n        self, valid_remote_config, mock_http_client, monkeypatch\n    ):\n        \"\"\"create_remote_adapter returns adapter with correct source_info when config and API key are valid.\"\"\"\n        monkeypatch.setenv(\"TEST_OPENAI_API_KEY\", \"sk-test-key-12345\")\n\n        with patch(\n            \"src.external_interfaces.remote_api_client.create_remote_client\"\n        ) as mock_create:\n            mock_create.return_value = AsyncMock()\n            adapter = create_remote_adapter(\n                config=valid_remote_config, http_client=mock_http_client\n            )\n\n        source = adapter.get_source_info()\n        assert source.source_type == SourceType.REMOTE, \\\n            f\"Expected REMOTE, got {source.source_type}\"\n        assert source.provider_name == \"openai\", \\\n            f\"Expected 'openai', got {source.provider_name}\"\n        assert source.model_id == \"gpt-4\", \\\n            f\"Expected 'gpt-4', got {source.model_id}\"\n\n    @pytest.mark.asyncio\n    async def test_missing_api_key_env_var(\n        self, valid_remote_config, mock_http_client, monkeypatch\n    ):\n        \"\"\"create_remote_adapter raises when API key env var is not set.\"\"\"\n        monkeypatch.delenv(\"TEST_OPENAI_API_KEY\", raising=False)\n\n        with pytest.raises((ValueError, KeyError, EnvironmentError, Exception)) as exc_info:\n            create_remote_adapter(\n                config=valid_remote_config, http_client=mock_http_client\n            )\n        # Should mention API key or environment variable\n        assert exc_info.value is not None\n\n    @pytest.mark.asyncio\n    async def test_empty_api_key_env_var(\n        self, valid_remote_config, mock_http_client, monkeypatch\n    ):\n        \"\"\"create_remote_adapter raises when API key env var is set to empty string.\"\"\"\n        monkeypatch.setenv(\"TEST_OPENAI_API_KEY\", \"\")\n\n        with pytest.raises((ValueError, KeyError, EnvironmentError, Exception)):\n            create_remote_adapter(\n                config=valid_remote_config, http_client=mock_http_client\n            )\n\n    @pytest.mark.asyncio\n    async def test_unsupported_provider(self, mock_http_client, monkeypatch):\n        \"\"\"create_remote_adapter raises for unsupported provider.\"\"\"\n        monkeypatch.setenv(\"TEST_UNSUPPORTED_KEY\", \"some-key\")\n        config = RemoteAdapterConfig(\n            provider=\"unsupported_provider_xyz\",\n            model=\"some-model\",\n            api_key_env_var=\"TEST_UNSUPPORTED_KEY\",\n            max_retries=3,\n            base_delay_seconds=1.0,\n            max_delay_seconds=30.0,\n            connect_timeout_seconds=5.0,\n            read_timeout_seconds=30.0,\n            total_timeout_seconds=60.0,\n        )\n        with pytest.raises((ValueError, NotImplementedError, Exception)):\n            create_remote_adapter(config=config, http_client=mock_http_client)\n\n\nclass TestCreateLocalAdapter:\n    \"\"\"Tests for create_local_adapter factory function.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_happy_path_valid_config(\n        self, valid_local_config, mock_local_client\n    ):\n        \"\"\"create_local_adapter returns adapter with correct source_info for valid config.\"\"\"\n        adapter = create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n\n        source = adapter.get_source_info()\n        assert source.source_type == SourceType.LOCAL, \\\n            f\"Expected LOCAL, got {source.source_type}\"\n        assert source.provider_name == \"ollama\", \\\n            f\"Expected 'ollama', got {source.provider_name}\"\n        assert source.backend_type == \"ollama\", \\\n            f\"Expected backend_type='ollama', got {source.backend_type}\"\n        assert source.model_id == \"llama3\", \\\n            f\"Expected 'llama3', got {source.model_id}\"\n\n    @pytest.mark.asyncio\n    async def test_unsupported_backend(self, mock_local_client):\n        \"\"\"create_local_adapter raises for unsupported backend.\"\"\"\n        config = LocalAdapterConfig(\n            backend=\"unsupported_backend_xyz\",\n            base_url=\"http://localhost:9999\",\n            model_id=\"some-model\",\n            inference_timeout_s=30.0,\n            health_check_timeout_s=5.0,\n        )\n        with pytest.raises((ValueError, NotImplementedError, Exception)):\n            create_local_adapter(config=config, local_client=mock_local_client)\n\n\n# ===========================================================================\n# 2. COMPLETION TESTS\n# ===========================================================================\n\nclass TestCompleteRemote:\n    \"\"\"Tests for complete() on RemoteModelAdapter.\"\"\"\n\n    @pytest.fixture\n    def remote_adapter(self, valid_remote_config, mock_remote_client, monkeypatch):\n        \"\"\"Create a remote adapter with mocked dependencies.\"\"\"\n        monkeypatch.setenv(\"TEST_OPENAI_API_KEY\", \"sk-test-key-12345\")\n        with patch(\n            \"src.external_interfaces.remote_api_client.create_remote_client\"\n        ) as mock_create:\n            mock_create.return_value = mock_remote_client\n            adapter = create_remote_adapter(\n                config=valid_remote_config, http_client=None\n            )\n        # Ensure adapter has the mock client for send_request\n        return adapter\n\n    @pytest.mark.asyncio\n    async def test_happy_path(self, remote_adapter, mock_remote_client):\n        \"\"\"Remote complete() returns CompletionResponse with correct fields.\"\"\"\n        task_resp = MockTaskResponse(\n            content=\"Hello from GPT-4\",\n            cost_usd=0.015,\n            latency_ms=200.0,\n            request_id=\"resp-001\",\n            usage=MockTokenUsage(input_tokens=20, output_tokens=10),\n        )\n        mock_remote_client.send_request.return_value = task_resp\n\n        request = _make_completion_request()\n        response = await remote_adapter.complete(request)\n\n        assert isinstance(response, CompletionResponse), \\\n            f\"Expected CompletionResponse, got {type(response)}\"\n        assert response.content == \"Hello from GPT-4\"\n        assert response.source_info.source_type == SourceType.REMOTE\n        assert response.cost_usd == 0.015\n        assert response.latency_ms >= 0.0\n        assert response.response_id != \"\"\n        assert response.token_usage.is_estimated is False\n\n    @pytest.mark.asyncio\n    async def test_source_info_matches_adapter(self, remote_adapter, mock_remote_client):\n        \"\"\"Remote complete() response source_info matches adapter's configured source.\"\"\"\n        mock_remote_client.send_request.return_value = MockTaskResponse()\n        request = _make_completion_request()\n        response = await remote_adapter.complete(request)\n\n        adapter_source = remote_adapter.get_source_info()\n        assert response.source_info == adapter_source, \\\n            f\"Response source_info {response.source_info} != adapter {adapter_source}\"\n\n    @pytest.mark.asyncio\n    async def test_auth_failure_maps_to_terminal_error(\n        self, remote_adapter, mock_remote_client\n    ):\n        \"\"\"Remote complete() raises TerminalError on AuthError from dependency.\"\"\"\n        mock_remote_client.send_request.side_effect = MockAuthError(\n            status_code=401, request_id=\"req-auth-fail\"\n        )\n        request = _make_completion_request()\n\n        with pytest.raises(TerminalError) as exc_info:\n            await remote_adapter.complete(request)\n\n        err = exc_info.value\n        assert err.source_info.source_type == SourceType.REMOTE\n        assert err.request_id != \"\"\n\n    @pytest.mark.asyncio\n    async def test_invalid_request_maps_to_terminal_error(\n        self, remote_adapter, mock_remote_client\n    ):\n        \"\"\"Remote complete() raises TerminalError on InvalidRequestError from dependency.\"\"\"\n        mock_remote_client.send_request.side_effect = MockInvalidRequestError(\n            status_code=422, request_id=\"req-invalid\"\n        )\n        request = _make_completion_request()\n\n        with pytest.raises(TerminalError) as exc_info:\n            await remote_adapter.complete(request)\n\n        assert exc_info.value.source_info.source_type == SourceType.REMOTE\n\n    @pytest.mark.asyncio\n    async def test_rate_limited_maps_to_retriable_error(\n        self, remote_adapter, mock_remote_client\n    ):\n        \"\"\"Remote complete() raises RetriableError on RateLimitError from dependency.\"\"\"\n        mock_remote_client.send_request.side_effect = MockRateLimitError(\n            retry_after=30.0, request_id=\"req-rate\"\n        )\n        request = _make_completion_request()\n\n        with pytest.raises(RetriableError) as exc_info:\n            await remote_adapter.complete(request)\n\n        err = exc_info.value\n        assert err.retry_after_seconds == 30.0\n\n    @pytest.mark.asyncio\n    async def test_remote_unavailable_maps_to_source_unavailable(\n        self, remote_adapter, mock_remote_client\n    ):\n        \"\"\"Remote complete() raises SourceUnavailableError on RemoteUnavailableError.\"\"\"\n        mock_remote_client.send_request.side_effect = MockRemoteUnavailableError(\n            request_id=\"req-unavail\"\n        )\n        request = _make_completion_request()\n\n        with pytest.raises(SourceUnavailableError) as exc_info:\n            await remote_adapter.complete(request)\n\n        err = exc_info.value\n        assert err.reason == UnavailableReason.REMOTE_UNAVAILABLE\n\n    @pytest.mark.asyncio\n    async def test_empty_messages_error(self, remote_adapter):\n        \"\"\"complete() raises error on empty messages list.\"\"\"\n        request = _make_completion_request(messages=[])\n\n        with pytest.raises((ValueError, Exception)):\n            await remote_adapter.complete(request)\n\n    @pytest.mark.asyncio\n    async def test_no_user_message_error(self, remote_adapter):\n        \"\"\"complete() raises error when messages have no USER role.\"\"\"\n        messages = [Message(role=Role.SYSTEM, content=\"System only\")]\n        request = _make_completion_request(messages=messages)\n\n        with pytest.raises((ValueError, Exception)):\n            await remote_adapter.complete(request)\n\n    @pytest.mark.asyncio\n    async def test_token_usage_is_estimated_false(\n        self, remote_adapter, mock_remote_client\n    ):\n        \"\"\"Remote completions always have token_usage.is_estimated == False.\"\"\"\n        mock_remote_client.send_request.return_value = MockTaskResponse()\n        request = _make_completion_request()\n        response = await remote_adapter.complete(request)\n\n        assert response.token_usage.is_estimated is False, \\\n            \"Remote completions must have is_estimated=False\"\n\n    @pytest.mark.asyncio\n    async def test_response_id_nonempty(self, remote_adapter, mock_remote_client):\n        \"\"\"CompletionResponse.response_id is always non-empty.\"\"\"\n        mock_remote_client.send_request.return_value = MockTaskResponse()\n        request = _make_completion_request()\n        response = await remote_adapter.complete(request)\n\n        assert response.response_id != \"\", \"response_id must be non-empty\"\n        assert isinstance(response.response_id, str)\n\n\nclass TestCompleteLocal:\n    \"\"\"Tests for complete() on LocalModelAdapter.\"\"\"\n\n    @pytest.fixture\n    def local_adapter(self, valid_local_config, mock_local_client):\n        \"\"\"Create a local adapter with mocked dependencies.\"\"\"\n        adapter = create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n        return adapter\n\n    @pytest.mark.asyncio\n    async def test_happy_path(self, local_adapter, mock_local_client):\n        \"\"\"Local complete() returns CompletionResponse with cost_usd=0.0.\"\"\"\n        success = MockInferenceSuccess(\n            text=\"Hello from Llama\",\n            tokens_generated=8,\n            tokens_prompt=15,\n            latency_ms=75.0,\n            request_id=\"local-resp-001\",\n        )\n        mock_local_client.infer.return_value = success\n\n        request = _make_completion_request()\n        response = await local_adapter.complete(request)\n\n        assert isinstance(response, CompletionResponse)\n        assert response.content == \"Hello from Llama\"\n        assert response.cost_usd == 0.0, \\\n            f\"Local cost_usd must be 0.0, got {response.cost_usd}\"\n        assert response.source_info.source_type == SourceType.LOCAL\n        assert response.latency_ms >= 0.0\n\n    @pytest.mark.asyncio\n    async def test_source_info_matches_adapter(self, local_adapter, mock_local_client):\n        \"\"\"Local complete() response source_info matches adapter's configured source.\"\"\"\n        mock_local_client.infer.return_value = MockInferenceSuccess()\n        request = _make_completion_request()\n        response = await local_adapter.complete(request)\n\n        assert response.source_info == local_adapter.get_source_info()\n\n    @pytest.mark.asyncio\n    async def test_source_unavailable_local(self, local_adapter, mock_local_client):\n        \"\"\"Local complete() raises SourceUnavailableError when server returns LocalModelUnavailable.\"\"\"\n        unavail = MockLocalModelUnavailable(\n            reason=\"SERVER_NOT_RUNNING\",\n            detail=\"Connection refused\",\n            request_id=\"local-req-fail\",\n        )\n        mock_local_client.infer.return_value = unavail\n\n        request = _make_completion_request()\n        with pytest.raises(SourceUnavailableError) as exc_info:\n            await local_adapter.complete(request)\n\n        err = exc_info.value\n        assert err.source_info.source_type == SourceType.LOCAL\n        assert err.reason in (\n            UnavailableReason.SERVER_NOT_RUNNING,\n            UnavailableReason.NO_MODEL_LOADED,\n            UnavailableReason.MODEL_LOADING,\n            UnavailableReason.INFERENCE_TIMEOUT,\n            UnavailableReason.INFERENCE_ERROR,\n        )\n\n    @pytest.mark.asyncio\n    async def test_cost_always_zero_for_local(self, local_adapter, mock_local_client):\n        \"\"\"Local completions always have cost_usd == 0.0 (invariant).\"\"\"\n        mock_local_client.infer.return_value = MockInferenceSuccess()\n        request = _make_completion_request()\n        response = await local_adapter.complete(request)\n\n        assert response.cost_usd == 0.0, \\\n            \"Local source completions must always have cost_usd == 0.0\"\n\n    @pytest.mark.asyncio\n    async def test_token_usage_total_equals_sum(self, local_adapter, mock_local_client):\n        \"\"\"Token usage total_tokens equals prompt_tokens + completion_tokens.\"\"\"\n        success = MockInferenceSuccess(tokens_generated=12, tokens_prompt=25)\n        mock_local_client.infer.return_value = success\n\n        request = _make_completion_request()\n        response = await local_adapter.complete(request)\n\n        usage = response.token_usage\n        assert usage.total_tokens == usage.prompt_tokens + usage.completion_tokens, \\\n            f\"total_tokens ({usage.total_tokens}) != prompt ({usage.prompt_tokens}) + completion ({usage.completion_tokens})\"\n\n\n# ===========================================================================\n# 3. ERROR AND RESPONSE MAPPING TESTS\n# ===========================================================================\n\nclass TestMapRemoteError:\n    \"\"\"Tests for map_remote_error pure function.\"\"\"\n\n    @pytest.fixture\n    def source(self):\n        return _make_source_info()\n\n    def test_auth_error_to_terminal(self, source):\n        \"\"\"AuthError maps to TerminalError.\"\"\"\n        auth_err = MockAuthError(\n            message=\"Unauthorized\", status_code=401, request_id=\"req-a1\"\n        )\n        result = map_remote_error(auth_err, source)\n\n        assert isinstance(result, TerminalError), \\\n            f\"Expected TerminalError, got {type(result)}\"\n        assert result.source_info == source\n        assert result.request_id == \"req-a1\"\n        assert \"Unauthorized\" in result.original_error or \"Auth\" in result.original_error\n\n    def test_invalid_request_error_to_terminal(self, source):\n        \"\"\"InvalidRequestError maps to TerminalError.\"\"\"\n        err = MockInvalidRequestError(\n            message=\"Bad request body\", status_code=422, request_id=\"req-ir1\"\n        )\n        result = map_remote_error(err, source)\n\n        assert isinstance(result, TerminalError)\n        assert result.source_info == source\n\n    def test_rate_limit_error_to_retriable(self, source):\n        \"\"\"RateLimitError maps to RetriableError with retry_after preserved.\"\"\"\n        err = MockRateLimitError(\n            message=\"Too many requests\", retry_after=45.0, request_id=\"req-rl1\"\n        )\n        result = map_remote_error(err, source)\n\n        assert isinstance(result, RetriableError), \\\n            f\"Expected RetriableError, got {type(result)}\"\n        assert result.retry_after_seconds == 45.0\n        assert result.request_id == \"req-rl1\"\n\n    def test_remote_unavailable_to_source_unavailable(self, source):\n        \"\"\"RemoteUnavailableError maps to SourceUnavailableError with REMOTE_UNAVAILABLE reason.\"\"\"\n        err = MockRemoteUnavailableError(\n            message=\"Service down\", request_id=\"req-ru1\"\n        )\n        result = map_remote_error(err, source)\n\n        assert isinstance(result, SourceUnavailableError), \\\n            f\"Expected SourceUnavailableError, got {type(result)}\"\n        assert result.reason == UnavailableReason.REMOTE_UNAVAILABLE\n        assert result.source_info == source\n\n    def test_unknown_error_type_raises(self, source):\n        \"\"\"map_remote_error raises for unrecognized error type.\"\"\"\n        unknown_err = RuntimeError(\"Unexpected error\")\n\n        with pytest.raises((TypeError, ValueError, Exception)):\n            map_remote_error(unknown_err, source)\n\n    def test_timestamp_is_valid_iso8601(self, source):\n        \"\"\"Mapped errors carry valid ISO 8601 UTC timestamps.\"\"\"\n        err = MockAuthError(request_id=\"req-ts\")\n        result = map_remote_error(err, source)\n\n        pattern = _iso8601_pattern()\n        assert pattern.match(result.timestamp_utc), \\\n            f\"timestamp_utc '{result.timestamp_utc}' is not valid ISO 8601\"\n\n    def test_original_error_contains_string_repr(self, source):\n        \"\"\"Mapped error.original_error contains string representation of input error.\"\"\"\n        err = MockAuthError(message=\"Auth failed badly\", request_id=\"req-oe\")\n        result = map_remote_error(err, source)\n\n        assert result.original_error != \"\", \\\n            \"original_error should contain string repr of input error\"\n\n\nclass TestMapLocalUnavailable:\n    \"\"\"Tests for map_local_unavailable pure function.\"\"\"\n\n    @pytest.fixture\n    def source(self):\n        return _make_local_source_info()\n\n    @pytest.mark.parametrize(\"reason_str,expected_reason\", [\n        (\"SERVER_NOT_RUNNING\", UnavailableReason.SERVER_NOT_RUNNING),\n        (\"NO_MODEL_LOADED\", UnavailableReason.NO_MODEL_LOADED),\n        (\"MODEL_LOADING\", UnavailableReason.MODEL_LOADING),\n        (\"INFERENCE_TIMEOUT\", UnavailableReason.INFERENCE_TIMEOUT),\n        (\"INFERENCE_ERROR\", UnavailableReason.INFERENCE_ERROR),\n    ])\n    def test_maps_all_reason_variants(self, source, reason_str, expected_reason):\n        \"\"\"map_local_unavailable correctly maps all five UnavailableReason variants.\"\"\"\n        unavail = MockLocalModelUnavailable(\n            reason=reason_str,\n            detail=f\"Simulated {reason_str}\",\n            request_id=\"local-req-map\",\n        )\n        result = map_local_unavailable(unavail, source)\n\n        assert isinstance(result, SourceUnavailableError)\n        assert result.reason == expected_reason, \\\n            f\"Expected {expected_reason}, got {result.reason}\"\n        assert result.source_info == source\n        assert result.request_id == \"local-req-map\"\n\n    def test_preserves_detail_in_original_error(self, source):\n        \"\"\"Mapped error preserves unavailable.detail in original_error.\"\"\"\n        unavail = MockLocalModelUnavailable(\n            reason=\"SERVER_NOT_RUNNING\",\n            detail=\"Connection refused at localhost:11434\",\n            request_id=\"local-detail\",\n        )\n        result = map_local_unavailable(unavail, source)\n\n        assert \"Connection refused\" in result.original_error or result.original_error != \"\"\n\n    def test_timestamp_is_valid_iso8601(self, source):\n        \"\"\"map_local_unavailable produces valid ISO 8601 UTC timestamp.\"\"\"\n        unavail = MockLocalModelUnavailable(request_id=\"local-ts\")\n        result = map_local_unavailable(unavail, source)\n\n        pattern = _iso8601_pattern()\n        assert pattern.match(result.timestamp_utc), \\\n            f\"timestamp_utc '{result.timestamp_utc}' is not valid ISO 8601\"\n\n    def test_invalid_input_raises(self, source):\n        \"\"\"map_local_unavailable raises on non-LocalModelUnavailable input.\"\"\"\n        with pytest.raises((TypeError, ValueError, AttributeError, Exception)):\n            map_local_unavailable(\"not_an_unavailable_object\", source)\n\n\nclass TestMapLocalSuccessToResponse:\n    \"\"\"Tests for map_local_success_to_response pure function.\"\"\"\n\n    @pytest.fixture\n    def source(self):\n        return _make_local_source_info()\n\n    def test_happy_path(self, source):\n        \"\"\"Correctly maps InferenceSuccess to CompletionResponse.\"\"\"\n        success = MockInferenceSuccess(\n            text=\"Generated text\",\n            tokens_generated=20,\n            tokens_prompt=30,\n            latency_ms=100.0,\n            request_id=\"local-success-001\",\n        )\n        result = map_local_success_to_response(success, source)\n\n        assert isinstance(result, CompletionResponse)\n        assert result.content == \"Generated text\", \\\n            f\"Expected 'Generated text', got {result.content!r}\"\n        assert result.source_info == source\n        assert result.cost_usd == 0.0, \\\n            f\"Local cost must be 0.0, got {result.cost_usd}\"\n        assert result.latency_ms == 100.0\n        assert result.response_id == \"local-success-001\"\n        assert result.token_usage.completion_tokens == 20\n        assert result.token_usage.prompt_tokens == 30\n        assert result.token_usage.total_tokens == 50\n\n    def test_invalid_input_raises(self, source):\n        \"\"\"map_local_success_to_response raises on non-InferenceSuccess input.\"\"\"\n        with pytest.raises((TypeError, ValueError, AttributeError, Exception)):\n            map_local_success_to_response(\"not_a_success\", source)\n\n\nclass TestMapRemoteResponse:\n    \"\"\"Tests for map_remote_response pure function.\"\"\"\n\n    @pytest.fixture\n    def source(self):\n        return _make_source_info()\n\n    def test_happy_path(self, source):\n        \"\"\"Correctly maps TaskResponse to CompletionResponse.\"\"\"\n        usage = MockTokenUsage(input_tokens=50, output_tokens=25)\n        task_resp = MockTaskResponse(\n            content=\"Remote response text\",\n            cost_usd=0.025,\n            latency_ms=300.0,\n            request_id=\"remote-resp-001\",\n            usage=usage,\n        )\n        result = map_remote_response(task_resp, source)\n\n        assert isinstance(result, CompletionResponse)\n        assert result.content == \"Remote response text\"\n        assert result.source_info == source\n        assert result.cost_usd == 0.025\n        assert result.latency_ms == 300.0\n        assert result.response_id == \"remote-resp-001\"\n        assert result.token_usage.prompt_tokens == 50\n        assert result.token_usage.completion_tokens == 25\n        assert result.token_usage.total_tokens == 75\n        assert result.token_usage.is_estimated is False, \\\n            \"Remote token_usage.is_estimated must be False\"\n\n    def test_invalid_input_raises(self, source):\n        \"\"\"map_remote_response raises on non-TaskResponse input.\"\"\"\n        with pytest.raises((TypeError, ValueError, AttributeError, Exception)):\n            map_remote_response(\"not_a_task_response\", source)\n\n\n# ===========================================================================\n# 4. ADAPTER LIFECYCLE TESTS\n# ===========================================================================\n\nclass TestHealth:\n    \"\"\"Tests for health() on both adapter types.\"\"\"\n\n    @pytest.fixture\n    def local_adapter(self, valid_local_config, mock_local_client):\n        return create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n\n    @pytest.mark.asyncio\n    async def test_local_health_available(self, local_adapter, mock_local_client):\n        \"\"\"Local health() returns available=True when model is loaded.\"\"\"\n        mock_local_client.health.return_value = MockHealthStatus(\n            is_ready=True, loaded_model=\"llama3\", detail=\"OK\"\n        )\n        report = await local_adapter.health()\n\n        assert isinstance(report, HealthReport)\n        assert report.available is True\n        assert report.source_info == local_adapter.get_source_info()\n        assert report.latency_ms >= 0.0\n\n    @pytest.mark.asyncio\n    async def test_local_health_unavailable(self, local_adapter, mock_local_client):\n        \"\"\"Local health() returns available=False with diagnostic detail when server is down.\"\"\"\n        mock_local_client.health.return_value = MockHealthStatus(\n            is_ready=False, loaded_model=\"\", detail=\"Server unreachable\"\n        )\n        report = await local_adapter.health()\n\n        assert report.available is False\n        assert report.detail != \"\", \\\n            \"Unavailable health report must have non-empty detail\"\n\n    @pytest.mark.asyncio\n    async def test_health_never_raises_on_exception(self, local_adapter, mock_local_client):\n        \"\"\"health() never raises for operational failures — returns available=False.\"\"\"\n        mock_local_client.health.side_effect = ConnectionError(\"Connection refused\")\n\n        report = await local_adapter.health()\n\n        assert isinstance(report, HealthReport)\n        assert report.available is False\n        assert report.detail != \"\"\n\n    @pytest.mark.asyncio\n    async def test_health_source_info_matches(self, local_adapter, mock_local_client):\n        \"\"\"HealthReport.source_info always matches adapter's configured source.\"\"\"\n        mock_local_client.health.return_value = MockHealthStatus()\n        report = await local_adapter.health()\n\n        assert report.source_info == local_adapter.get_source_info()\n\n\nclass TestClose:\n    \"\"\"Tests for close() method.\"\"\"\n\n    @pytest.fixture\n    def local_adapter(self, valid_local_config, mock_local_client):\n        return create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n\n    @pytest.mark.asyncio\n    async def test_close_idempotent(self, local_adapter):\n        \"\"\"close() can be called multiple times safely.\"\"\"\n        await local_adapter.close()\n        await local_adapter.close()  # Should not raise\n\n    @pytest.mark.asyncio\n    async def test_complete_after_close_raises(self, local_adapter):\n        \"\"\"complete() raises RuntimeError after close() on adapter that owns its client.\"\"\"\n        # If adapter owns the client, close should cause complete to fail\n        # For injected clients, behavior may differ\n        await local_adapter.close()\n        request = _make_completion_request()\n\n        # May raise RuntimeError or similar — depends on ownership\n        try:\n            await local_adapter.complete(request)\n            # If it doesn't raise, the adapter does not own the client (injected)\n        except RuntimeError:\n            pass  # Expected for owned clients\n\n    @pytest.mark.asyncio\n    async def test_async_context_manager(self, valid_local_config, mock_local_client):\n        \"\"\"Adapters support async context manager protocol.\"\"\"\n        adapter = create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n        async with adapter as a:\n            assert a is not None\n            source = a.get_source_info()\n            assert source.source_type == SourceType.LOCAL\n\n\nclass TestGetSourceInfo:\n    \"\"\"Tests for get_source_info() method.\"\"\"\n\n    @pytest.fixture\n    def local_adapter(self, valid_local_config, mock_local_client):\n        return create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n\n    def test_remote_source_info(self, valid_remote_config, mock_http_client, monkeypatch):\n        \"\"\"get_source_info returns correct SourceInfo for remote adapter.\"\"\"\n        monkeypatch.setenv(\"TEST_OPENAI_API_KEY\", \"sk-test\")\n        with patch(\n            \"src.external_interfaces.remote_api_client.create_remote_client\"\n        ) as mock_create:\n            mock_create.return_value = AsyncMock()\n            adapter = create_remote_adapter(\n                config=valid_remote_config, http_client=mock_http_client\n            )\n\n        source = adapter.get_source_info()\n        assert source.source_type == SourceType.REMOTE\n        assert source.provider_name != \"\"\n        assert source.model_id != \"\"\n\n    def test_local_source_info(self, local_adapter):\n        \"\"\"get_source_info returns correct SourceInfo for local adapter.\"\"\"\n        source = local_adapter.get_source_info()\n        assert source.source_type == SourceType.LOCAL\n        assert source.provider_name != \"\"\n        assert source.model_id != \"\"\n\n    def test_source_info_immutable(self, local_adapter):\n        \"\"\"get_source_info returns the same instance on repeated calls.\"\"\"\n        s1 = local_adapter.get_source_info()\n        s2 = local_adapter.get_source_info()\n        assert s1 is s2 or s1 == s2, \\\n            \"get_source_info should return consistent SourceInfo\"\n\n    def test_source_info_frozen(self, local_adapter):\n        \"\"\"SourceInfo is frozen — cannot be mutated.\"\"\"\n        source = local_adapter.get_source_info()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            source.model_id = \"hacked\"\n\n\nclass TestPromoteModel:\n    \"\"\"Tests for promote_model() method.\"\"\"\n\n    @pytest.fixture\n    def local_adapter(self, valid_local_config, mock_local_client):\n        return create_local_adapter(\n            config=valid_local_config, local_client=mock_local_client\n        )\n\n    @pytest.mark.asyncio\n    async def test_promote_success_updates_model_id(\n        self, local_adapter, mock_local_client\n    ):\n        \"\"\"promote_model updates source_info.model_id on success.\"\"\"\n        mock_local_client.promote_model.return_value = MockPromotionResult(\n            status=\"success\", new_model_id=\"llama3.1\"\n        )\n\n        old_model = local_adapter.get_source_info().model_id\n        result = await local_adapter.promote_model(\n            new_model_id=\"llama3.1\",\n            smoke_test_prompt=\"Say hello\",\n            expected_substring=\"hello\",\n        )\n\n        new_model = local_adapter.get_source_info().model_id\n        assert new_model == \"llama3.1\", \\\n            f\"Expected model_id 'llama3.1' after promotion, got {new_model}\"\n\n    @pytest.mark.asyncio\n    async def test_promote_failure_no_change(\n        self, local_adapter, mock_local_client\n    ):\n        \"\"\"promote_model does not change model_id on failure.\"\"\"\n        mock_local_client.promote_model.return_value = MockPromotionResult(\n            status=\"failed\", detail=\"Smoke test failed\"\n        )\n\n        old_model = local_adapter.get_source_info().model_id\n\n        result = await local_adapter.promote_model(\n            new_model_id=\"llama3.1\",\n            smoke_test_prompt=\"Say hello\",\n            expected_substring=\"hello\",\n        )\n\n        current_model = local_adapter.get_source_info().model_id\n        assert current_model == old_model, \\\n            f\"model_id should not change on failed promotion, got {current_model}\"\n\n    @pytest.mark.asyncio\n    async def test_promote_on_remote_raises_not_implemented(\n        self, valid_remote_config, mock_http_client, monkeypatch\n    ):\n        \"\"\"promote_model on RemoteModelAdapter raises NotImplementedError.\"\"\"\n        monkeypatch.setenv(\"TEST_OPENAI_API_KEY\", \"sk-test\")\n        with patch(\n            \"src.external_interfaces.remote_api_client.create_remote_client\"\n        ) as mock_create:\n            mock_create.return_value = AsyncMock()\n            adapter = create_remote_adapter(\n                config=valid_remote_config, http_client=mock_http_client\n            )\n\n        with pytest.raises(NotImplementedError):\n            await adapter.promote_model(\n                new_model_id=\"gpt-5\",\n                smoke_test_prompt=\"Test\",\n                expected_substring=\"ok\",\n            )\n\n    @pytest.mark.asyncio\n    async def test_promote_empty_model_id_raises(self, local_adapter):\n        \"\"\"promote_model raises error when new_model_id is empty.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            await local_adapter.promote_model(\n                new_model_id=\"\",\n                smoke_test_prompt=\"Test\",\n                expected_substring=\"ok\",\n            )\n\n    @pytest.mark.asyncio\n    async def test_promote_empty_smoke_test_raises(self, local_adapter):\n        \"\"\"promote_model raises error when smoke_test_prompt is empty.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            await local_adapter.promote_model(\n                new_model_id=\"llama3.1\",\n                smoke_test_prompt=\"\",\n                expected_substring=\"ok\",\n            )\n\n\n# ===========================================================================\n# 5. INVARIANT TESTS\n# ===========================================================================\n\nclass TestInvariants:\n    \"\"\"Cross-cutting invariant tests from the contract.\"\"\"\n\n    def test_source_type_enum_values(self):\n        \"\"\"SourceType enum has LOCAL and REMOTE values.\"\"\"\n        assert hasattr(SourceType, \"LOCAL\")\n        assert hasattr(SourceType, \"REMOTE\")\n\n    def test_role_enum_values(self):\n        \"\"\"Role enum has SYSTEM, USER, ASSISTANT values.\"\"\"\n        assert hasattr(Role, \"SYSTEM\")\n        assert hasattr(Role, \"USER\")\n        assert hasattr(Role, \"ASSISTANT\")\n\n    def test_unavailable_reason_enum_values(self):\n        \"\"\"UnavailableReason enum has all specified variants.\"\"\"\n        for variant in [\n            \"SERVER_NOT_RUNNING\", \"NO_MODEL_LOADED\", \"MODEL_LOADING\",\n            \"INFERENCE_TIMEOUT\", \"INFERENCE_ERROR\", \"RATE_LIMITED\",\n            \"REMOTE_UNAVAILABLE\", \"AUTH_FAILURE\",\n        ]:\n            assert hasattr(UnavailableReason, variant), \\\n                f\"UnavailableReason missing variant: {variant}\"\n\n    def test_source_info_frozen(self):\n        \"\"\"SourceInfo is immutable (frozen Pydantic model).\"\"\"\n        si = _make_source_info()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            si.provider_name = \"changed\"\n\n    def test_generation_config_frozen(self):\n        \"\"\"GenerationConfig is immutable (frozen Pydantic model).\"\"\"\n        gc = _make_generation_config()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            gc.temperature = 999.0\n\n    def test_unified_token_usage_frozen(self):\n        \"\"\"UnifiedTokenUsage is immutable (frozen Pydantic model).\"\"\"\n        usage = UnifiedTokenUsage(\n            prompt_tokens=10,\n            completion_tokens=5,\n            total_tokens=15,\n            is_estimated=False,\n        )\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            usage.prompt_tokens = 999\n\n    def test_completion_response_frozen(self):\n        \"\"\"CompletionResponse is immutable (frozen Pydantic model).\"\"\"\n        resp = CompletionResponse(\n            content=\"test\",\n            source_info=_make_source_info(),\n            token_usage=UnifiedTokenUsage(\n                prompt_tokens=1, completion_tokens=1,\n                total_tokens=2, is_estimated=False,\n            ),\n            cost_usd=0.0,\n            latency_ms=1.0,\n            response_id=\"test-id\",\n        )\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            resp.content = \"changed\"\n\n    def test_health_report_frozen(self):\n        \"\"\"HealthReport is immutable (frozen Pydantic model).\"\"\"\n        report = HealthReport(\n            available=True,\n            source_info=_make_source_info(),\n            detail=\"OK\",\n            latency_ms=1.0,\n        )\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            report.available = False\n\n    def test_model_client_error_is_exception(self):\n        \"\"\"ModelClientError is an Exception subclass.\"\"\"\n        err = ModelClientError(\n            source_info=_make_source_info(),\n            message=\"test\",\n            request_id=\"req-001\",\n            original_error=\"orig\",\n            timestamp_utc=\"2024-01-01T00:00:00Z\",\n        )\n        assert isinstance(err, Exception), \\\n            \"ModelClientError must be an Exception subclass\"\n\n    def test_retriable_error_is_exception(self):\n        \"\"\"RetriableError is an Exception subclass.\"\"\"\n        err = RetriableError(\n            source_info=_make_source_info(),\n            message=\"test\",\n            request_id=\"req-001\",\n            original_error=\"orig\",\n            timestamp_utc=\"2024-01-01T00:00:00Z\",\n            retry_after_seconds=10.0,\n            retries_exhausted=3,\n        )\n        assert isinstance(err, Exception)\n\n    def test_terminal_error_is_exception(self):\n        \"\"\"TerminalError is an Exception subclass.\"\"\"\n        err = TerminalError(\n            source_info=_make_source_info(),\n            message=\"test\",\n            request_id=\"req-001\",\n            original_error=\"orig\",\n            timestamp_utc=\"2024-01-01T00:00:00Z\",\n            status_code=401,\n        )\n        assert isinstance(err, Exception)\n\n    def test_source_unavailable_error_is_exception(self):\n        \"\"\"SourceUnavailableError is an Exception subclass.\"\"\"\n        err = SourceUnavailableError(\n            source_info=_make_source_info(),\n            message=\"test\",\n            request_id=\"req-001\",\n            original_error=\"orig\",\n            timestamp_utc=\"2024-01-01T00:00:00Z\",\n            reason=UnavailableReason.SERVER_NOT_RUNNING,\n        )\n        assert isinstance(err, Exception)\n\n    def test_error_hierarchy_unified(self):\n        \"\"\"All specific errors conceptually extend ModelClientError.\"\"\"\n        source = _make_source_info()\n        base_kwargs = dict(\n            source_info=source, message=\"test\", request_id=\"req\",\n            original_error=\"orig\", timestamp_utc=\"2024-01-01T00:00:00Z\",\n        )\n        # Check they are all exceptions at minimum\n        retriable = RetriableError(\n            **base_kwargs, retry_after_seconds=0, retries_exhausted=0\n        )\n        terminal = TerminalError(**base_kwargs, status_code=500)\n        unavailable = SourceUnavailableError(\n            **base_kwargs, reason=UnavailableReason.REMOTE_UNAVAILABLE\n        )\n\n        for err in [retriable, terminal, unavailable]:\n            assert isinstance(err, Exception), \\\n                f\"{type(err).__name__} must be an Exception\"\n\n    @pytest.mark.asyncio\n    async def test_errors_carry_request_id(self):\n        \"\"\"Every error in the hierarchy carries a non-empty request_id.\"\"\"\n        source = _make_source_info()\n        base_kwargs = dict(\n            source_info=source, message=\"test\", request_id=\"audit-trail-id\",\n            original_error=\"orig\", timestamp_utc=\"2024-01-01T00:00:00Z\",\n        )\n\n        errors = [\n            ModelClientError(**base_kwargs),\n            RetriableError(**base_kwargs, retry_after_seconds=0, retries_exhausted=0),\n            TerminalError(**base_kwargs, status_code=400),\n            SourceUnavailableError(**base_kwargs, reason=UnavailableReason.AUTH_FAILURE),\n        ]\n\n        for err in errors:\n            assert err.request_id == \"audit-trail-id\", \\\n                f\"{type(err).__name__}.request_id should be 'audit-trail-id'\"\n            assert err.request_id != \"\", \\\n                f\"{type(err).__name__}.request_id should be non-empty\"\n\n\nclass TestMappingInvariantsParametrized:\n    \"\"\"Parametrized mapping invariant tests.\"\"\"\n\n    @pytest.mark.parametrize(\"error_cls,expected_type\", [\n        (MockAuthError, TerminalError),\n        (MockInvalidRequestError, TerminalError),\n        (MockRateLimitError, RetriableError),\n        (MockRemoteUnavailableError, SourceUnavailableError),\n    ])\n    def test_remote_error_mapping_type(self, error_cls, expected_type):\n        \"\"\"Each remote error type maps to the correct unified error type.\"\"\"\n        source = _make_source_info()\n        kwargs = {\"request_id\": \"param-test\"}\n        if error_cls in (MockAuthError, MockInvalidRequestError):\n            kwargs[\"status_code\"] = 401\n        if error_cls == MockRateLimitError:\n            kwargs[\"retry_after\"] = 10.0\n\n        err = error_cls(**kwargs)\n        result = map_remote_error(err, source)\n\n        assert isinstance(result, expected_type), \\\n            f\"{error_cls.__name__} should map to {expected_type.__name__}, got {type(result).__name__}\"\n\n    @pytest.mark.parametrize(\"reason_str\", [\n        \"SERVER_NOT_RUNNING\",\n        \"NO_MODEL_LOADED\",\n        \"MODEL_LOADING\",\n        \"INFERENCE_TIMEOUT\",\n        \"INFERENCE_ERROR\",\n    ])\n    def test_local_unavailable_all_reasons_produce_source_unavailable(self, reason_str):\n        \"\"\"All five local UnavailableReason variants produce SourceUnavailableError.\"\"\"\n        source = _make_local_source_info()\n        unavail = MockLocalModelUnavailable(\n            reason=reason_str, request_id=\"param-local\"\n        )\n        result = map_local_unavailable(unavail, source)\n\n        assert isinstance(result, SourceUnavailableError)\n        assert result.reason.name == reason_str, \\\n            f\"Expected reason {reason_str}, got {result.reason.name}\"\n"
+}

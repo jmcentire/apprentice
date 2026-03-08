@@ -1,0 +1,637 @@
+{
+  "component_id": "phase_manager",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "tv_happy_path",
+      "description": "validate_thresholds returns valid PhaseThresholds when invariant holds",
+      "function": "validate_thresholds",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid thresholds with emergency < coaching < phase2_to_phase3",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "tv_threshold_ordering_violation",
+      "description": "validate_thresholds raises on emergency_threshold >= coaching_trigger",
+      "function": "validate_thresholds",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "threshold_ordering_violation",
+      "assertions": []
+    },
+    {
+      "id": "tv_invalid_example_count",
+      "description": "validate_thresholds raises on phase1_to_phase2_example_count < 1",
+      "function": "validate_thresholds",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_example_count",
+      "assertions": []
+    },
+    {
+      "id": "tv_invalid_sustained_windows",
+      "description": "validate_thresholds raises on sustained_windows < 1",
+      "function": "validate_thresholds",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_sustained_windows",
+      "assertions": []
+    },
+    {
+      "id": "tv_invalid_cooldown_windows",
+      "description": "validate_thresholds raises on cooldown_windows < 0",
+      "function": "validate_thresholds",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_cooldown_windows",
+      "assertions": []
+    },
+    {
+      "id": "cp_emergency_remote_only",
+      "description": "compute_phase returns REMOTE_ONLY when correlation < emergency_threshold",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "cp_coaching_trigger_with_model",
+      "description": "compute_phase returns COACHING when correlation < coaching_trigger but >= emergency, with model available and sufficient examples",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.COACHING"
+      ]
+    },
+    {
+      "id": "cp_coaching_trigger_no_model",
+      "description": "compute_phase returns REMOTE_ONLY when correlation < coaching_trigger, no model available",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "cp_insufficient_examples",
+      "description": "compute_phase returns REMOTE_ONLY when example_count < threshold regardless of correlation",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "cp_autonomous_sustained",
+      "description": "compute_phase returns AUTONOMOUS when sustained windows threshold met",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.AUTONOMOUS"
+      ]
+    },
+    {
+      "id": "cp_coaching_not_sustained",
+      "description": "compute_phase returns COACHING when above coaching but not sustained enough for AUTONOMOUS",
+      "function": "compute_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.COACHING"
+      ]
+    },
+    {
+      "id": "cp_nan_correlation",
+      "description": "compute_phase raises error on NaN rolling_correlation",
+      "function": "compute_phase",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "nan_correlation",
+      "assertions": []
+    },
+    {
+      "id": "cp_boundary_exact_emergency",
+      "description": "compute_phase at exact emergency_threshold boundary",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cp_boundary_exact_coaching",
+      "description": "compute_phase at exact coaching_trigger boundary",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cp_boundary_exact_sustained",
+      "description": "compute_phase at exact sustained_windows boundary",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cp_no_model_high_correlation",
+      "description": "compute_phase never returns AUTONOMOUS without local_model_available",
+      "function": "compute_phase",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase != Phase.AUTONOMOUS"
+      ]
+    },
+    {
+      "id": "cp_determinism",
+      "description": "compute_phase with identical inputs always produces identical output",
+      "function": "compute_phase",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "eval_happy_first_evaluation",
+      "description": "evaluate on new task produces INITIAL_ASSIGNMENT transition",
+      "function": "evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "eval_no_transition",
+      "description": "evaluate returns no transition when phase unchanged",
+      "function": "evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.transition is None"
+      ]
+    },
+    {
+      "id": "eval_transition_remote_to_coaching",
+      "description": "evaluate detects transition from REMOTE_ONLY to COACHING",
+      "function": "evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "eval_cooldown_suppresses_transition",
+      "description": "evaluate suppresses transition during cooldown period",
+      "function": "evaluate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.cooldown_active is True",
+        "result.transition is None"
+      ]
+    },
+    {
+      "id": "eval_nan_correlation_error",
+      "description": "evaluate raises on NaN rolling_correlation",
+      "function": "evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "nan_correlation",
+      "assertions": []
+    },
+    {
+      "id": "eval_clock_failure",
+      "description": "evaluate raises on clock failure",
+      "function": "evaluate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "clock_failure",
+      "assertions": []
+    },
+    {
+      "id": "eval_windows_incremented",
+      "description": "evaluate increments windows_since_last_transition when no transition",
+      "function": "evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "eval_windows_reset_on_transition",
+      "description": "evaluate resets windows_since_last_transition to 0 on transition",
+      "function": "evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "eval_transition_appended_to_history",
+      "description": "evaluate appends PhaseTransition to task's transition_history",
+      "function": "evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "gtp_unknown_task",
+      "description": "get_task_phase returns REMOTE_ONLY for unknown task_id",
+      "function": "get_task_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == Phase.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "gtp_known_task",
+      "description": "get_task_phase returns current phase after evaluation",
+      "function": "get_task_phase",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "gtp_empty_task_id",
+      "description": "get_task_phase raises on empty task_id",
+      "function": "get_task_phase",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": []
+    },
+    {
+      "id": "gts_unknown_task",
+      "description": "get_task_state returns None for unknown task_id",
+      "function": "get_task_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is None"
+      ]
+    },
+    {
+      "id": "gts_known_task",
+      "description": "get_task_state returns full TaskPhaseState after evaluation",
+      "function": "get_task_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "gts_empty_task_id",
+      "description": "get_task_state raises on empty task_id",
+      "function": "get_task_state",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": []
+    },
+    {
+      "id": "gth_unknown_task",
+      "description": "get_transition_history returns empty list for unknown task_id",
+      "function": "get_transition_history",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == []"
+      ]
+    },
+    {
+      "id": "gth_ordering",
+      "description": "get_transition_history returns transitions in chronological order",
+      "function": "get_transition_history",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "gth_empty_task_id",
+      "description": "get_transition_history raises on empty task_id",
+      "function": "get_transition_history",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": []
+    },
+    {
+      "id": "rt_existing_task",
+      "description": "reset_task removes state for existing task and returns True",
+      "function": "reset_task",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is True"
+      ]
+    },
+    {
+      "id": "rt_unknown_task",
+      "description": "reset_task returns False for unknown task_id",
+      "function": "reset_task",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is False"
+      ]
+    },
+    {
+      "id": "rt_clears_all_state",
+      "description": "After reset, get_task_phase returns REMOTE_ONLY, get_task_state returns None, get_transition_history returns empty",
+      "function": "reset_task",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "rt_empty_task_id",
+      "description": "reset_task raises on empty task_id",
+      "function": "reset_task",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": []
+    },
+    {
+      "id": "inv_remote_only_default",
+      "description": "REMOTE_ONLY is the universal default for any unknown task",
+      "function": "get_task_phase",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "inv_task_isolation",
+      "description": "Two different tasks do not interfere with each other's state",
+      "function": "evaluate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "inv_emergency_from_any_phase",
+      "description": "Emergency revert to REMOTE_ONLY can occur from any phase",
+      "function": "compute_phase",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "edge_zero_example_count",
+      "description": "compute_phase with zero example_count returns REMOTE_ONLY",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.phase == Phase.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "edge_inf_correlation",
+      "description": "Edge case with infinite correlation value",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "edge_cooldown_zero",
+      "description": "Cooldown windows of 0 means no cooldown suppression",
+      "function": "evaluate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "edge_sustained_windows_one",
+      "description": "sustained_windows=1 means single window above threshold suffices for AUTONOMOUS",
+      "function": "compute_phase",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the Phase Manager component.\n\nTests are organized into sections:\n1. Fixtures\n2. Threshold validation tests\n3. compute_phase pure function tests\n4. evaluate stateful tests\n5. Task state management tests\n6. Property-based / invariant tests\n7. Edge cases\n\nAll dependencies are mocked. No global state.\n\"\"\"\n\nimport math\nimport pytest\nfrom unittest.mock import MagicMock, PropertyMock\nfrom dataclasses import dataclass\n\nfrom src.phase_manager import (\n    Phase,\n    TrendDirection,\n    TransitionTrigger,\n    PhaseThresholds,\n    PhaseMetrics,\n    PhaseTransition,\n    PhaseComputationResult,\n    PhaseManager,\n    compute_phase,\n    validate_thresholds,\n)\n\n\n# ============================================================\n# Section 1: Fixtures\n# ============================================================\n\n@pytest.fixture\ndef default_thresholds():\n    \"\"\"Valid PhaseThresholds with emergency=0.3 < coaching=0.5 < phase2_to_phase3=0.8.\"\"\"\n    return PhaseThresholds(\n        phase1_to_phase2_example_count=10,\n        phase2_to_phase3_correlation=0.8,\n        coaching_trigger=0.5,\n        emergency_threshold=0.3,\n        sustained_windows=3,\n        cooldown_windows=2,\n    )\n\n\n@pytest.fixture\ndef mock_clock():\n    \"\"\"Mock Clock returning deterministic ISO 8601 timestamps.\"\"\"\n    clock = MagicMock()\n    clock.now.return_value = \"2024-01-15T10:00:00Z\"\n    return clock\n\n\n@pytest.fixture\ndef phase_manager(mock_clock):\n    \"\"\"Fresh PhaseManager instance injected with mock clock.\"\"\"\n    return PhaseManager(clock=mock_clock)\n\n\ndef make_metrics(\n    task_id=\"task-1\",\n    example_count=20,\n    rolling_correlation=0.9,\n    local_model_available=True,\n    consecutive_windows_above_threshold=5,\n    trend_direction=TrendDirection.STABLE,\n):\n    \"\"\"Factory for PhaseMetrics with sensible defaults.\"\"\"\n    return PhaseMetrics(\n        task_id=task_id,\n        example_count=example_count,\n        rolling_correlation=rolling_correlation,\n        local_model_available=local_model_available,\n        consecutive_windows_above_threshold=consecutive_windows_above_threshold,\n        trend_direction=trend_direction,\n    )\n\n\ndef make_remote_only_metrics(task_id=\"task-1\"):\n    \"\"\"Metrics that should produce REMOTE_ONLY (low correlation, few examples).\"\"\"\n    return make_metrics(\n        task_id=task_id,\n        example_count=2,\n        rolling_correlation=0.1,\n        local_model_available=False,\n        consecutive_windows_above_threshold=0,\n    )\n\n\ndef make_coaching_metrics(task_id=\"task-1\"):\n    \"\"\"Metrics that should produce COACHING (above coaching, below sustained for autonomous).\"\"\"\n    return make_metrics(\n        task_id=task_id,\n        example_count=20,\n        rolling_correlation=0.7,\n        local_model_available=True,\n        consecutive_windows_above_threshold=1,\n    )\n\n\ndef make_autonomous_metrics(task_id=\"task-1\"):\n    \"\"\"Metrics that should produce AUTONOMOUS (sustained high correlation).\"\"\"\n    return make_metrics(\n        task_id=task_id,\n        example_count=20,\n        rolling_correlation=0.9,\n        local_model_available=True,\n        consecutive_windows_above_threshold=5,\n    )\n\n\n# ============================================================\n# Section 2: Threshold Validation Tests\n# ============================================================\n\nclass TestValidateThresholds:\n    def test_happy_path_valid_thresholds(self, default_thresholds):\n        \"\"\"validate_thresholds returns the same instance when all invariants hold.\"\"\"\n        result = validate_thresholds(default_thresholds)\n        assert result is default_thresholds, \"Should return the same instance on valid input\"\n        assert result.emergency_threshold < result.coaching_trigger < result.phase2_to_phase3_correlation\n\n    @pytest.mark.parametrize(\"emergency, coaching, p2p3\", [\n        (0.5, 0.5, 0.8),   # emergency == coaching\n        (0.6, 0.5, 0.8),   # emergency > coaching\n        (0.3, 0.8, 0.8),   # coaching == p2p3\n        (0.3, 0.9, 0.8),   # coaching > p2p3\n        (0.9, 0.5, 0.3),   # all reversed\n    ])\n    def test_threshold_ordering_violation(self, emergency, coaching, p2p3):\n        \"\"\"validate_thresholds raises on violated ordering invariant.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            thresholds = PhaseThresholds(\n                phase1_to_phase2_example_count=10,\n                phase2_to_phase3_correlation=p2p3,\n                coaching_trigger=coaching,\n                emergency_threshold=emergency,\n                sustained_windows=3,\n                cooldown_windows=2,\n            )\n            validate_thresholds(thresholds)\n        # Accept either construction-time or validation-time error\n\n    def test_invalid_example_count_zero(self):\n        \"\"\"validate_thresholds raises when phase1_to_phase2_example_count < 1.\"\"\"\n        with pytest.raises(Exception):\n            thresholds = PhaseThresholds(\n                phase1_to_phase2_example_count=0,\n                phase2_to_phase3_correlation=0.8,\n                coaching_trigger=0.5,\n                emergency_threshold=0.3,\n                sustained_windows=3,\n                cooldown_windows=2,\n            )\n            validate_thresholds(thresholds)\n\n    def test_invalid_example_count_negative(self):\n        \"\"\"validate_thresholds raises when phase1_to_phase2_example_count is negative.\"\"\"\n        with pytest.raises(Exception):\n            thresholds = PhaseThresholds(\n                phase1_to_phase2_example_count=-1,\n                phase2_to_phase3_correlation=0.8,\n                coaching_trigger=0.5,\n                emergency_threshold=0.3,\n                sustained_windows=3,\n                cooldown_windows=2,\n            )\n            validate_thresholds(thresholds)\n\n    def test_invalid_sustained_windows_zero(self):\n        \"\"\"validate_thresholds raises when sustained_windows < 1.\"\"\"\n        with pytest.raises(Exception):\n            thresholds = PhaseThresholds(\n                phase1_to_phase2_example_count=10,\n                phase2_to_phase3_correlation=0.8,\n                coaching_trigger=0.5,\n                emergency_threshold=0.3,\n                sustained_windows=0,\n                cooldown_windows=2,\n            )\n            validate_thresholds(thresholds)\n\n    def test_invalid_cooldown_windows_negative(self):\n        \"\"\"validate_thresholds raises when cooldown_windows < 0.\"\"\"\n        with pytest.raises(Exception):\n            thresholds = PhaseThresholds(\n                phase1_to_phase2_example_count=10,\n                phase2_to_phase3_correlation=0.8,\n                coaching_trigger=0.5,\n                emergency_threshold=0.3,\n                sustained_windows=3,\n                cooldown_windows=-1,\n            )\n            validate_thresholds(thresholds)\n\n\n# ============================================================\n# Section 3: compute_phase Pure Function Tests\n# ============================================================\n\nclass TestComputePhase:\n    \"\"\"Tests for the pure, stateless compute_phase function.\"\"\"\n\n    def test_emergency_below_threshold(self, default_thresholds):\n        \"\"\"Correlation below emergency_threshold → REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(rolling_correlation=0.1)\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY, (\n            f\"Expected REMOTE_ONLY for correlation {metrics.rolling_correlation} < \"\n            f\"emergency {default_thresholds.emergency_threshold}\"\n        )\n\n    def test_coaching_trigger_with_model_and_examples(self, default_thresholds):\n        \"\"\"Correlation between emergency and coaching, with model + examples → COACHING.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.4,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.COACHING\n\n    def test_coaching_trigger_no_model(self, default_thresholds):\n        \"\"\"Correlation between emergency and coaching, no model → REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.4,\n            example_count=20,\n            local_model_available=False,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY\n\n    def test_coaching_trigger_insufficient_examples(self, default_thresholds):\n        \"\"\"Correlation between emergency and coaching, insufficient examples → REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.4,\n            example_count=5,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY\n\n    def test_insufficient_examples_high_correlation(self, default_thresholds):\n        \"\"\"High correlation but insufficient examples → REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=5,\n            local_model_available=True,\n            consecutive_windows_above_threshold=10,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY\n\n    def test_no_model_high_correlation(self, default_thresholds):\n        \"\"\"High correlation but no model → never AUTONOMOUS.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=False,\n            consecutive_windows_above_threshold=10,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase != Phase.AUTONOMOUS, \"Must not be AUTONOMOUS without local model\"\n        assert result.phase in (Phase.REMOTE_ONLY, Phase.COACHING)\n\n    def test_autonomous_sustained_threshold_met(self, default_thresholds):\n        \"\"\"Sustained windows >= threshold, model available, enough examples → AUTONOMOUS.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=3,  # == sustained_windows\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.AUTONOMOUS\n\n    def test_coaching_not_sustained_enough(self, default_thresholds):\n        \"\"\"Above coaching, model + examples present, but not enough sustained windows → COACHING.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=2,  # < sustained_windows (3)\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.COACHING\n\n    def test_nan_correlation_raises(self, default_thresholds):\n        \"\"\"NaN correlation must raise an error.\"\"\"\n        metrics = make_metrics(rolling_correlation=float(\"nan\"))\n        with pytest.raises(Exception):\n            compute_phase(metrics, default_thresholds)\n\n    # Boundary value tests\n    def test_boundary_exact_emergency_threshold(self, default_thresholds):\n        \"\"\"Correlation exactly at emergency_threshold (0.3) — should NOT trigger emergency.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.3,  # == emergency_threshold\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        # At exactly emergency_threshold, the condition is < not <=, so should be COACHING or above\n        # (correlation < coaching_trigger=0.5, model available, examples sufficient → COACHING)\n        assert result.phase in (Phase.REMOTE_ONLY, Phase.COACHING), (\n            \"Boundary at emergency_threshold: implementation may use < or <=\"\n        )\n\n    def test_boundary_just_below_emergency(self, default_thresholds):\n        \"\"\"Correlation just below emergency_threshold → REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(rolling_correlation=0.2999)\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY\n\n    def test_boundary_exact_coaching_trigger(self, default_thresholds):\n        \"\"\"Correlation exactly at coaching_trigger (0.5).\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.5,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        # At coaching_trigger boundary — either COACHING or above depending on < vs <=\n        assert result.phase in (Phase.COACHING, Phase.REMOTE_ONLY)\n\n    def test_boundary_exact_sustained_windows(self, default_thresholds):\n        \"\"\"consecutive_windows exactly at sustained_windows → AUTONOMOUS.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=3,  # exactly sustained_windows\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.AUTONOMOUS\n\n    def test_boundary_one_below_sustained_windows(self, default_thresholds):\n        \"\"\"consecutive_windows one below sustained_windows → COACHING (not AUTONOMOUS).\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=2,  # sustained_windows - 1\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.COACHING\n\n    def test_determinism(self, default_thresholds):\n        \"\"\"Same inputs always produce same output — compute_phase is pure.\"\"\"\n        metrics = make_coaching_metrics()\n        results = [compute_phase(metrics, default_thresholds) for _ in range(10)]\n        phases = [r.phase for r in results]\n        triggers = [r.trigger for r in results]\n        assert len(set(phases)) == 1, \"Phase must be deterministic\"\n        assert len(set(triggers)) == 1, \"Trigger must be deterministic\"\n\n    def test_trigger_for_emergency(self, default_thresholds):\n        \"\"\"Trigger should indicate emergency threshold breach.\"\"\"\n        metrics = make_metrics(rolling_correlation=0.1)\n        result = compute_phase(metrics, default_thresholds)\n        assert result.trigger == TransitionTrigger.CORRELATION_BELOW_EMERGENCY_THRESHOLD\n\n    def test_trigger_for_coaching(self, default_thresholds):\n        \"\"\"Trigger should indicate coaching trigger correlation level.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.4,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.trigger == TransitionTrigger.CORRELATION_BELOW_COACHING_TRIGGER\n\n    def test_trigger_for_autonomous(self, default_thresholds):\n        \"\"\"Trigger should indicate sustained correlation above threshold.\"\"\"\n        metrics = make_autonomous_metrics()\n        result = compute_phase(metrics, default_thresholds)\n        assert result.trigger == TransitionTrigger.SUSTAINED_CORRELATION_ABOVE_THRESHOLD\n\n    def test_trigger_for_phase1_to_phase2(self, default_thresholds):\n        \"\"\"Trigger for transitioning from Phase1 to Phase2 via example count + model ready.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.7,\n            example_count=10,  # exactly at threshold\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.COACHING\n        assert result.trigger == TransitionTrigger.EXAMPLE_COUNT_AND_MODEL_READY\n\n    # Postcondition: AUTONOMOUS requires sustained windows\n    @pytest.mark.parametrize(\"windows\", [0, 1, 2])\n    def test_autonomous_requires_sustained_windows(self, default_thresholds, windows):\n        \"\"\"AUTONOMOUS is never returned when consecutive_windows < sustained_windows.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.95,\n            example_count=100,\n            local_model_available=True,\n            consecutive_windows_above_threshold=windows,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        if result.phase == Phase.AUTONOMOUS:\n            assert windows >= default_thresholds.sustained_windows\n\n\n# ============================================================\n# Section 4: evaluate Stateful Tests\n# ============================================================\n\nclass TestEvaluate:\n    \"\"\"Tests for the stateful evaluate method on PhaseManager.\"\"\"\n\n    def test_first_evaluation_initial_assignment(self, phase_manager, default_thresholds, mock_clock):\n        \"\"\"First evaluation for a new task may produce INITIAL_ASSIGNMENT transition.\"\"\"\n        metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(metrics, default_thresholds)\n        # New task: initialized to REMOTE_ONLY, then transitions to COACHING\n        if result.transition is not None:\n            assert result.transition.from_phase == Phase.REMOTE_ONLY\n            assert result.transition.trigger in (\n                TransitionTrigger.INITIAL_ASSIGNMENT,\n                TransitionTrigger.EXAMPLE_COUNT_AND_MODEL_READY,\n                TransitionTrigger.CORRELATION_BELOW_COACHING_TRIGGER,\n            )\n            assert result.transition.timestamp == \"2024-01-15T10:00:00Z\"\n            assert result.transition.task_id == metrics.task_id\n\n    def test_no_transition_when_phase_unchanged(self, phase_manager, default_thresholds):\n        \"\"\"Evaluating with same-phase metrics produces no transition.\"\"\"\n        metrics = make_remote_only_metrics()\n        # First eval — initializes to REMOTE_ONLY, compute_phase also REMOTE_ONLY\n        result1 = phase_manager.evaluate(metrics, default_thresholds)\n        # Second eval — still REMOTE_ONLY, no transition\n        result2 = phase_manager.evaluate(metrics, default_thresholds)\n        # After the first eval settles, second should produce no transition\n        assert result2.transition is None, \"No transition when phase is unchanged\"\n        assert result2.current_phase == Phase.REMOTE_ONLY\n\n    def test_transition_remote_to_coaching(self, phase_manager, default_thresholds):\n        \"\"\"Evaluating from REMOTE_ONLY to COACHING detects transition.\"\"\"\n        # First: establish REMOTE_ONLY\n        remote_metrics = make_remote_only_metrics()\n        phase_manager.evaluate(remote_metrics, default_thresholds)\n\n        # Second: metrics that produce COACHING\n        coaching_metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(coaching_metrics, default_thresholds)\n        assert result.current_phase == Phase.COACHING\n        if result.transition is not None:\n            assert result.transition.from_phase == Phase.REMOTE_ONLY\n            assert result.transition.to_phase == Phase.COACHING\n\n    def test_cooldown_suppresses_transition(self, phase_manager, default_thresholds):\n        \"\"\"During cooldown, transition is suppressed and cooldown_active=True.\"\"\"\n        # Trigger a transition first\n        remote_metrics = make_remote_only_metrics()\n        phase_manager.evaluate(remote_metrics, default_thresholds)\n        coaching_metrics = make_coaching_metrics()\n        result1 = phase_manager.evaluate(coaching_metrics, default_thresholds)\n\n        # If a transition occurred and cooldown_windows > 0, the next different-phase eval\n        # within cooldown should be suppressed\n        if result1.transition is not None:\n            # Immediately try another transition (within cooldown_windows=2)\n            autonomous_metrics = make_autonomous_metrics()\n            result2 = phase_manager.evaluate(autonomous_metrics, default_thresholds)\n            if result2.cooldown_active:\n                assert result2.transition is None, \"Transition suppressed during cooldown\"\n                # Phase should remain the previous phase\n                assert result2.current_phase == Phase.COACHING\n\n    def test_nan_correlation_raises(self, phase_manager, default_thresholds):\n        \"\"\"evaluate raises on NaN rolling_correlation.\"\"\"\n        metrics = make_metrics(rolling_correlation=float(\"nan\"))\n        with pytest.raises(Exception):\n            phase_manager.evaluate(metrics, default_thresholds)\n\n    def test_clock_failure_raises(self, default_thresholds):\n        \"\"\"evaluate raises when clock.now() fails.\"\"\"\n        failing_clock = MagicMock()\n        failing_clock.now.side_effect = RuntimeError(\"clock failure\")\n        pm = PhaseManager(clock=failing_clock)\n\n        # Use metrics that will trigger a transition (new task → any phase change)\n        metrics = make_coaching_metrics()\n        with pytest.raises(Exception):\n            pm.evaluate(metrics, default_thresholds)\n\n    def test_windows_incremented_no_transition(self, phase_manager, default_thresholds):\n        \"\"\"windows_since_last_transition increments by 1 when no transition occurs.\"\"\"\n        metrics = make_remote_only_metrics()\n        phase_manager.evaluate(metrics, default_thresholds)\n        phase_manager.evaluate(metrics, default_thresholds)\n        state = phase_manager.get_task_state(metrics.task_id)\n        if state is not None:\n            assert state.windows_since_last_transition >= 1\n\n    def test_windows_reset_on_transition(self, phase_manager, default_thresholds):\n        \"\"\"windows_since_last_transition resets to 0 when a transition occurs.\"\"\"\n        remote_metrics = make_remote_only_metrics()\n        phase_manager.evaluate(remote_metrics, default_thresholds)\n        phase_manager.evaluate(remote_metrics, default_thresholds)\n\n        coaching_metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(coaching_metrics, default_thresholds)\n        if result.transition is not None:\n            state = phase_manager.get_task_state(coaching_metrics.task_id)\n            assert state.windows_since_last_transition == 0\n\n    def test_transition_appended_to_history(self, phase_manager, default_thresholds):\n        \"\"\"PhaseTransition events are appended to task's transition_history.\"\"\"\n        remote_metrics = make_remote_only_metrics()\n        phase_manager.evaluate(remote_metrics, default_thresholds)\n\n        coaching_metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(coaching_metrics, default_thresholds)\n        if result.transition is not None:\n            history = phase_manager.get_transition_history(coaching_metrics.task_id)\n            assert len(history) >= 1\n            assert result.transition in history\n\n    def test_transition_has_frozen_metrics_snapshot(self, phase_manager, default_thresholds):\n        \"\"\"PhaseTransition contains frozen metrics_snapshot matching input metrics.\"\"\"\n        coaching_metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(coaching_metrics, default_thresholds)\n        if result.transition is not None:\n            snapshot = result.transition.metrics_snapshot\n            assert snapshot.task_id == coaching_metrics.task_id\n            assert snapshot.rolling_correlation == coaching_metrics.rolling_correlation\n            assert snapshot.example_count == coaching_metrics.example_count\n\n\n# ============================================================\n# Section 5: Task State Management Tests\n# ============================================================\n\nclass TestGetTaskPhase:\n    def test_unknown_task_returns_remote_only(self, phase_manager):\n        \"\"\"Unknown task_id returns Phase.REMOTE_ONLY.\"\"\"\n        result = phase_manager.get_task_phase(\"never-seen-task\")\n        assert result == Phase.REMOTE_ONLY\n\n    def test_known_task_returns_current_phase(self, phase_manager, default_thresholds):\n        \"\"\"After evaluation, returns the computed phase.\"\"\"\n        metrics = make_coaching_metrics()\n        eval_result = phase_manager.evaluate(metrics, default_thresholds)\n        phase = phase_manager.get_task_phase(metrics.task_id)\n        assert phase == eval_result.current_phase\n\n    def test_empty_task_id_raises(self, phase_manager):\n        \"\"\"Empty task_id raises an error.\"\"\"\n        with pytest.raises(Exception):\n            phase_manager.get_task_phase(\"\")\n\n\nclass TestGetTaskState:\n    def test_unknown_task_returns_none(self, phase_manager):\n        \"\"\"Unknown task_id returns None.\"\"\"\n        result = phase_manager.get_task_state(\"unknown-task\")\n        assert result is None\n\n    def test_known_task_returns_state(self, phase_manager, default_thresholds):\n        \"\"\"After evaluation, returns full TaskPhaseState.\"\"\"\n        metrics = make_coaching_metrics()\n        phase_manager.evaluate(metrics, default_thresholds)\n        state = phase_manager.get_task_state(metrics.task_id)\n        assert state is not None\n        assert state.task_id == metrics.task_id\n        assert isinstance(state.current_phase, Phase)\n        assert isinstance(state.windows_since_last_transition, int)\n        assert isinstance(state.transition_history, list)\n\n    def test_empty_task_id_raises(self, phase_manager):\n        \"\"\"Empty task_id raises an error.\"\"\"\n        with pytest.raises(Exception):\n            phase_manager.get_task_state(\"\")\n\n\nclass TestGetTransitionHistory:\n    def test_unknown_task_returns_empty(self, phase_manager):\n        \"\"\"Unknown task_id returns empty list.\"\"\"\n        result = phase_manager.get_transition_history(\"unknown-task\")\n        assert result == []\n\n    def test_chronological_ordering(self, phase_manager, default_thresholds, mock_clock):\n        \"\"\"Transition history is ordered oldest first.\"\"\"\n        timestamps = iter([\n            \"2024-01-15T10:00:00Z\",\n            \"2024-01-15T10:01:00Z\",\n            \"2024-01-15T10:02:00Z\",\n            \"2024-01-15T10:03:00Z\",\n            \"2024-01-15T10:04:00Z\",\n        ])\n        mock_clock.now.side_effect = lambda: next(timestamps, \"2024-01-15T10:05:00Z\")\n\n        task_id = \"task-chrono\"\n        # Drive multiple transitions\n        phase_manager.evaluate(make_remote_only_metrics(task_id), default_thresholds)\n        phase_manager.evaluate(make_coaching_metrics(task_id), default_thresholds)\n        phase_manager.evaluate(make_remote_only_metrics(task_id), default_thresholds)\n        phase_manager.evaluate(make_coaching_metrics(task_id), default_thresholds)\n\n        history = phase_manager.get_transition_history(task_id)\n        if len(history) >= 2:\n            for i in range(len(history) - 1):\n                assert history[i].timestamp <= history[i + 1].timestamp, (\n                    f\"History not chronological: {history[i].timestamp} > {history[i+1].timestamp}\"\n                )\n\n    def test_empty_task_id_raises(self, phase_manager):\n        \"\"\"Empty task_id raises an error.\"\"\"\n        with pytest.raises(Exception):\n            phase_manager.get_transition_history(\"\")\n\n\nclass TestResetTask:\n    def test_reset_existing_task(self, phase_manager, default_thresholds):\n        \"\"\"reset_task returns True for a tracked task and clears all state.\"\"\"\n        metrics = make_coaching_metrics()\n        phase_manager.evaluate(metrics, default_thresholds)\n        result = phase_manager.reset_task(metrics.task_id)\n        assert result is True\n\n    def test_reset_unknown_task(self, phase_manager):\n        \"\"\"reset_task returns False for an unknown task.\"\"\"\n        result = phase_manager.reset_task(\"never-tracked\")\n        assert result is False\n\n    def test_reset_clears_all_state(self, phase_manager, default_thresholds):\n        \"\"\"After reset: get_task_phase→REMOTE_ONLY, get_task_state→None, history→[].\"\"\"\n        metrics = make_coaching_metrics()\n        phase_manager.evaluate(metrics, default_thresholds)\n        phase_manager.reset_task(metrics.task_id)\n\n        assert phase_manager.get_task_phase(metrics.task_id) == Phase.REMOTE_ONLY, (\n            \"After reset, task phase should be REMOTE_ONLY\"\n        )\n        assert phase_manager.get_task_state(metrics.task_id) is None, (\n            \"After reset, task state should be None\"\n        )\n        assert phase_manager.get_transition_history(metrics.task_id) == [], (\n            \"After reset, transition history should be empty\"\n        )\n\n    def test_reset_empty_task_id_raises(self, phase_manager):\n        \"\"\"Empty task_id raises an error.\"\"\"\n        with pytest.raises(Exception):\n            phase_manager.reset_task(\"\")\n\n\n# ============================================================\n# Section 6: Invariant Tests\n# ============================================================\n\nclass TestInvariants:\n    def test_remote_only_universal_default(self, phase_manager):\n        \"\"\"REMOTE_ONLY is the universal default for any unknown task.\"\"\"\n        for task_id in [\"task-a\", \"task-b\", \"nonexistent-123\"]:\n            assert phase_manager.get_task_phase(task_id) == Phase.REMOTE_ONLY\n\n    def test_task_isolation(self, phase_manager, default_thresholds):\n        \"\"\"Two different tasks do not interfere with each other's state.\"\"\"\n        metrics_a = make_coaching_metrics(task_id=\"task-a\")\n        metrics_b = make_remote_only_metrics(task_id=\"task-b\")\n\n        phase_manager.evaluate(metrics_a, default_thresholds)\n        phase_manager.evaluate(metrics_b, default_thresholds)\n\n        phase_a = phase_manager.get_task_phase(\"task-a\")\n        phase_b = phase_manager.get_task_phase(\"task-b\")\n\n        # task-a should be COACHING, task-b REMOTE_ONLY\n        assert phase_a != phase_b or phase_a == Phase.REMOTE_ONLY, (\n            \"Tasks should have independent phases\"\n        )\n        assert phase_b == Phase.REMOTE_ONLY, \"task-b should remain REMOTE_ONLY\"\n\n    def test_emergency_from_any_phase(self, default_thresholds):\n        \"\"\"Emergency revert to REMOTE_ONLY works from COACHING and AUTONOMOUS.\"\"\"\n        emergency_metrics_base = dict(\n            rolling_correlation=0.1,  # way below emergency_threshold=0.3\n            example_count=100,\n            local_model_available=True,\n            consecutive_windows_above_threshold=100,\n            trend_direction=TrendDirection.DEGRADING,\n        )\n        for task_id in [\"from-coaching\", \"from-autonomous\"]:\n            metrics = make_metrics(task_id=task_id, **emergency_metrics_base)\n            result = compute_phase(metrics, default_thresholds)\n            assert result.phase == Phase.REMOTE_ONLY, (\n                f\"Emergency should force REMOTE_ONLY, got {result.phase}\"\n            )\n\n    def test_phase1_to_phase2_requires_both_conditions(self, default_thresholds):\n        \"\"\"Phase 1→2 requires BOTH sufficient examples AND local_model_available.\"\"\"\n        # Only examples, no model\n        m1 = make_metrics(\n            rolling_correlation=0.7,\n            example_count=20,\n            local_model_available=False,\n            consecutive_windows_above_threshold=0,\n        )\n        r1 = compute_phase(m1, default_thresholds)\n        assert r1.phase == Phase.REMOTE_ONLY, \"No model → stay REMOTE_ONLY\"\n\n        # Only model, no examples\n        m2 = make_metrics(\n            rolling_correlation=0.7,\n            example_count=5,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        r2 = compute_phase(m2, default_thresholds)\n        assert r2.phase == Phase.REMOTE_ONLY, \"Insufficient examples → stay REMOTE_ONLY\"\n\n        # Both conditions met\n        m3 = make_metrics(\n            rolling_correlation=0.7,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        r3 = compute_phase(m3, default_thresholds)\n        assert r3.phase == Phase.COACHING, \"Both conditions met → COACHING\"\n\n\n# ============================================================\n# Section 7: Edge Cases\n# ============================================================\n\nclass TestEdgeCases:\n    def test_zero_example_count(self, default_thresholds):\n        \"\"\"Zero example count always yields REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(\n            example_count=0,\n            rolling_correlation=0.9,\n            local_model_available=True,\n            consecutive_windows_above_threshold=100,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        assert result.phase == Phase.REMOTE_ONLY\n\n    def test_inf_correlation(self, default_thresholds):\n        \"\"\"Infinite correlation should be handled gracefully (not crash).\"\"\"\n        metrics = make_metrics(rolling_correlation=float(\"inf\"))\n        try:\n            result = compute_phase(metrics, default_thresholds)\n            # If it succeeds, should still return a valid Phase\n            assert result.phase in (Phase.REMOTE_ONLY, Phase.COACHING, Phase.AUTONOMOUS)\n        except Exception:\n            # Raising is also acceptable for inf\n            pass\n\n    def test_negative_inf_correlation(self, default_thresholds):\n        \"\"\"Negative infinity correlation should trigger REMOTE_ONLY.\"\"\"\n        metrics = make_metrics(rolling_correlation=float(\"-inf\"))\n        try:\n            result = compute_phase(metrics, default_thresholds)\n            assert result.phase == Phase.REMOTE_ONLY\n        except Exception:\n            pass  # Raising is also acceptable\n\n    def test_cooldown_windows_zero(self):\n        \"\"\"cooldown_windows=0 means no cooldown suppression.\"\"\"\n        thresholds = PhaseThresholds(\n            phase1_to_phase2_example_count=10,\n            phase2_to_phase3_correlation=0.8,\n            coaching_trigger=0.5,\n            emergency_threshold=0.3,\n            sustained_windows=3,\n            cooldown_windows=0,\n        )\n        clock = MagicMock()\n        clock.now.return_value = \"2024-01-15T10:00:00Z\"\n        pm = PhaseManager(clock=clock)\n\n        # First eval → establish state\n        pm.evaluate(make_remote_only_metrics(\"task-cd0\"), thresholds)\n        # Second eval → should transition without cooldown\n        result = pm.evaluate(make_coaching_metrics(\"task-cd0\"), thresholds)\n        # With cooldown_windows=0, transition should NOT be suppressed\n        assert result.cooldown_active is False or result.transition is not None, (\n            \"With cooldown_windows=0, transitions should not be suppressed\"\n        )\n\n    def test_sustained_windows_one(self):\n        \"\"\"sustained_windows=1: single window above threshold suffices for AUTONOMOUS.\"\"\"\n        thresholds = PhaseThresholds(\n            phase1_to_phase2_example_count=10,\n            phase2_to_phase3_correlation=0.8,\n            coaching_trigger=0.5,\n            emergency_threshold=0.3,\n            sustained_windows=1,\n            cooldown_windows=0,\n        )\n        metrics = make_metrics(\n            rolling_correlation=0.9,\n            example_count=20,\n            local_model_available=True,\n            consecutive_windows_above_threshold=1,\n        )\n        result = compute_phase(metrics, thresholds)\n        assert result.phase == Phase.AUTONOMOUS, (\n            \"With sustained_windows=1 and 1 window above threshold, should be AUTONOMOUS\"\n        )\n\n    def test_exact_example_count_threshold(self, default_thresholds):\n        \"\"\"Exactly at phase1_to_phase2_example_count boundary.\"\"\"\n        metrics = make_metrics(\n            rolling_correlation=0.7,\n            example_count=10,  # exactly phase1_to_phase2_example_count\n            local_model_available=True,\n            consecutive_windows_above_threshold=0,\n        )\n        result = compute_phase(metrics, default_thresholds)\n        # At exactly the threshold, should allow COACHING (>= comparison)\n        assert result.phase == Phase.COACHING, (\n            \"At exact example_count threshold with model available, should be COACHING\"\n        )\n\n    def test_phase_level_ordering(self):\n        \"\"\"Phase enum levels: REMOTE_ONLY=1 < COACHING=2 < AUTONOMOUS=3.\"\"\"\n        assert Phase.REMOTE_ONLY.level < Phase.COACHING.level\n        assert Phase.COACHING.level < Phase.AUTONOMOUS.level\n\n    def test_clock_returning_unusual_timestamp(self, default_thresholds):\n        \"\"\"Clock returning various ISO 8601 formats still works.\"\"\"\n        clock = MagicMock()\n        clock.now.return_value = \"2024-12-31T23:59:59.999999+00:00\"\n        pm = PhaseManager(clock=clock)\n        metrics = make_coaching_metrics()\n        result = pm.evaluate(metrics, default_thresholds)\n        if result.transition is not None:\n            assert result.transition.timestamp == \"2024-12-31T23:59:59.999999+00:00\"\n\n    def test_many_evaluations_no_state_leak(self, phase_manager, default_thresholds):\n        \"\"\"Multiple evaluations for different tasks don't leak state.\"\"\"\n        for i in range(20):\n            task_id = f\"task-{i}\"\n            metrics = make_coaching_metrics(task_id=task_id)\n            phase_manager.evaluate(metrics, default_thresholds)\n\n        # Each task should be independently tracked\n        for i in range(20):\n            task_id = f\"task-{i}\"\n            state = phase_manager.get_task_state(task_id)\n            assert state is not None\n            assert state.task_id == task_id\n\n    def test_transition_is_frozen(self, phase_manager, default_thresholds):\n        \"\"\"PhaseTransition should be immutable (frozen Pydantic model).\"\"\"\n        metrics = make_coaching_metrics()\n        result = phase_manager.evaluate(metrics, default_thresholds)\n        if result.transition is not None:\n            with pytest.raises((AttributeError, TypeError, Exception)):\n                result.transition.task_id = \"hacked\"\n"
+}

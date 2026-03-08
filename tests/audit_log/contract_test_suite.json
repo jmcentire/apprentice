@@ -1,0 +1,588 @@
+{
+  "component_id": "audit_log",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "entry_to_json_line_happy",
+      "description": "to_json_line returns valid compact JSON with all required keys",
+      "function": "AuditEntry.to_json_line",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "A valid AuditEntry with known fields",
+      "expected_output_description": "A compact JSON string with keys timestamp, task_name, event_type, details and no newlines",
+      "expected_error": "",
+      "assertions": [
+        "Result is valid JSON",
+        "Result contains no newline characters",
+        "Result is non-empty",
+        "Parsed dict has keys: timestamp, task_name, event_type, details"
+      ]
+    },
+    {
+      "id": "entry_to_json_line_roundtrip",
+      "description": "to_json_line output can be deserialized back to matching AuditEntry",
+      "function": "AuditEntry.to_json_line",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "json.loads(result) produces dict matching original entry fields"
+      ]
+    },
+    {
+      "id": "entry_to_json_line_special_chars",
+      "description": "to_json_line handles special characters and unicode in details and task_name",
+      "function": "AuditEntry.to_json_line",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "AuditEntry with unicode task_name and special chars in details dict",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is valid JSON",
+        "Parsed dict preserves unicode and special characters"
+      ]
+    },
+    {
+      "id": "entry_to_json_line_empty_details",
+      "description": "to_json_line works with empty details dict",
+      "function": "AuditEntry.to_json_line",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "AuditEntry with details={}",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Result is valid JSON",
+        "Parsed details is empty dict"
+      ]
+    },
+    {
+      "id": "entry_frozen_immutable",
+      "description": "AuditEntry is frozen and cannot be mutated after construction",
+      "function": "AuditEntry.__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Attempting to set any attribute raises an error"
+      ]
+    },
+    {
+      "id": "event_type_all_variants",
+      "description": "EventType enum has exactly 9 variants with correct snake_case values",
+      "function": "EventType",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "EventType has exactly 9 members",
+        "All 9 expected variant names exist",
+        "Each variant's value equals its snake_case name"
+      ]
+    },
+    {
+      "id": "event_type_rejects_unknown",
+      "description": "EventType rejects unrecognized event strings",
+      "function": "EventType",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValueError",
+      "assertions": [
+        "Creating EventType with unknown string raises ValueError"
+      ]
+    },
+    {
+      "id": "audit_config_valid",
+      "description": "AuditConfig accepts a valid log_path with existing writable parent directory",
+      "function": "AuditConfig.__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "log_path pointing to tmp_path / 'audit.jsonl'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "config.log_path is the provided path string"
+      ]
+    },
+    {
+      "id": "audit_config_empty_log_path",
+      "description": "AuditConfig rejects empty log_path string",
+      "function": "AuditConfig.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValidationError or ValueError for empty_log_path",
+      "assertions": [
+        "Construction with empty string raises validation error"
+      ]
+    },
+    {
+      "id": "audit_config_parent_not_exists",
+      "description": "AuditConfig rejects log_path whose parent directory does not exist",
+      "function": "AuditConfig.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValidationError or ValueError for parent_not_exists",
+      "assertions": [
+        "Construction with nonexistent parent raises error"
+      ]
+    },
+    {
+      "id": "logger_init_happy",
+      "description": "JsonLinesAuditLogger initializes successfully with valid AuditConfig",
+      "function": "JsonLinesAuditLogger.__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid AuditConfig with tmp_path log_path",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Logger instance is created",
+        "Log file exists on disk",
+        "apprentice.audit logger has propagate=False"
+      ]
+    },
+    {
+      "id": "logger_init_creates_file",
+      "description": "JsonLinesAuditLogger creates log file if it does not exist",
+      "function": "JsonLinesAuditLogger.__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Log file is created",
+        "Log file is initially empty or has no content truncated"
+      ]
+    },
+    {
+      "id": "logger_init_no_truncate",
+      "description": "JsonLinesAuditLogger does not truncate existing log file content",
+      "function": "JsonLinesAuditLogger.__init__",
+      "category": "invariant",
+      "setup_description": "Write content to log file before initializing logger",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Existing content in the file is preserved after init"
+      ]
+    },
+    {
+      "id": "logger_init_parent_not_found",
+      "description": "JsonLinesAuditLogger raises error when parent directory does not exist",
+      "function": "JsonLinesAuditLogger.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "parent_directory_not_found error",
+      "assertions": [
+        "Initialization with nonexistent parent directory raises appropriate error"
+      ]
+    },
+    {
+      "id": "logger_init_propagate_false",
+      "description": "The apprentice.audit logger has propagate=False for isolation",
+      "function": "JsonLinesAuditLogger.__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "logging.getLogger('apprentice.audit').propagate is False"
+      ]
+    },
+    {
+      "id": "log_single_entry",
+      "description": "Logging a single entry appends exactly one JSONL line to the file",
+      "function": "JsonLinesAuditLogger.log",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File contains exactly one line",
+        "Line is valid JSON matching the logged entry"
+      ]
+    },
+    {
+      "id": "log_multiple_entries_append_only",
+      "description": "Logging multiple entries appends lines in order without modifying previous lines",
+      "function": "JsonLinesAuditLogger.log",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File contains N lines after logging N entries",
+        "Earlier lines are unchanged after logging later entries",
+        "Lines appear in order of logging"
+      ]
+    },
+    {
+      "id": "log_entry_flushed",
+      "description": "Logged entry is flushed to disk before log() returns",
+      "function": "JsonLinesAuditLogger.log",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Reading the file immediately after log() shows the entry"
+      ]
+    },
+    {
+      "id": "entries_by_task_matching",
+      "description": "entries_by_task returns all entries matching the given task_name",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Log entries with different task_names, query for one specific task",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All returned entries have the queried task_name",
+        "Count matches expected number of entries for that task",
+        "Entries are in chronological order"
+      ]
+    },
+    {
+      "id": "entries_by_task_no_match",
+      "description": "entries_by_task returns empty list when no entries match",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned list is empty"
+      ]
+    },
+    {
+      "id": "entries_by_task_case_sensitive",
+      "description": "entries_by_task uses case-sensitive exact match",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Querying 'TaskA' does not return entries for 'taska'"
+      ]
+    },
+    {
+      "id": "entries_by_task_empty_name_error",
+      "description": "entries_by_task raises error for empty task_name",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name error (ValueError)",
+      "assertions": [
+        "Calling with empty string raises appropriate error"
+      ]
+    },
+    {
+      "id": "entries_by_task_does_not_modify_file",
+      "description": "entries_by_task does not modify the audit log file",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File content is identical before and after query"
+      ]
+    },
+    {
+      "id": "entries_by_task_skips_corrupted",
+      "description": "entries_by_task skips corrupted lines without failing",
+      "function": "JsonLinesAuditLogger.entries_by_task",
+      "category": "edge_case",
+      "setup_description": "Manually write corrupted lines interspersed with valid entries",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Valid entries are returned",
+        "Corrupted lines are skipped",
+        "No exception raised"
+      ]
+    },
+    {
+      "id": "entries_by_type_happy",
+      "description": "entries_by_type returns all entries matching the given EventType",
+      "function": "JsonLinesAuditLogger.entries_by_type",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All returned entries have the queried event_type",
+        "Count matches expected",
+        "Entries in chronological order"
+      ]
+    },
+    {
+      "id": "entries_by_type_no_match",
+      "description": "entries_by_type returns empty list when no entries match",
+      "function": "JsonLinesAuditLogger.entries_by_type",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned list is empty"
+      ]
+    },
+    {
+      "id": "entries_by_type_does_not_modify_file",
+      "description": "entries_by_type does not modify the audit log file",
+      "function": "JsonLinesAuditLogger.entries_by_type",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File content is identical before and after query"
+      ]
+    },
+    {
+      "id": "entries_by_type_skips_corrupted",
+      "description": "entries_by_type skips corrupted lines without failing",
+      "function": "JsonLinesAuditLogger.entries_by_type",
+      "category": "edge_case",
+      "setup_description": "Manually write corrupted lines interspersed with valid entries",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Valid entries are returned",
+        "Corrupted lines are skipped"
+      ]
+    },
+    {
+      "id": "entries_in_range_happy",
+      "description": "entries_in_range returns entries within [start, end] inclusive",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All returned entries have timestamps >= start and <= end",
+        "Entries in chronological order"
+      ]
+    },
+    {
+      "id": "entries_in_range_boundary_inclusive",
+      "description": "entries_in_range includes entries exactly at start and end boundaries",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Entry with timestamp == start is included",
+        "Entry with timestamp == end is included"
+      ]
+    },
+    {
+      "id": "entries_in_range_no_match",
+      "description": "entries_in_range returns empty list when no entries in range",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned list is empty"
+      ]
+    },
+    {
+      "id": "entries_in_range_start_after_end",
+      "description": "entries_in_range raises error or returns empty when start > end",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "start_after_end error or empty list",
+      "assertions": [
+        "Appropriate error raised or empty list returned"
+      ]
+    },
+    {
+      "id": "entries_in_range_does_not_modify_file",
+      "description": "entries_in_range does not modify the audit log file",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File content is identical before and after query"
+      ]
+    },
+    {
+      "id": "entries_in_range_skips_corrupted",
+      "description": "entries_in_range skips corrupted lines without failing",
+      "function": "JsonLinesAuditLogger.entries_in_range",
+      "category": "edge_case",
+      "setup_description": "Manually write corrupted lines interspersed with valid entries",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Valid entries are returned",
+        "Corrupted lines are skipped"
+      ]
+    },
+    {
+      "id": "roundtrip_log_and_query",
+      "description": "Log N entries then query all back via entries_by_task, verify count and content integrity",
+      "function": "JsonLinesAuditLogger",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All logged entries can be retrieved",
+        "Retrieved entries match logged entries in content and order"
+      ]
+    },
+    {
+      "id": "append_only_invariant",
+      "description": "The audit log file is strictly append-only across multiple log operations",
+      "function": "JsonLinesAuditLogger.log",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File size only grows",
+        "Previous lines remain unchanged after new entries"
+      ]
+    },
+    {
+      "id": "details_json_serializable",
+      "description": "AuditEntry details dict values must be JSON-serializable",
+      "function": "AuditEntry.to_json_line",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Details with standard JSON types serialize successfully"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the audit_log component.\nCovers AuditEntry, AuditConfig, EventType, and JsonLinesAuditLogger.\n\nRun with: pytest contract_test.py -v\n\"\"\"\n\nimport json\nimport logging\nimport os\nimport stat\nimport sys\nfrom datetime import datetime, timezone, timedelta\nfrom pathlib import Path\nfrom unittest.mock import patch, MagicMock\n\nimport pytest\n\nfrom src.audit_log import (\n    AuditEntry,\n    AuditConfig,\n    AuditLogger,\n    EventType,\n    JsonLinesAuditLogger,\n)\n\n\n# ---------------------------------------------------------------------------\n# Helpers & Fixtures\n# ---------------------------------------------------------------------------\n\nALL_EVENT_TYPES = [\n    \"request_routed\",\n    \"training_example_stored\",\n    \"fine_tune_started\",\n    \"fine_tune_completed\",\n    \"model_validated\",\n    \"model_promoted\",\n    \"phase_transition\",\n    \"budget_warning\",\n    \"confidence_alert\",\n]\n\n\ndef _make_entry(\n    task_name=\"test_task\",\n    event_type=EventType.request_routed,\n    details=None,\n    timestamp=None,\n):\n    kwargs = {\n        \"task_name\": task_name,\n        \"event_type\": event_type,\n        \"details\": details if details is not None else {\"key\": \"value\"},\n    }\n    if timestamp is not None:\n        kwargs[\"timestamp\"] = timestamp\n    return AuditEntry(**kwargs)\n\n\n@pytest.fixture\ndef audit_log_path(tmp_path):\n    return str(tmp_path / \"audit.jsonl\")\n\n\n@pytest.fixture\ndef audit_config(audit_log_path):\n    return AuditConfig(log_path=audit_log_path)\n\n\n@pytest.fixture\ndef audit_logger(audit_config):\n    \"\"\"Fresh JsonLinesAuditLogger for each test; cleans up logging handlers.\"\"\"\n    logger_instance = JsonLinesAuditLogger(config=audit_config)\n    yield logger_instance\n    # Cleanup: remove handlers from the named logger to avoid leaks between tests\n    named_logger = logging.getLogger(\"apprentice.audit\")\n    for handler in named_logger.handlers[:]:\n        handler.close()\n        named_logger.removeHandler(handler)\n\n\n@pytest.fixture\ndef sample_entries():\n    \"\"\"Diverse set of AuditEntry instances for testing.\"\"\"\n    ts_base = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)\n    entries = []\n    for i, et in enumerate(EventType):\n        ts = (ts_base + timedelta(minutes=i)).isoformat()\n        entries.append(\n            _make_entry(\n                task_name=f\"task_{i % 3}\",\n                event_type=et,\n                details={\"index\": i, \"info\": f\"detail_{i}\"},\n                timestamp=ts,\n            )\n        )\n    return entries\n\n\n# ---------------------------------------------------------------------------\n# TestEventType\n# ---------------------------------------------------------------------------\n\n\nclass TestEventType:\n    def test_all_variants_exist(self):\n        \"\"\"EventType enum has exactly 9 variants with correct snake_case values.\"\"\"\n        members = list(EventType)\n        assert len(members) == 9, f\"Expected 9 EventType variants, got {len(members)}\"\n        for name in ALL_EVENT_TYPES:\n            variant = EventType(name)\n            assert variant.value == name, (\n                f\"EventType variant {name} value mismatch: {variant.value}\"\n            )\n\n    def test_rejects_unknown_string(self):\n        \"\"\"EventType rejects unrecognized event strings.\"\"\"\n        with pytest.raises(ValueError):\n            EventType(\"unknown_event\")\n\n    def test_rejects_empty_string(self):\n        \"\"\"EventType rejects empty string.\"\"\"\n        with pytest.raises(ValueError):\n            EventType(\"\")\n\n\n# ---------------------------------------------------------------------------\n# TestAuditEntry\n# ---------------------------------------------------------------------------\n\n\nclass TestAuditEntryToJsonLine:\n    def test_happy_path(self):\n        \"\"\"to_json_line returns valid compact JSON with all required keys.\"\"\"\n        entry = _make_entry()\n        result = entry.to_json_line()\n\n        assert isinstance(result, str), \"Result should be a string\"\n        assert result, \"Result should be non-empty\"\n        assert \"\\n\" not in result, \"Result must not contain newline characters\"\n\n        parsed = json.loads(result)\n        for key in (\"timestamp\", \"task_name\", \"event_type\", \"details\"):\n            assert key in parsed, f\"Missing key '{key}' in JSON output\"\n\n    def test_roundtrip_serialization(self):\n        \"\"\"to_json_line output deserializes back to matching field values.\"\"\"\n        entry = _make_entry(\n            task_name=\"roundtrip_task\",\n            event_type=EventType.fine_tune_started,\n            details={\"x\": 42, \"nested\": {\"a\": True}},\n        )\n        result = entry.to_json_line()\n        parsed = json.loads(result)\n\n        assert parsed[\"task_name\"] == \"roundtrip_task\"\n        assert parsed[\"event_type\"] == \"fine_tune_started\"\n        assert parsed[\"details\"][\"x\"] == 42\n        assert parsed[\"details\"][\"nested\"][\"a\"] is True\n\n    def test_special_characters_and_unicode(self):\n        \"\"\"to_json_line handles unicode and special chars properly.\"\"\"\n        entry = _make_entry(\n            task_name=\"tâche_spéciale_日本語\",\n            details={\"msg\": 'quote\"and\\\\backslash', \"emoji\": \"🎉\"},\n        )\n        result = entry.to_json_line()\n        assert \"\\n\" not in result\n        parsed = json.loads(result)\n        assert parsed[\"task_name\"] == \"tâche_spéciale_日本語\"\n        assert \"🎉\" in parsed[\"details\"][\"emoji\"]\n\n    def test_empty_details(self):\n        \"\"\"to_json_line works with empty details dict.\"\"\"\n        entry = _make_entry(details={})\n        result = entry.to_json_line()\n        parsed = json.loads(result)\n        assert parsed[\"details\"] == {}\n\n    def test_details_json_serializable(self):\n        \"\"\"Details with standard JSON types serialize successfully.\"\"\"\n        entry = _make_entry(\n            details={\n                \"str_val\": \"hello\",\n                \"int_val\": 123,\n                \"float_val\": 1.5,\n                \"bool_val\": True,\n                \"null_val\": None,\n                \"list_val\": [1, 2, 3],\n                \"dict_val\": {\"nested\": \"ok\"},\n            }\n        )\n        result = entry.to_json_line()\n        parsed = json.loads(result)\n        assert parsed[\"details\"][\"int_val\"] == 123\n        assert parsed[\"details\"][\"null_val\"] is None\n\n\nclass TestAuditEntryFrozen:\n    def test_immutable_after_construction(self):\n        \"\"\"AuditEntry is frozen and cannot be mutated after construction.\"\"\"\n        entry = _make_entry()\n        with pytest.raises((AttributeError, TypeError)):\n            entry.task_name = \"modified\"\n        with pytest.raises((AttributeError, TypeError)):\n            entry.event_type = EventType.budget_warning\n        with pytest.raises((AttributeError, TypeError)):\n            entry.details = {\"new\": \"dict\"}\n\n\n# ---------------------------------------------------------------------------\n# TestAuditConfig\n# ---------------------------------------------------------------------------\n\n\nclass TestAuditConfig:\n    def test_valid_config(self, tmp_path):\n        \"\"\"AuditConfig accepts valid log_path with existing writable parent.\"\"\"\n        log_path = str(tmp_path / \"audit.jsonl\")\n        config = AuditConfig(log_path=log_path)\n        assert config.log_path == log_path\n\n    def test_empty_log_path_rejected(self):\n        \"\"\"AuditConfig rejects empty log_path string.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            AuditConfig(log_path=\"\")\n\n    def test_parent_not_exists_rejected(self, tmp_path):\n        \"\"\"AuditConfig rejects log_path whose parent directory does not exist.\"\"\"\n        bad_path = str(tmp_path / \"nonexistent_dir\" / \"audit.jsonl\")\n        with pytest.raises((ValueError, Exception)):\n            AuditConfig(log_path=bad_path)\n\n\n# ---------------------------------------------------------------------------\n# TestJsonLinesAuditLoggerInit\n# ---------------------------------------------------------------------------\n\n\nclass TestJsonLinesAuditLoggerInit:\n    def test_happy_path(self, audit_config, audit_log_path):\n        \"\"\"JsonLinesAuditLogger initializes successfully with valid config.\"\"\"\n        logger = JsonLinesAuditLogger(config=audit_config)\n        assert Path(audit_log_path).exists(), \"Log file should be created\"\n        named = logging.getLogger(\"apprentice.audit\")\n        assert named.propagate is False, \"audit logger must have propagate=False\"\n        # Cleanup\n        for h in named.handlers[:]:\n            h.close()\n            named.removeHandler(h)\n\n    def test_creates_file_if_not_exists(self, audit_config, audit_log_path):\n        \"\"\"Logger creates the log file if it does not exist.\"\"\"\n        assert not Path(audit_log_path).exists()\n        logger = JsonLinesAuditLogger(config=audit_config)\n        assert Path(audit_log_path).exists(), \"Log file should have been created\"\n        for h in logging.getLogger(\"apprentice.audit\").handlers[:]:\n            h.close()\n            logging.getLogger(\"apprentice.audit\").removeHandler(h)\n\n    def test_no_truncate_existing_content(self, audit_config, audit_log_path):\n        \"\"\"Logger does not truncate existing log file content.\"\"\"\n        existing_line = '{\"existing\": \"data\"}\\n'\n        Path(audit_log_path).write_text(existing_line)\n        logger = JsonLinesAuditLogger(config=audit_config)\n        content = Path(audit_log_path).read_text()\n        assert existing_line in content, \"Existing content must be preserved\"\n        for h in logging.getLogger(\"apprentice.audit\").handlers[:]:\n            h.close()\n            logging.getLogger(\"apprentice.audit\").removeHandler(h)\n\n    def test_propagate_false(self, audit_config):\n        \"\"\"The apprentice.audit logger has propagate=False.\"\"\"\n        logger = JsonLinesAuditLogger(config=audit_config)\n        named = logging.getLogger(\"apprentice.audit\")\n        assert named.propagate is False\n        for h in named.handlers[:]:\n            h.close()\n            named.removeHandler(h)\n\n\n# ---------------------------------------------------------------------------\n# TestLog\n# ---------------------------------------------------------------------------\n\n\nclass TestLog:\n    def test_single_entry(self, audit_logger, audit_log_path):\n        \"\"\"Logging a single entry appends exactly one JSONL line.\"\"\"\n        entry = _make_entry()\n        audit_logger.log(entry)\n        lines = Path(audit_log_path).read_text().strip().splitlines()\n        assert len(lines) == 1, f\"Expected 1 line, got {len(lines)}\"\n        parsed = json.loads(lines[0])\n        assert parsed[\"task_name\"] == \"test_task\"\n        assert parsed[\"event_type\"] == \"request_routed\"\n\n    def test_multiple_entries_append_only(self, audit_logger, audit_log_path):\n        \"\"\"Logging multiple entries appends in order without modifying previous.\"\"\"\n        entries = [\n            _make_entry(task_name=f\"task_{i}\", event_type=EventType.request_routed)\n            for i in range(5)\n        ]\n\n        for i, e in enumerate(entries):\n            audit_logger.log(e)\n            lines = Path(audit_log_path).read_text().strip().splitlines()\n            assert len(lines) == i + 1, f\"Expected {i+1} lines after logging entry {i}\"\n\n        lines = Path(audit_log_path).read_text().strip().splitlines()\n        for i, line in enumerate(lines):\n            parsed = json.loads(line)\n            assert parsed[\"task_name\"] == f\"task_{i}\", (\n                f\"Line {i} task_name mismatch\"\n            )\n\n    def test_entry_flushed_immediately(self, audit_logger, audit_log_path):\n        \"\"\"Logged entry is readable from file immediately after log() returns.\"\"\"\n        entry = _make_entry(task_name=\"flush_test\")\n        audit_logger.log(entry)\n        content = Path(audit_log_path).read_text()\n        assert \"flush_test\" in content, \"Entry should be flushed to disk\"\n\n    def test_append_only_invariant(self, audit_logger, audit_log_path):\n        \"\"\"File size only grows; previous lines remain unchanged.\"\"\"\n        entry1 = _make_entry(task_name=\"first\")\n        audit_logger.log(entry1)\n        content_after_first = Path(audit_log_path).read_text()\n\n        entry2 = _make_entry(task_name=\"second\")\n        audit_logger.log(entry2)\n        content_after_second = Path(audit_log_path).read_text()\n\n        assert content_after_second.startswith(content_after_first), (\n            \"New content must be appended, not replacing old content\"\n        )\n        assert len(content_after_second) > len(content_after_first)\n\n\n# ---------------------------------------------------------------------------\n# TestEntriesByTask\n# ---------------------------------------------------------------------------\n\n\nclass TestEntriesByTask:\n    def test_matching_entries(self, audit_logger, sample_entries):\n        \"\"\"entries_by_task returns all entries matching the given task_name.\"\"\"\n        for e in sample_entries:\n            audit_logger.log(e)\n\n        results = audit_logger.entries_by_task(\"task_0\")\n        assert len(results) > 0, \"Should find at least one match\"\n        for entry in results:\n            assert entry.task_name == \"task_0\", (\n                f\"Returned entry has wrong task_name: {entry.task_name}\"\n            )\n\n    def test_no_match_returns_empty(self, audit_logger, sample_entries):\n        \"\"\"entries_by_task returns empty list when no entries match.\"\"\"\n        for e in sample_entries:\n            audit_logger.log(e)\n        results = audit_logger.entries_by_task(\"nonexistent_task\")\n        assert results == [], f\"Expected empty list, got {len(results)} entries\"\n\n    def test_case_sensitive_match(self, audit_logger):\n        \"\"\"entries_by_task uses case-sensitive exact match.\"\"\"\n        audit_logger.log(_make_entry(task_name=\"TaskA\"))\n        audit_logger.log(_make_entry(task_name=\"taska\"))\n\n        results_upper = audit_logger.entries_by_task(\"TaskA\")\n        results_lower = audit_logger.entries_by_task(\"taska\")\n\n        assert len(results_upper) == 1\n        assert results_upper[0].task_name == \"TaskA\"\n        assert len(results_lower) == 1\n        assert results_lower[0].task_name == \"taska\"\n\n    def test_empty_task_name_error(self, audit_logger):\n        \"\"\"entries_by_task raises error for empty task_name.\"\"\"\n        with pytest.raises((ValueError, Exception)):\n            audit_logger.entries_by_task(\"\")\n\n    def test_does_not_modify_file(self, audit_logger, audit_log_path, sample_entries):\n        \"\"\"entries_by_task does not modify the audit log file.\"\"\"\n        for e in sample_entries:\n            audit_logger.log(e)\n        content_before = Path(audit_log_path).read_text()\n        audit_logger.entries_by_task(\"task_0\")\n        content_after = Path(audit_log_path).read_text()\n        assert content_before == content_after, \"Query must not modify the file\"\n\n    def test_skips_corrupted_lines(self, audit_logger, audit_log_path):\n        \"\"\"entries_by_task skips corrupted lines without failing.\"\"\"\n        audit_logger.log(_make_entry(task_name=\"valid_task\"))\n        # Manually inject a corrupted line\n        with open(audit_log_path, \"a\") as f:\n            f.write(\"THIS IS NOT VALID JSON\\n\")\n        audit_logger.log(_make_entry(task_name=\"valid_task\"))\n\n        results = audit_logger.entries_by_task(\"valid_task\")\n        assert len(results) == 2, (\n            f\"Expected 2 valid entries, got {len(results)}\"\n        )\n\n    def test_chronological_order(self, audit_logger):\n        \"\"\"entries_by_task returns entries in chronological (file) order.\"\"\"\n        ts_base = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)\n        for i in range(5):\n            ts = (ts_base + timedelta(seconds=i)).isoformat()\n            audit_logger.log(_make_entry(task_name=\"ordered\", timestamp=ts))\n\n        results = audit_logger.entries_by_task(\"ordered\")\n        timestamps = [e.timestamp for e in results]\n        assert timestamps == sorted(timestamps), \"Entries must be in chronological order\"\n\n\n# ---------------------------------------------------------------------------\n# TestEntriesByType\n# ---------------------------------------------------------------------------\n\n\nclass TestEntriesByType:\n    def test_happy_path(self, audit_logger, sample_entries):\n        \"\"\"entries_by_type returns all entries matching the given EventType.\"\"\"\n        for e in sample_entries:\n            audit_logger.log(e)\n\n        target_type = EventType.fine_tune_started\n        results = audit_logger.entries_by_type(target_type)\n        assert len(results) > 0, \"Should find at least one match\"\n        for entry in results:\n            assert entry.event_type == target_type, (\n                f\"Returned entry has wrong event_type: {entry.event_type}\"\n            )\n\n    def test_no_match_returns_empty(self, audit_logger):\n        \"\"\"entries_by_type returns empty list when no entries match.\"\"\"\n        audit_logger.log(_make_entry(event_type=EventType.request_routed))\n        results = audit_logger.entries_by_type(EventType.budget_warning)\n        assert results == []\n\n    def test_does_not_modify_file(self, audit_logger, audit_log_path, sample_entries):\n        \"\"\"entries_by_type does not modify the audit log file.\"\"\"\n        for e in sample_entries:\n            audit_logger.log(e)\n        content_before = Path(audit_log_path).read_text()\n        audit_logger.entries_by_type(EventType.request_routed)\n        content_after = Path(audit_log_path).read_text()\n        assert content_before == content_after\n\n    def test_skips_corrupted_lines(self, audit_logger, audit_log_path):\n        \"\"\"entries_by_type skips corrupted lines without failing.\"\"\"\n        audit_logger.log(_make_entry(event_type=EventType.model_promoted))\n        with open(audit_log_path, \"a\") as f:\n            f.write(\"{bad json\\n\")\n        audit_logger.log(_make_entry(event_type=EventType.model_promoted))\n\n        results = audit_logger.entries_by_type(EventType.model_promoted)\n        assert len(results) == 2\n\n\n# ---------------------------------------------------------------------------\n# TestEntriesInRange\n# ---------------------------------------------------------------------------\n\n\nclass TestEntriesInRange:\n    def _log_timed_entries(self, audit_logger):\n        \"\"\"Log entries with known timestamps, return (entries, timestamps).\"\"\"\n        ts_base = datetime(2024, 3, 1, 0, 0, 0, tzinfo=timezone.utc)\n        timestamps = []\n        for i in range(5):\n            ts = (ts_base + timedelta(hours=i)).isoformat()\n            timestamps.append(ts)\n            audit_logger.log(_make_entry(task_name=f\"timed_{i}\", timestamp=ts))\n        return timestamps\n\n    def test_happy_path(self, audit_logger):\n        \"\"\"entries_in_range returns entries within [start, end] inclusive.\"\"\"\n        timestamps = self._log_timed_entries(audit_logger)\n        start = timestamps[1]\n        end = timestamps[3]\n        results = audit_logger.entries_in_range(start, end)\n        assert len(results) == 3, f\"Expected 3 entries in range, got {len(results)}\"\n        for entry in results:\n            assert entry.timestamp >= start\n            assert entry.timestamp <= end\n\n    def test_boundary_inclusivity(self, audit_logger):\n        \"\"\"entries_in_range includes entries exactly at start and end boundaries.\"\"\"\n        timestamps = self._log_timed_entries(audit_logger)\n        start = timestamps[0]\n        end = timestamps[4]\n        results = audit_logger.entries_in_range(start, end)\n        result_timestamps = [e.timestamp for e in results]\n        # The boundary timestamps should be included\n        assert any(t == start for t in result_timestamps), \"Start boundary must be inclusive\"\n        assert any(t == end for t in result_timestamps), \"End boundary must be inclusive\"\n\n    def test_no_match_empty_list(self, audit_logger):\n        \"\"\"entries_in_range returns empty list when no entries in range.\"\"\"\n        self._log_timed_entries(audit_logger)\n        far_future_start = datetime(2099, 1, 1, tzinfo=timezone.utc).isoformat()\n        far_future_end = datetime(2099, 12, 31, tzinfo=timezone.utc).isoformat()\n        results = audit_logger.entries_in_range(far_future_start, far_future_end)\n        assert results == []\n\n    def test_start_after_end(self, audit_logger):\n        \"\"\"entries_in_range raises error or returns empty when start > end.\"\"\"\n        self._log_timed_entries(audit_logger)\n        later = datetime(2024, 6, 1, tzinfo=timezone.utc).isoformat()\n        earlier = datetime(2024, 1, 1, tzinfo=timezone.utc).isoformat()\n        try:\n            results = audit_logger.entries_in_range(later, earlier)\n            # If no exception, should return empty list\n            assert results == [], \"start > end should yield empty list or raise error\"\n        except (ValueError, Exception):\n            pass  # Raising an error is also acceptable per contract\n\n    def test_does_not_modify_file(self, audit_logger, audit_log_path):\n        \"\"\"entries_in_range does not modify the audit log file.\"\"\"\n        timestamps = self._log_timed_entries(audit_logger)\n        content_before = Path(audit_log_path).read_text()\n        audit_logger.entries_in_range(timestamps[0], timestamps[-1])\n        content_after = Path(audit_log_path).read_text()\n        assert content_before == content_after\n\n    def test_skips_corrupted_lines(self, audit_logger, audit_log_path):\n        \"\"\"entries_in_range skips corrupted lines without failing.\"\"\"\n        timestamps = self._log_timed_entries(audit_logger)\n        with open(audit_log_path, \"a\") as f:\n            f.write(\"CORRUPTED LINE HERE\\n\")\n        results = audit_logger.entries_in_range(timestamps[0], timestamps[-1])\n        assert len(results) == 5, \"Should return all 5 valid entries, skipping corrupted\"\n\n\n# ---------------------------------------------------------------------------\n# TestRoundTrip\n# ---------------------------------------------------------------------------\n\n\nclass TestRoundTrip:\n    def test_log_and_query_all_back(self, audit_logger):\n        \"\"\"Log N entries then query all back, verify count and content integrity.\"\"\"\n        entries = []\n        for i in range(10):\n            e = _make_entry(\n                task_name=\"roundtrip\",\n                event_type=EventType.request_routed,\n                details={\"index\": i},\n            )\n            entries.append(e)\n            audit_logger.log(e)\n\n        results = audit_logger.entries_by_task(\"roundtrip\")\n        assert len(results) == 10, f\"Expected 10 entries, got {len(results)}\"\n\n        for i, result in enumerate(results):\n            assert result.task_name == \"roundtrip\"\n            assert result.event_type == EventType.request_routed\n            assert result.details[\"index\"] == i, (\n                f\"Entry {i} details mismatch: {result.details}\"\n            )\n\n    def test_mixed_types_filtered_correctly(self, audit_logger):\n        \"\"\"Log entries of various types, filter returns only the requested type.\"\"\"\n        types_logged = [\n            EventType.request_routed,\n            EventType.budget_warning,\n            EventType.request_routed,\n            EventType.fine_tune_completed,\n            EventType.budget_warning,\n        ]\n        for et in types_logged:\n            audit_logger.log(_make_entry(event_type=et))\n\n        routed = audit_logger.entries_by_type(EventType.request_routed)\n        assert len(routed) == 2\n\n        warnings = audit_logger.entries_by_type(EventType.budget_warning)\n        assert len(warnings) == 2\n\n        completed = audit_logger.entries_by_type(EventType.fine_tune_completed)\n        assert len(completed) == 1\n"
+}
