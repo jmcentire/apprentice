@@ -1,0 +1,884 @@
+{
+  "component_id": "phase_manager",
+  "name": "Phase Manager",
+  "description": "Determines the current phase per task type based on training example count and confidence scores. Phase 1→2 transition: when training example count >= phase1_to_phase2 threshold AND a local model is available. Phase 2→3 transition: when rolling correlation >= phase2_to_phase3 threshold over a sustained number of consecutive windows. Phase 3→2 regression: when correlation drops below coaching_trigger. Phase 3→1 emergency: when correlation drops below emergency_threshold, revert to full remote serving. Transitions are logged as audit events. Phase is derived (computed from state), not stored as a discrete flag — emergent from confidence scores. Quality-based phase is separated from effective operational mode; infrastructure degradation (e.g., local model unavailability) is handled by the caller per error handling rules.",
+  "version": 1,
+  "types": [
+    {
+      "name": "Phase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE_ONLY",
+        "COACHING",
+        "AUTONOMOUS"
+      ],
+      "inner_types": [],
+      "description": "Quality-based operational phase derived from confidence metrics. Not an IntEnum — explicit ordering via a 'level' property (REMOTE_ONLY=1, COACHING=2, AUTONOMOUS=3). Phase is emergent from scores, never manually set."
+    },
+    {
+      "name": "TrendDirection",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "IMPROVING",
+        "STABLE",
+        "DEGRADING"
+      ],
+      "inner_types": [],
+      "description": "Direction of the rolling correlation trend over consecutive evaluation windows."
+    },
+    {
+      "name": "TransitionTrigger",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "EXAMPLE_COUNT_AND_MODEL_READY",
+        "SUSTAINED_CORRELATION_ABOVE_THRESHOLD",
+        "CORRELATION_BELOW_COACHING_TRIGGER",
+        "CORRELATION_BELOW_EMERGENCY_THRESHOLD",
+        "INITIAL_ASSIGNMENT"
+      ],
+      "inner_types": [],
+      "description": "Structured reason for a phase transition, used in audit events for machine-readable logging."
+    },
+    {
+      "name": "PhaseThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase1_to_phase2_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of training examples required before transitioning from Phase 1 (REMOTE_ONLY) to Phase 2 (COACHING).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "phase1_to_phase2_example_count must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "phase2_to_phase3_correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Minimum rolling correlation score required for Phase 2→3 transition. Must be in (0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "phase2_to_phase3_correlation must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "coaching_trigger",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation threshold below which Phase 3 regresses to Phase 2 (COACHING). Must be less than phase2_to_phase3_correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value < 1.0",
+              "error_message": "coaching_trigger must be in (0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "emergency_threshold",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation threshold below which Phase 3 or Phase 2 emergency-reverts to Phase 1 (REMOTE_ONLY). Must be less than coaching_trigger.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value < 1.0",
+              "error_message": "emergency_threshold must be in [0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "sustained_windows",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Number of consecutive evaluation windows where rolling correlation must be >= phase2_to_phase3_correlation before Phase 2→3 transition is granted. Expressed as window counts for deterministic testability, not wall-clock time.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "sustained_windows must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "cooldown_windows",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Minimum number of evaluation windows that must elapse after a transition before another transition is permitted. Prevents oscillation. 0 disables cooldown.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "cooldown_windows must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration model for phase transition thresholds. Frozen Pydantic model. Has a model_validator enforcing invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation. Loaded from YAML config. Fails fast on invalid ordering at construction time."
+    },
+    {
+      "name": "PhaseMetrics",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the task type this metrics snapshot pertains to.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of training examples accumulated for this task type.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "example_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "rolling_correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current rolling correlation score from the quality tracking system's evaluation window. NaN or negative values indicate insufficient data.",
+          "validators": []
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a local fine-tuned model is currently available and ready for inference for this task. Required for Phase 1→2 transition.",
+          "validators": []
+        },
+        {
+          "name": "consecutive_windows_above_threshold",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of consecutive recent evaluation windows where rolling_correlation was >= phase2_to_phase3_correlation threshold. Used for sustained-period check on Phase 2→3 transition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_windows_above_threshold must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "trend_direction",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Direction of the correlation trend over recent consecutive windows, as determined by the quality tracking system.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model containing all inputs needed to compute the current quality-based phase for a single task. Pure data — no behavior. Immutable snapshot of current task state at evaluation time."
+    },
+    {
+      "name": "PhaseTransition",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier for which the transition occurred.",
+          "validators": []
+        },
+        {
+          "name": "from_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase the task was in prior to this transition.",
+          "validators": []
+        },
+        {
+          "name": "to_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase the task has transitioned to.",
+          "validators": []
+        },
+        {
+          "name": "trigger",
+          "type_ref": "TransitionTrigger",
+          "required": true,
+          "default": "",
+          "description": "Structured reason that caused this transition.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 timestamp of when the transition was detected. Injected via clock protocol for testability, not computed internally.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+              "error_message": "timestamp must be ISO 8601 format"
+            }
+          ]
+        },
+        {
+          "name": "metrics_snapshot",
+          "type_ref": "PhaseMetrics",
+          "required": true,
+          "default": "",
+          "description": "Complete frozen snapshot of the PhaseMetrics at the moment of transition, for full audit traceability.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing an audit event for a phase transition. Serializable to JSON for structured logging. Immutable record of a detected phase change."
+    },
+    {
+      "name": "PhaseComputationResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The quality-based phase derived from the provided metrics and thresholds.",
+          "validators": []
+        },
+        {
+          "name": "trigger",
+          "type_ref": "TransitionTrigger",
+          "required": true,
+          "default": "",
+          "description": "The transition trigger that best describes why this phase was computed. INITIAL_ASSIGNMENT if no prior phase context.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of the pure phase computation. Contains the derived phase and the trigger reason that would apply if this represents a transition from a different phase."
+    },
+    {
+      "name": "TaskPhaseState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type identifier.",
+          "validators": []
+        },
+        {
+          "name": "current_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The most recently computed phase for this task.",
+          "validators": []
+        },
+        {
+          "name": "windows_since_last_transition",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of evaluation windows that have elapsed since the last phase transition for this task. Used for cooldown enforcement.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "windows_since_last_transition must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "transition_history",
+          "type_ref": "PhaseTransitionList",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of all phase transitions for this task, oldest first.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Per-task mutable state tracked by the PhaseManager for transition detection, cooldown enforcement, and history. Held in a dict keyed by task_id within the PhaseManager."
+    },
+    {
+      "name": "PhaseTransitionList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PhaseTransition",
+      "variants": [],
+      "inner_types": [],
+      "description": "Ordered list of PhaseTransition audit events."
+    },
+    {
+      "name": "EvaluateResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "current_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The derived quality-based phase after evaluation.",
+          "validators": []
+        },
+        {
+          "name": "transition",
+          "type_ref": "OptionalPhaseTransition",
+          "required": true,
+          "default": "",
+          "description": "The phase transition event if a transition occurred, or None if the phase did not change.",
+          "validators": []
+        },
+        {
+          "name": "cooldown_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if a transition was suppressed due to cooldown enforcement. The computed phase would have changed but cooldown prevented it.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of evaluating a task's metrics through the PhaseManager. Contains the current phase and an optional transition event if a phase change was detected."
+    },
+    {
+      "name": "OptionalPhaseTransition",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "PhaseTransition"
+      ],
+      "description": "Optional PhaseTransition — present when a transition occurred, None otherwise."
+    },
+    {
+      "name": "TaskPhaseStateMap",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "states",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping of task_id (str) to TaskPhaseState.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Dictionary-like container mapping task_id strings to their TaskPhaseState. Used for bulk state inspection and serialization."
+    },
+    {
+      "name": "Clock",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "now",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Method signature: () -> str. Returns current time as ISO 8601 string. Represented here as the protocol's callable interface.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol (structural typing) for a clock dependency. Must provide a now() method returning an ISO 8601 timestamp string. Injected for testability — production uses real clock, tests use a deterministic stub."
+    }
+  ],
+  "functions": [
+    {
+      "name": "compute_phase",
+      "description": "Pure computation core. Derives the quality-based Phase from a frozen PhaseMetrics snapshot and PhaseThresholds configuration. This function is pure, deterministic, stateless, and trivially unit-testable. It does not consider previous phase, cooldown, or transition history — only current metrics vs. thresholds. The caller (PhaseManager.evaluate) handles statefulness. Logic: (1) If rolling_correlation < emergency_threshold → REMOTE_ONLY. (2) If rolling_correlation < coaching_trigger → COACHING (if example_count >= phase1_to_phase2_example_count and local_model_available, else REMOTE_ONLY). (3) If example_count < phase1_to_phase2_example_count or not local_model_available → REMOTE_ONLY. (4) If consecutive_windows_above_threshold >= sustained_windows → AUTONOMOUS. (5) Otherwise → COACHING.",
+      "inputs": [
+        {
+          "name": "metrics",
+          "type_ref": "PhaseMetrics",
+          "required": true,
+          "default": "",
+          "description": "Frozen snapshot of current task metrics.",
+          "validators": []
+        },
+        {
+          "name": "thresholds",
+          "type_ref": "PhaseThresholds",
+          "required": true,
+          "default": "",
+          "description": "Phase transition threshold configuration.",
+          "validators": []
+        }
+      ],
+      "output_type": "PhaseComputationResult",
+      "error_cases": [
+        {
+          "name": "nan_correlation",
+          "condition": "metrics.rolling_correlation is NaN (not a valid number)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "rolling_correlation must be a valid float, not NaN. Caller must handle insufficient data before invoking compute_phase."
+          }
+        },
+        {
+          "name": "invalid_thresholds",
+          "condition": "PhaseThresholds invariant violated: emergency_threshold >= coaching_trigger or coaching_trigger >= phase2_to_phase3_correlation",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "PhaseThresholds invariant violated: must have emergency_threshold < coaching_trigger < phase2_to_phase3_correlation"
+          }
+        }
+      ],
+      "preconditions": [
+        "metrics is a valid frozen PhaseMetrics instance",
+        "thresholds is a valid PhaseThresholds instance (invariant emergency_threshold < coaching_trigger < phase2_to_phase3_correlation holds)",
+        "metrics.rolling_correlation is not NaN (caller must handle NaN as insufficient data before calling)"
+      ],
+      "postconditions": [
+        "Returned PhaseComputationResult.phase is one of Phase.REMOTE_ONLY, Phase.COACHING, or Phase.AUTONOMOUS",
+        "If metrics.rolling_correlation < thresholds.emergency_threshold then result.phase == Phase.REMOTE_ONLY",
+        "If metrics.local_model_available is False then result.phase in {Phase.REMOTE_ONLY, Phase.COACHING} — never AUTONOMOUS without model readiness consideration at coaching level",
+        "If metrics.example_count < thresholds.phase1_to_phase2_example_count then result.phase == Phase.REMOTE_ONLY",
+        "If result.phase == Phase.AUTONOMOUS then metrics.consecutive_windows_above_threshold >= thresholds.sustained_windows",
+        "Result is fully determined by inputs — same inputs always produce same output",
+        "Returned trigger accurately describes the dominant reason for the computed phase"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function — no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "evaluate",
+      "description": "Stateful transition detection layer. Takes current PhaseMetrics for a task, computes the quality-based phase via compute_phase(), diffs against the previously recorded phase for that task, enforces optional cooldown/debounce, and emits a PhaseTransition audit event if the phase changed. Updates internal per-task state (TaskPhaseState). If the task_id has not been seen before, it is initialized to REMOTE_ONLY and the first evaluation may produce an INITIAL_ASSIGNMENT transition. The timestamp for any transition event is obtained from the injected Clock protocol.",
+      "inputs": [
+        {
+          "name": "metrics",
+          "type_ref": "PhaseMetrics",
+          "required": true,
+          "default": "",
+          "description": "Frozen snapshot of current task metrics.",
+          "validators": []
+        },
+        {
+          "name": "thresholds",
+          "type_ref": "PhaseThresholds",
+          "required": true,
+          "default": "",
+          "description": "Phase transition threshold configuration.",
+          "validators": []
+        }
+      ],
+      "output_type": "EvaluateResult",
+      "error_cases": [
+        {
+          "name": "nan_correlation",
+          "condition": "metrics.rolling_correlation is NaN",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "rolling_correlation must not be NaN. Caller must handle insufficient data."
+          }
+        },
+        {
+          "name": "clock_failure",
+          "condition": "Injected Clock.now() raises an exception or returns invalid ISO 8601 string",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "message": "Clock dependency failed to provide valid ISO 8601 timestamp."
+          }
+        }
+      ],
+      "preconditions": [
+        "PhaseManager has been initialized with a valid Clock dependency",
+        "metrics is a valid frozen PhaseMetrics instance with non-NaN rolling_correlation",
+        "thresholds is a valid PhaseThresholds instance passing all validators and model invariants"
+      ],
+      "postconditions": [
+        "Internal TaskPhaseState for metrics.task_id is updated to reflect the computed phase (unless cooldown suppressed the transition)",
+        "If a transition occurred, EvaluateResult.transition is a frozen PhaseTransition with correct from_phase, to_phase, trigger, timestamp, and metrics_snapshot",
+        "If no transition occurred, EvaluateResult.transition is None",
+        "If cooldown suppressed a transition, EvaluateResult.cooldown_active is True and current_phase reflects the PREVIOUS phase (not the computed one)",
+        "windows_since_last_transition is incremented by 1 for the task, or reset to 0 if a transition occurred",
+        "The PhaseTransition (if any) is appended to the task's transition_history"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Updates internal per-task state (TaskPhaseState) including current_phase, windows_since_last_transition, and transition_history"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "TaskPhaseState for the given task_id",
+          "description": "Updates current_phase, windows_since_last_transition, and appends to transition_history if transition detected."
+        },
+        {
+          "kind": "logging",
+          "target": "structured audit log",
+          "description": "Logs PhaseTransition as JSON audit event if a transition occurred."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_task_phase",
+      "description": "Returns the current quality-based phase for a given task. If the task_id has never been evaluated, returns Phase.REMOTE_ONLY (the default initial phase). This is a read-only query — no state mutation, no transition detection.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the task type to query.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "Phase",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_id must be a non-empty string."
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "If task_id has been previously evaluated, returns the most recently computed phase for that task",
+        "If task_id has never been evaluated, returns Phase.REMOTE_ONLY",
+        "No internal state is mutated"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only query, no state mutation."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "get_task_state",
+      "description": "Returns the full TaskPhaseState for a given task, including current phase, windows since last transition, and complete transition history. Returns None if the task_id has never been evaluated. Useful for debugging, auditing, and exposing state to the ConfidenceSnapshot builder.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the task type to query.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "OptionalTaskPhaseState",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_id must be a non-empty string."
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "If task_id has been previously evaluated, returns the full TaskPhaseState",
+        "If task_id has never been evaluated, returns None",
+        "No internal state is mutated"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only query, no state mutation."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "get_transition_history",
+      "description": "Returns the complete ordered list of PhaseTransition audit events for a given task. Returns an empty list if the task has never transitioned or has never been evaluated. Useful for audit trail inspection and debugging.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the task type to query.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "PhaseTransitionList",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_id must be a non-empty string."
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "Returned list is ordered chronologically, oldest transition first",
+        "If task_id has never been evaluated, returns an empty list",
+        "No internal state is mutated"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Read-only query, no state mutation."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "reset_task",
+      "description": "Removes all tracked state for a given task_id, including current phase, cooldown counters, and transition history. After reset, the task will be treated as never-evaluated on the next call to evaluate(). Logs a structured audit event recording the reset. Returns True if the task existed and was reset, False if the task_id was not tracked.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the task type to reset.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [
+        {
+          "name": "empty_task_id",
+          "condition": "task_id is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_id must be a non-empty string."
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "If task_id was tracked, all state for that task is removed and True is returned",
+        "If task_id was not tracked, no state is modified and False is returned",
+        "After reset, get_task_phase(task_id) returns Phase.REMOTE_ONLY",
+        "After reset, get_task_state(task_id) returns None",
+        "After reset, get_transition_history(task_id) returns an empty list"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "TaskPhaseState for the given task_id",
+          "description": "Removes all tracked state for the task."
+        },
+        {
+          "kind": "logging",
+          "target": "structured audit log",
+          "description": "Logs a task reset event as JSON audit record."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_thresholds",
+      "description": "Validates a PhaseThresholds instance, checking both individual field constraints and the cross-field invariant (emergency_threshold < coaching_trigger < phase2_to_phase3_correlation). Intended for use at config load time to fail fast on invalid configuration. Returns the validated PhaseThresholds if valid; raises on any violation. This is a static/standalone function, not requiring PhaseManager state.",
+      "inputs": [
+        {
+          "name": "thresholds",
+          "type_ref": "PhaseThresholds",
+          "required": true,
+          "default": "",
+          "description": "PhaseThresholds instance to validate.",
+          "validators": []
+        }
+      ],
+      "output_type": "PhaseThresholds",
+      "error_cases": [
+        {
+          "name": "threshold_ordering_violation",
+          "condition": "emergency_threshold >= coaching_trigger OR coaching_trigger >= phase2_to_phase3_correlation",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "PhaseThresholds invariant violated: must have emergency_threshold < coaching_trigger < phase2_to_phase3_correlation. Got emergency_threshold={emergency_threshold}, coaching_trigger={coaching_trigger}, phase2_to_phase3_correlation={phase2_to_phase3_correlation}"
+          }
+        },
+        {
+          "name": "invalid_example_count",
+          "condition": "phase1_to_phase2_example_count < 1",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "phase1_to_phase2_example_count must be at least 1"
+          }
+        },
+        {
+          "name": "invalid_sustained_windows",
+          "condition": "sustained_windows < 1",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "sustained_windows must be at least 1"
+          }
+        },
+        {
+          "name": "invalid_cooldown_windows",
+          "condition": "cooldown_windows < 0",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "cooldown_windows must be non-negative"
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "If returned without error, the PhaseThresholds instance satisfies: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation",
+        "If returned without error, all individual field validators pass",
+        "The returned PhaseThresholds is the same instance as the input (passthrough on success)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure validation — no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "Phase is always derived from metrics, never stored as a manually-set flag — it is emergent from confidence scores",
+    "PhaseThresholds invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation — enforced at construction and validated at config load",
+    "Phase.REMOTE_ONLY is the universal default — any unknown task, any initialization, any emergency scenario reverts to REMOTE_ONLY",
+    "Phase transitions are always logged as structured JSON audit events via the logging side effect",
+    "Cooldown enforcement may suppress a transition but never alters the computed phase — it only delays the state update",
+    "compute_phase is a pure function: same PhaseMetrics + PhaseThresholds inputs always produce the same PhaseComputationResult output",
+    "Phase 2→3 transition requires consecutive_windows_above_threshold >= sustained_windows — sustained period is measured in window counts, not wall-clock time",
+    "Phase 1→2 transition requires BOTH sufficient example_count AND local_model_available — either condition alone is insufficient",
+    "Emergency revert (→ Phase 1) can occur from any phase when correlation drops below emergency_threshold",
+    "No global state — all state flows through explicit parameters, injected dependencies (Clock), or per-task state dictionaries within the PhaseManager instance",
+    "Timestamps in PhaseTransition events are always obtained from the injected Clock protocol, never from system clock directly, ensuring testability",
+    "Quality-based Phase is separated from effective operational mode — Phase Manager computes quality phase only; infrastructure degradation (local model down, budget exhausted) is handled by the caller"
+  ],
+  "requires": [
+    "pydantic>=2.0"
+  ]
+}

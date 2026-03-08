@@ -1,0 +1,649 @@
+{
+  "root_id": "root",
+  "nodes": {
+    "root": {
+      "component_id": "root",
+      "name": "Project Root",
+      "description": "Adopted codebase at /Users/jmcentire/Code/apprentice",
+      "depth": 0,
+      "parent_id": "",
+      "children": [
+        "docker",
+        "examples",
+        "src"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "docker": {
+      "component_id": "docker",
+      "name": "Docker",
+      "description": "Package: docker",
+      "depth": 1,
+      "parent_id": "root",
+      "children": [
+        "docker_trainer"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "docker_trainer": {
+      "component_id": "docker_trainer",
+      "name": "Trainer",
+      "description": "Package: docker/trainer",
+      "depth": 2,
+      "parent_id": "docker",
+      "children": [
+        "docker_trainer_train"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "docker_trainer_train": {
+      "component_id": "docker_trainer_train",
+      "name": "Train",
+      "description": "Module docker/trainer/train.py: _retry, _cleanup_work_dir, main, format_chat",
+      "depth": 3,
+      "parent_id": "docker_trainer",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "examples": {
+      "component_id": "examples",
+      "name": "Examples",
+      "description": "Package: examples",
+      "depth": 1,
+      "parent_id": "root",
+      "children": [
+        "examples_wos_client"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "examples_wos_client": {
+      "component_id": "examples_wos_client",
+      "name": "Wos Client",
+      "description": "Module examples/wos_client.py: main",
+      "depth": 2,
+      "parent_id": "examples",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src": {
+      "component_id": "src",
+      "name": "Src",
+      "description": "Package: src",
+      "depth": 1,
+      "parent_id": "root",
+      "children": [
+        "src_apprentice"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice": {
+      "component_id": "src_apprentice",
+      "name": "Apprentice",
+      "description": "Package: src/apprentice",
+      "depth": 2,
+      "parent_id": "src",
+      "children": [
+        "src_apprentice_apprentice_class",
+        "src_apprentice_audit_log",
+        "src_apprentice_audit_log_adapter",
+        "src_apprentice_budget_manager",
+        "src_apprentice_confidence_engine",
+        "src_apprentice_config_and_registry",
+        "src_apprentice_config_loader",
+        "src_apprentice_data_models",
+        "src_apprentice_evaluators",
+        "src_apprentice_event_handler",
+        "src_apprentice_external_interfaces",
+        "src_apprentice_factory",
+        "src_apprentice_feedback_collector",
+        "src_apprentice_fine_tuning_orchestrator",
+        "src_apprentice_kubernetes_lora_backend",
+        "src_apprentice_local_model_server",
+        "src_apprentice_middleware",
+        "src_apprentice_model_validator",
+        "src_apprentice_observer",
+        "src_apprentice_phase_manager",
+        "src_apprentice_pii_detection",
+        "src_apprentice_pii_evaluation",
+        "src_apprentice_pii_tokenizer",
+        "src_apprentice_plugin_registry",
+        "src_apprentice_remote_api_client",
+        "src_apprentice_reporting",
+        "src_apprentice_rolling_window",
+        "src_apprentice_router",
+        "src_apprentice_sampling_scheduler",
+        "src_apprentice_task_registry",
+        "src_apprentice_training_data_store",
+        "src_apprentice_training_pipeline",
+        "src_apprentice_unified_interface",
+        "src_apprentice_wos_handler",
+        "src_apprentice_cli",
+        "src_apprentice_root",
+        "src_apprentice_report_generator"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_apprentice_class": {
+      "component_id": "src_apprentice_apprentice_class",
+      "name": "Apprentice Class",
+      "description": "Module src/apprentice/apprentice_class.py: validate_threshold_ordering, __init__, __init__, __init__, __init__ (+17 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_audit_log": {
+      "component_id": "src_apprentice_audit_log",
+      "name": "Audit Log",
+      "description": "Module src/apprentice/audit_log.py: _log, format, validate_timestamp, to_json_line, __setattr__ (+12 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_audit_log_adapter": {
+      "component_id": "src_apprentice_audit_log_adapter",
+      "name": "Audit Log Adapter",
+      "description": "Module src/apprentice/audit_log_adapter.py: _to_child_event_type, _wrap_child_entry, __init__, log_path, max_file_size_mb (+16 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_budget_manager": {
+      "component_id": "src_apprentice_budget_manager",
+      "name": "Budget Manager",
+      "description": "Module src/apprentice/budget_manager.py: _log, format, validate_limit_positive, validate_period_limits_not_empty, validate_timezone (+27 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_confidence_engine": {
+      "component_id": "src_apprentice_confidence_engine",
+      "name": "Confidence Engine",
+      "description": "Module src/apprentice/confidence_engine.py: _log, __init__, record_comparison, get_snapshot, get_all_snapshots (+6 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_config_and_registry": {
+      "component_id": "src_apprentice_config_and_registry",
+      "name": "Config And Registry",
+      "description": "Module src/apprentice/config_and_registry.py: validate_model, __init__",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_config_loader": {
+      "component_id": "src_apprentice_config_loader",
+      "name": "Config Loader",
+      "description": "Module src/apprentice/config_loader.py: get_unresolved_vars, resolve_env_var, load_config, validate_cross_field_constraints, __init__ (+11 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_data_models": {
+      "component_id": "src_apprentice_data_models",
+      "name": "Data Models",
+      "description": "Module src/apprentice/data_models.py: create_task_request, create_task_response, create_confidence_snapshot, create_budget_state, record_cost (+31 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_evaluators": {
+      "component_id": "src_apprentice_evaluators",
+      "name": "Evaluators",
+      "description": "Module src/apprentice/evaluators.py: _log, clamp_score, cosine_similarity, create_evaluator, format (+14 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_event_handler": {
+      "component_id": "src_apprentice_event_handler",
+      "name": "Event Handler",
+      "description": "Module src/apprentice/event_handler.py: _resolve_callable, _level_from_string, format, format, __init__ (+5 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_external_interfaces": {
+      "component_id": "src_apprentice_external_interfaces",
+      "name": "External Interfaces",
+      "description": "Module src/apprentice/external_interfaces.py: map_remote_error, map_local_unavailable, map_local_success_to_response, map_remote_response, create_remote_adapter (+21 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_factory": {
+      "component_id": "src_apprentice_factory",
+      "name": "Factory",
+      "description": "Module src/apprentice/factory.py: build_from_config, __init__, check_budget, record_spend, __init__ (+11 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_feedback_collector": {
+      "component_id": "src_apprentice_feedback_collector",
+      "name": "Feedback Collector",
+      "description": "Module src/apprentice/feedback_collector.py: _log, __init__, _task_file, _ensure_dir, _read_entries (+4 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_fine_tuning_orchestrator": {
+      "component_id": "src_apprentice_fine_tuning_orchestrator",
+      "name": "Fine Tuning Orchestrator",
+      "description": "Module src/apprentice/fine_tuning_orchestrator.py: parse_orchestrator_config, validate_iso8601, validate_iso8601, validate_iso8601, validate_count_matches_ids (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_kubernetes_lora_backend": {
+      "component_id": "src_apprentice_kubernetes_lora_backend",
+      "name": "Kubernetes Lora Backend",
+      "description": "Module src/apprentice/kubernetes_lora_backend.py: _retry, __init__, fine_tune, _get_gcs_client, _gcs_path (+15 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_local_model_server": {
+      "component_id": "src_apprentice_local_model_server",
+      "name": "Local Model Server",
+      "description": "Module src/apprentice/local_model_server.py: validate_result_type, validate_result_type, __init__, __aenter__, __aexit__ (+16 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_middleware": {
+      "component_id": "src_apprentice_middleware",
+      "name": "Middleware",
+      "description": "Module src/apprentice/middleware.py: __init__, pre_process, post_process, __init__, middlewares (+3 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_model_validator": {
+      "component_id": "src_apprentice_model_validator",
+      "name": "Model Validator",
+      "description": "Module src/apprentice/model_validator.py: validate_min_score, validate_promotion_threshold, validate_min_test_samples, validate_swap_timeout, __init__ (+10 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_observer": {
+      "component_id": "src_apprentice_observer",
+      "name": "Observer",
+      "description": "Module src/apprentice/observer.py: _compute_match_score, __init__, observe, record_action, get_context (+3 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_phase_manager": {
+      "component_id": "src_apprentice_phase_manager",
+      "name": "Phase Manager",
+      "description": "Module src/apprentice/phase_manager.py: _log, compute_phase, validate_thresholds, _get_global_manager, evaluate (+15 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_pii_detection": {
+      "component_id": "src_apprentice_pii_detection",
+      "name": "Pii Detection",
+      "description": "Module src/apprentice/pii_detection.py: _log, _merge_detections, detect, name, __init__ (+15 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_pii_evaluation": {
+      "component_id": "src_apprentice_pii_evaluation",
+      "name": "Pii Evaluation",
+      "description": "Module src/apprentice/pii_evaluation.py: _span_iou, _compute_f1, __init__, evaluate",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_pii_tokenizer": {
+      "component_id": "src_apprentice_pii_tokenizer",
+      "name": "Pii Tokenizer",
+      "description": "Module src/apprentice/pii_tokenizer.py: _scan_and_replace, _restore_tokens, _replace_detections, _detect_and_replace, __init__ (+16 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_plugin_registry": {
+      "component_id": "src_apprentice_plugin_registry",
+      "name": "Plugin Registry",
+      "description": "Module src/apprentice/plugin_registry.py: _validate_plugin_name, _make_default_factory, __init__, __init__, __init__ (+15 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_remote_api_client": {
+      "component_id": "src_apprentice_remote_api_client",
+      "name": "Remote Api Client",
+      "description": "Module src/apprentice/remote_api_client.py: compute_cost, get_pricing, create_remote_client, send_diversity_request, __init__ (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_reporting": {
+      "component_id": "src_apprentice_reporting",
+      "name": "Reporting",
+      "description": "Module src/apprentice/reporting.py: validate_report_config, generate_report, format_report, deliver_webhook, get_task_types (+14 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_rolling_window": {
+      "component_id": "src_apprentice_rolling_window",
+      "name": "Rolling Window",
+      "description": "Module src/apprentice/rolling_window.py: _log, format, save, load, __init__ (+12 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_router": {
+      "component_id": "src_apprentice_router",
+      "name": "Router",
+      "description": "Module src/apprentice/router.py: compute_routing_action, build_audit_entry, check_budget, record_spend, get_phase_context (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_sampling_scheduler": {
+      "component_id": "src_apprentice_sampling_scheduler",
+      "name": "Sampling Scheduler",
+      "description": "Module src/apprentice/sampling_scheduler.py: exponential_decay, linear_decay, step_decay, validate_rate, validate_rates (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_task_registry": {
+      "component_id": "src_apprentice_task_registry",
+      "name": "Task Registry",
+      "description": "Module src/apprentice/task_registry.py: _log, get_task, task_names, format, validate_threshold_ordering (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_training_data_store": {
+      "component_id": "src_apprentice_training_data_store",
+      "name": "Training Data Store",
+      "description": "Module src/apprentice/training_data_store.py: _log, initialize, add_example, iter_training_examples, iter_validation_examples (+24 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_training_pipeline": {
+      "component_id": "src_apprentice_training_pipeline",
+      "name": "Training Pipeline",
+      "description": "Module src/apprentice/training_pipeline.py: __init__, initialize, add_example, should_trigger, run_pipeline (+13 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_unified_interface": {
+      "component_id": "src_apprentice_unified_interface",
+      "name": "Unified Interface",
+      "description": "Module src/apprentice/unified_interface.py: load_config, parse_args, format_output, execute_run, execute_status (+16 more)",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_wos_handler": {
+      "component_id": "src_apprentice_wos_handler",
+      "name": "Wos Handler",
+      "description": "Module src/apprentice/wos_handler.py: handle_event, handle_feedback, handle_recommend, list_skills",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_cli": {
+      "component_id": "src_apprentice_cli",
+      "name": "Cli",
+      "description": "Package: src/apprentice/cli",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [
+        "src_apprentice_cli_cli",
+        "src_apprentice_cli_cli_models",
+        "src_apprentice_cli_init_wizard",
+        "src_apprentice_cli_serve"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_cli_cli": {
+      "component_id": "src_apprentice_cli_cli",
+      "name": "Cli",
+      "description": "Module src/apprentice/cli/cli.py: configure_logging, parse_args, load_config, resolve_input, format_output (+9 more)",
+      "depth": 4,
+      "parent_id": "src_apprentice_cli",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_cli_cli_models": {
+      "component_id": "src_apprentice_cli_cli_models",
+      "name": "Cli Models",
+      "description": "Module src/apprentice/cli/cli_models.py: validate_schema",
+      "depth": 4,
+      "parent_id": "src_apprentice_cli",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_cli_init_wizard": {
+      "component_id": "src_apprentice_cli_init_wizard",
+      "name": "Init Wizard",
+      "description": "Module src/apprentice/cli/init_wizard.py: _prompt, _prompt_choice, _prompt_multiline, run_wizard",
+      "depth": 4,
+      "parent_id": "src_apprentice_cli",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_cli_serve": {
+      "component_id": "src_apprentice_cli_serve",
+      "name": "Serve",
+      "description": "Module src/apprentice/cli/serve.py: serve_main, __init__, check_ip, check_auth, _check_api_key (+19 more)",
+      "depth": 4,
+      "parent_id": "src_apprentice_cli",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_root": {
+      "component_id": "src_apprentice_root",
+      "name": "Root",
+      "description": "Package: src/apprentice/root",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [
+        "src_apprentice_root_composition"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_root_composition": {
+      "component_id": "src_apprentice_root_composition",
+      "name": "Composition",
+      "description": "Module src/apprentice/root/composition.py: create_remote_adapter, _parse_config, _resolve_env_vars, _teardown_components, initialize_composition_root (+16 more)",
+      "depth": 4,
+      "parent_id": "src_apprentice_root",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_report_generator": {
+      "component_id": "src_apprentice_report_generator",
+      "name": "Report Generator",
+      "description": "Package: src/apprentice/report_generator",
+      "depth": 3,
+      "parent_id": "src_apprentice",
+      "children": [
+        "src_apprentice_report_generator_core",
+        "src_apprentice_report_generator_models",
+        "src_apprentice_report_generator_report_generator"
+      ],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_report_generator_core": {
+      "component_id": "src_apprentice_report_generator_core",
+      "name": "Core",
+      "description": "Module src/apprentice/report_generator/core.py: __init__, generate_report, format_report, _format_json, _format_cli_summary (+2 more)",
+      "depth": 4,
+      "parent_id": "src_apprentice_report_generator",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_report_generator_models": {
+      "component_id": "src_apprentice_report_generator_models",
+      "name": "Models",
+      "description": "Module src/apprentice/report_generator/models.py: validate_confidence_score, validate_sampling_frequency, validate_budget_utilization_pct, validate_sample_count, validate_correlation_score (+6 more)",
+      "depth": 4,
+      "parent_id": "src_apprentice_report_generator",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    },
+    "src_apprentice_report_generator_report_generator": {
+      "component_id": "src_apprentice_report_generator_report_generator",
+      "name": "Report Generator",
+      "description": "Module src/apprentice/report_generator/report_generator.py: validate_report_config, generate_report, format_report, deliver_webhook",
+      "depth": 4,
+      "parent_id": "src_apprentice_report_generator",
+      "children": [],
+      "contract": null,
+      "implementation_status": "pending",
+      "test_results": null
+    }
+  }
+}

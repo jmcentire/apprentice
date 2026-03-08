@@ -1,0 +1,680 @@
+{
+  "component_id": "sampling_scheduler",
+  "name": "Adaptive Sampling Scheduler",
+  "description": "Given the current ConfidenceSnapshot from the Confidence Engine, determines whether THIS specific request should be a coaching sample (sent to both local and remote). In Phase 1: all requests go to remote (100%). In Phase 2: all requests go to both (100% coaching). In Phase 3: sampling rate is a continuous function of current correlation score, computed via configurable decay function (exponential, linear, or step — defined in config). Has a hard minimum floor (config: min_floor, default 2%) — never stops spot-checking. Forces 100% sampling when correlation < coaching_trigger. Forces full remote (no local) when correlation < emergency_threshold. Staleness override: forces a coaching sample if the confidence engine signals staleness. The decision for each request is made by generating a random float and comparing against the current sampling rate. Returns a SamplingDecision with routing booleans, phase label, effective rate, and human-readable reason string. The scheduler is entirely stateless — all state arrives via ConfidenceSnapshot. The random source is injected for deterministic testing. Config validation fails fast at startup. All decisions are serializable for the JSON audit trail.",
+  "version": 1,
+  "types": [
+    {
+      "name": "SamplingPhase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE_ONLY",
+        "COACHING_FULL",
+        "ADAPTIVE",
+        "LOCAL_ONLY"
+      ],
+      "inner_types": [],
+      "description": "Emergent phase label derived from the current ConfidenceSnapshot. Phases are never manually triggered — they are computed on every call from correlation score, sample count, staleness, and budget state."
+    },
+    {
+      "name": "DecayFunctionName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "exponential",
+        "linear",
+        "step"
+      ],
+      "inner_types": [],
+      "description": "The name of a registered decay function that maps correlation score to sampling rate. Selected via config and resolved at scheduler construction time."
+    },
+    {
+      "name": "DecayFunctionParams",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "5.0",
+          "description": "Exponential decay rate constant. Used by 'exponential' decay. Higher values cause faster decay of sampling rate as correlation increases.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0",
+              "error_message": "Exponential decay rate must be positive"
+            }
+          ]
+        },
+        {
+          "name": "high_correlation_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.02",
+          "description": "Sampling rate at the high-correlation end for linear interpolation. Used by 'linear' decay.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "high_correlation_rate must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "low_correlation_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Sampling rate at the low-correlation end for linear interpolation. Used by 'linear' decay.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "low_correlation_rate must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "steps",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "Ordered list of (correlation_threshold, sampling_rate) pairs for 'step' decay. Each element is a two-element list [threshold: float, rate: float]. Must be sorted ascending by threshold. The rate for the highest threshold <= current correlation is used.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "all(len(s) == 2 and 0.0 <= s[0] <= 1.0 and 0.0 <= s[1] <= 1.0 for s in value)",
+              "error_message": "Each step must be [threshold, rate] with both values in [0.0, 1.0]"
+            },
+            {
+              "kind": "custom",
+              "expression": "all(value[i][0] < value[i+1][0] for i in range(len(value)-1))",
+              "error_message": "Steps must be sorted ascending by correlation threshold"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parameters for the configurable decay function. Which fields are used depends on the chosen DecayFunctionName. All have sensible defaults so only the relevant ones need be specified in config."
+    },
+    {
+      "name": "SamplingSchedulerConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "emergency_threshold",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.3",
+          "description": "If correlation_score < emergency_threshold, force REMOTE_ONLY phase — local model is too unreliable to serve. Must be strictly less than coaching_trigger.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "emergency_threshold must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "coaching_trigger",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.6",
+          "description": "If correlation_score < coaching_trigger (and >= emergency_threshold), force COACHING_FULL phase — 100% of requests are coaching samples (sent to both local and remote). Must be strictly less than adaptive_entry_correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "coaching_trigger must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "adaptive_entry_correlation",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.8",
+          "description": "Minimum correlation score to enter ADAPTIVE phase. When correlation >= this value, sampling rate is computed via the decay function. Below this (but >= coaching_trigger), the system remains in COACHING_FULL.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "adaptive_entry_correlation must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "min_floor",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.02",
+          "description": "Hard minimum sampling rate — the system never stops spot-checking. In ADAPTIVE phase, the effective rate is max(decay_function(correlation), min_floor). Default 2%.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "min_floor must be in (0.0, 1.0] — zero floor is not permitted, spot-checking must never stop"
+            }
+          ]
+        },
+        {
+          "name": "min_sample_count_for_adaptive",
+          "type_ref": "int",
+          "required": false,
+          "default": "50",
+          "description": "Minimum number of coaching samples that must have been collected before the scheduler can enter ADAPTIVE phase. Below this count, COACHING_FULL is forced regardless of correlation score. Prevents premature confidence in correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "min_sample_count_for_adaptive must be >= 1"
+            }
+          ]
+        },
+        {
+          "name": "decay_function_name",
+          "type_ref": "DecayFunctionName",
+          "required": false,
+          "default": "exponential",
+          "description": "Name of the decay function to use for computing sampling rate in ADAPTIVE phase. Must be one of the registered decay function names: 'exponential', 'linear', 'step'.",
+          "validators": []
+        },
+        {
+          "name": "decay_params",
+          "type_ref": "DecayFunctionParams",
+          "required": false,
+          "default": "{}",
+          "description": "Parameters passed to the selected decay function. Which fields matter depends on decay_function_name.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model holding all configuration for the Adaptive Sampling Scheduler. Validated strictly at construction time (fail fast). Cross-validation ensures threshold ordering: 0 <= emergency_threshold < coaching_trigger < adaptive_entry_correlation <= 1.0 and min_floor <= 1.0. Loaded from the top-level YAML config 'sampling' section."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "correlation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current correlation score between local model outputs and remote model outputs, as computed by the Confidence Engine. Range [0.0, 1.0]. A value of 0.0 means no correlation data yet (Phase 1 / initial state).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "correlation_score must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "is_stale",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the Confidence Engine has flagged the correlation data as stale (e.g., no coaching samples collected within the staleness window). Forces a coaching sample regardless of the computed phase.",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of coaching samples collected so far. Used to determine whether sufficient data exists to enter ADAPTIVE phase (must be >= config.min_sample_count_for_adaptive).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the budget controller reports the remote API budget is exhausted. When true, the scheduler forces LOCAL_ONLY phase — no remote calls are made. This is the highest-priority override.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable snapshot of the current confidence state, produced by the Confidence Engine. Passed into the scheduler on every request. This is the sole source of truth for phase determination — the scheduler holds no internal state."
+    },
+    {
+      "name": "SamplingDecision",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "send_to_local",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If True, the request should be routed to the local model for inference.",
+          "validators": []
+        },
+        {
+          "name": "send_to_remote",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If True, the request should be routed to the remote API for inference.",
+          "validators": []
+        },
+        {
+          "name": "is_coaching_sample",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Computed field: True iff send_to_local AND send_to_remote are both True. When True, the responses will be compared by the Confidence Engine to update correlation.",
+          "validators": []
+        },
+        {
+          "name": "sampling_rate",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The effective sampling rate that was computed for this decision, after all overrides and floor clamping. Range [0.0, 1.0]. In forced phases (REMOTE_ONLY, COACHING_FULL, LOCAL_ONLY) this is 1.0.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "sampling_rate must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "SamplingPhase",
+          "required": true,
+          "default": "",
+          "description": "The emergent phase label computed for this request based on the ConfidenceSnapshot.",
+          "validators": []
+        },
+        {
+          "name": "reason",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation of why this decision was made. Includes the override that triggered (if any), the computed rate, and the random roll result. For audit trail and debugging.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "reason must not be empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen (immutable) Pydantic model representing the scheduler's decision for a single request. Serializable to JSON for the structured audit trail. Validated: at least one of send_to_local or send_to_remote must be True — a request is never dropped. is_coaching_sample is a computed property: True when both send_to_local and send_to_remote are True."
+    },
+    {
+      "name": "RandomSource",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": false,
+          "default": "Callable[[], float]",
+          "description": "A callable with signature () -> float returning a value in [0.0, 1.0). Injected at scheduler construction for deterministic testing.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol / interface for the injectable random number source. In production, wraps random.random(). In tests, can return deterministic sequences. The scheduler calls random_source() to get a float in [0.0, 1.0). This is modeled as a callable that takes no arguments and returns a float."
+    },
+    {
+      "name": "DecayFunction",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": false,
+          "default": "Callable[[float, DecayFunctionParams], float]",
+          "description": "A callable with signature (correlation: float, params: DecayFunctionParams) -> float. Returns the raw sampling rate before floor clamping.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol / interface for decay functions. A decay function takes a correlation score (float in [0.0, 1.0]) and the DecayFunctionParams, and returns a sampling rate (float in [0.0, 1.0]). Three concrete implementations are provided: exponential_decay, linear_decay, step_decay. The scheduler resolves the concrete function from config.decay_function_name at construction time."
+    }
+  ],
+  "functions": [
+    {
+      "name": "AdaptiveSamplingScheduler.__init__",
+      "description": "Construct the scheduler with validated config and an injectable random source. Resolves the decay function from config.decay_function_name at construction time. Validates all config cross-constraints (threshold ordering). Fails fast with a clear error if config is invalid — never silently defaults.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "SamplingSchedulerConfig",
+          "required": true,
+          "default": "",
+          "description": "Fully validated sampling scheduler configuration. Cross-validation must pass: emergency_threshold < coaching_trigger < adaptive_entry_correlation.",
+          "validators": []
+        },
+        {
+          "name": "random_source",
+          "type_ref": "RandomSource",
+          "required": false,
+          "default": "random.random",
+          "description": "Injectable callable () -> float returning a value in [0.0, 1.0). Defaults to stdlib random.random. Inject a deterministic source for testing.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_config",
+          "condition": "Config Pydantic validation fails (type errors, range violations)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "source": "pydantic"
+          }
+        },
+        {
+          "name": "threshold_ordering_violation",
+          "condition": "emergency_threshold >= coaching_trigger OR coaching_trigger >= adaptive_entry_correlation",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Threshold ordering violated: must have emergency_threshold < coaching_trigger < adaptive_entry_correlation"
+          }
+        },
+        {
+          "name": "unknown_decay_function",
+          "condition": "config.decay_function_name does not match any registered decay function (should not happen with enum, but guarded)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Unknown decay function name: {name}"
+          }
+        },
+        {
+          "name": "invalid_step_config",
+          "condition": "decay_function_name is 'step' but decay_params.steps is empty",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Step decay function requires at least one step in decay_params.steps"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid SamplingSchedulerConfig instance (Pydantic validation passed)",
+        "config.emergency_threshold < config.coaching_trigger",
+        "config.coaching_trigger < config.adaptive_entry_correlation",
+        "config.adaptive_entry_correlation <= 1.0",
+        "config.min_floor > 0.0",
+        "config.decay_function_name is a registered DecayFunctionName",
+        "random_source returns float in [0.0, 1.0) on each call"
+      ],
+      "postconditions": [
+        "Scheduler instance is ready to accept should_sample calls",
+        "The decay function corresponding to config.decay_function_name is resolved and bound",
+        "Config is immutable after construction — no runtime config changes"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.sampling_scheduler",
+          "description": "Logs scheduler construction with resolved config at INFO level"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "should_sample",
+      "description": "The single public method. Given a ConfidenceSnapshot, determines the emergent phase and whether this specific request should be a coaching sample. Override precedence chain (highest to lowest priority): (1) budget_exhausted → LOCAL_ONLY, (2) correlation < emergency_threshold → REMOTE_ONLY, (3) correlation < coaching_trigger → COACHING_FULL, (4) is_stale → COACHING_FULL (staleness override), (5) sample_count < min_sample_count_for_adaptive → COACHING_FULL, (6) correlation < adaptive_entry_correlation → COACHING_FULL, (7) ADAPTIVE phase: compute rate via decay_function(correlation, params), clamp to max(rate, min_floor), roll random, route accordingly. In ADAPTIVE phase: if random_roll < effective_rate → coaching sample (both=True); else → local only. Returns a frozen SamplingDecision.",
+      "inputs": [
+        {
+          "name": "snapshot",
+          "type_ref": "ConfidenceSnapshot",
+          "required": true,
+          "default": "",
+          "description": "Current confidence state from the Confidence Engine. Must be a valid ConfidenceSnapshot with all fields populated.",
+          "validators": []
+        }
+      ],
+      "output_type": "SamplingDecision",
+      "error_cases": [
+        {
+          "name": "invalid_snapshot",
+          "condition": "snapshot fails ConfidenceSnapshot Pydantic validation (e.g. correlation_score out of range, missing fields)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "source": "pydantic"
+          }
+        }
+      ],
+      "preconditions": [
+        "snapshot is a valid ConfidenceSnapshot instance",
+        "snapshot.correlation_score is in [0.0, 1.0]",
+        "snapshot.sample_count >= 0",
+        "The scheduler has been successfully constructed via __init__"
+      ],
+      "postconditions": [
+        "Returned SamplingDecision has at least one of send_to_local or send_to_remote set to True",
+        "SamplingDecision.is_coaching_sample == (send_to_local AND send_to_remote)",
+        "If snapshot.budget_exhausted is True: phase == LOCAL_ONLY, send_to_local == True, send_to_remote == False",
+        "If not budget_exhausted and snapshot.correlation_score < config.emergency_threshold: phase == REMOTE_ONLY, send_to_remote == True, send_to_local == False",
+        "If phase == COACHING_FULL: send_to_local == True, send_to_remote == True, sampling_rate == 1.0",
+        "If phase == ADAPTIVE: sampling_rate >= config.min_floor",
+        "If phase == ADAPTIVE and send_to_remote == False: send_to_local == True (local-only serving in adaptive)",
+        "If phase == ADAPTIVE and send_to_remote == True: send_to_local == True (coaching sample in adaptive)",
+        "SamplingDecision.reason is non-empty and human-readable",
+        "SamplingDecision.phase matches the computed emergent phase",
+        "SamplingDecision is frozen (immutable) after construction"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.sampling_scheduler",
+          "description": "Logs every sampling decision as structured JSON at DEBUG level for audit trail. Includes snapshot, computed phase, effective rate, random roll value, and final decision."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": 1,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "exponential_decay",
+      "description": "Computes sampling rate using exponential decay: rate = exp(-decay_params.rate * (correlation - adaptive_entry_correlation) / (1.0 - adaptive_entry_correlation)). Maps correlation from [adaptive_entry_correlation, 1.0] to a rate that decays exponentially from ~1.0 toward 0.0. The result is NOT floor-clamped — the caller (should_sample) applies min_floor after. This is a pure function with no side effects.",
+      "inputs": [
+        {
+          "name": "correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current correlation score, expected to be in [adaptive_entry_correlation, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "correlation must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "params",
+          "type_ref": "DecayFunctionParams",
+          "required": true,
+          "default": "",
+          "description": "Decay function parameters. Uses params.rate (exponential decay constant).",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [],
+      "preconditions": [
+        "correlation is in [0.0, 1.0]",
+        "params.rate > 0.0"
+      ],
+      "postconditions": [
+        "Return value is in [0.0, 1.0]",
+        "Return value decreases monotonically as correlation increases (for fixed params.rate > 0)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "linear_decay",
+      "description": "Computes sampling rate using linear interpolation: rate = low_correlation_rate + (high_correlation_rate - low_correlation_rate) * normalized_correlation, where normalized_correlation = (correlation - adaptive_entry_correlation) / (1.0 - adaptive_entry_correlation). Maps correlation from [adaptive_entry_correlation, 1.0] linearly between low_correlation_rate and high_correlation_rate. The result is NOT floor-clamped. Pure function.",
+      "inputs": [
+        {
+          "name": "correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current correlation score, expected to be in [adaptive_entry_correlation, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "correlation must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "params",
+          "type_ref": "DecayFunctionParams",
+          "required": true,
+          "default": "",
+          "description": "Decay function parameters. Uses params.low_correlation_rate and params.high_correlation_rate.",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [],
+      "preconditions": [
+        "correlation is in [0.0, 1.0]",
+        "params.low_correlation_rate and params.high_correlation_rate are in [0.0, 1.0]"
+      ],
+      "postconditions": [
+        "Return value is in [min(low_correlation_rate, high_correlation_rate), max(low_correlation_rate, high_correlation_rate)]",
+        "Return value varies linearly with correlation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "step_decay",
+      "description": "Computes sampling rate using a step function defined by an ordered list of (correlation_threshold, sampling_rate) pairs. Finds the highest threshold that is <= current correlation and returns the corresponding rate. If correlation is below all thresholds, returns 1.0 (full coaching). The result is NOT floor-clamped. Pure function.",
+      "inputs": [
+        {
+          "name": "correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current correlation score.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "correlation must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "params",
+          "type_ref": "DecayFunctionParams",
+          "required": true,
+          "default": "",
+          "description": "Decay function parameters. Uses params.steps — must be non-empty and sorted ascending by threshold.",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [
+        {
+          "name": "empty_steps",
+          "condition": "params.steps is empty",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Step decay function requires at least one step in params.steps"
+          }
+        }
+      ],
+      "preconditions": [
+        "correlation is in [0.0, 1.0]",
+        "params.steps is non-empty",
+        "params.steps is sorted ascending by threshold (index 0 of each pair)"
+      ],
+      "postconditions": [
+        "Return value is in [0.0, 1.0]",
+        "Return value equals the rate of the highest step whose threshold <= correlation, or 1.0 if no step threshold is <= correlation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "The scheduler is stateless — all state flows through the ConfidenceSnapshot parameter; no mutable instance state is modified after construction",
+    "At least one of send_to_local or send_to_remote is True in every SamplingDecision — requests are never dropped",
+    "is_coaching_sample is always equal to (send_to_local AND send_to_remote) — it is a derived field, never set independently",
+    "Budget exhaustion is the highest-priority override — when budget_exhausted is True, send_to_remote is always False regardless of all other conditions",
+    "Emergency threshold is the second-highest priority — when correlation < emergency_threshold and budget is not exhausted, send_to_local is False (local model is untrustworthy)",
+    "The min_floor is a hard minimum — in ADAPTIVE phase, the effective sampling rate is never below config.min_floor; spot-checking never stops",
+    "Phase determination is fully deterministic given the same ConfidenceSnapshot and config — only the random roll introduces non-determinism, and that is injectable",
+    "Override precedence is strict and total: budget_exhausted > emergency_threshold > coaching_trigger > staleness > min_sample_count_for_adaptive > adaptive_entry_correlation > decay_function + floor_clamp > random_roll",
+    "Config is immutable after scheduler construction — config values cannot change at runtime",
+    "All SamplingDecision instances are frozen (immutable) Pydantic models suitable for JSON serialization into the audit trail",
+    "Decay functions are pure — they have no side effects and always return the same output for the same inputs",
+    "The random source is called at most once per should_sample invocation, and only in ADAPTIVE phase when the rate is not 1.0",
+    "REMOTE_ONLY phase implies send_to_local=False, send_to_remote=True — this is the only phase where local model is excluded",
+    "LOCAL_ONLY phase implies send_to_local=True, send_to_remote=False — this occurs only when budget is exhausted",
+    "COACHING_FULL phase implies send_to_local=True, send_to_remote=True, sampling_rate=1.0"
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0"
+  ]
+}

@@ -1,0 +1,1831 @@
+{
+  "component_id": "training_pipeline",
+  "name": "Training Data Store & Fine-Tuning Pipeline",
+  "description": "Manages the full lifecycle of training data collection, storage, fine-tuning orchestration, model validation, and promotion. This is the component that turns remote API responses into local model capability. Designed as a thin orchestration facade with three injected dependencies (training_data_store, fine_tuning_orchestrator, model_validator) and a small, high-level API surface. The pipeline does NOT re-export sub-component methods — it wraps them in orchestrated workflows. Data version is a hash computed at pipeline run start, tying the run to a specific data snapshot. Budget check happens before fine-tuning starts. Consecutive validation failures are tracked and surfaced in status/logs. State is persisted as JSON for resumability. Structured JSON logging at every decision point for auditability.",
+  "version": 1,
+  "types": [
+    {
+      "name": "PipelineStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "IDLE",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        "INSUFFICIENT_DATA",
+        "SKIPPED_BUDGET",
+        "SKIPPED_COOLDOWN",
+        "SKIPPED_ALREADY_RUNNING"
+      ],
+      "inner_types": [],
+      "description": "Enum representing the current state of the training pipeline. Used for status queries and to guard against concurrent runs."
+    },
+    {
+      "name": "PipelineStepName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "DATA_SNAPSHOT",
+        "BUDGET_CHECK",
+        "FINE_TUNE",
+        "VALIDATE",
+        "PROMOTE"
+      ],
+      "inner_types": [],
+      "description": "Enum identifying each discrete step in the pipeline execution sequence. Used for tracking progress, resumability, and pinpointing failures."
+    },
+    {
+      "name": "PipelineStepStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        "SKIPPED"
+      ],
+      "inner_types": [],
+      "description": "Status of an individual pipeline step within a run."
+    },
+    {
+      "name": "BudgetConstraint",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_monthly_budget_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Maximum monthly budget in USD for fine-tuning operations. Must be positive.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0",
+              "error_message": "max_monthly_budget_usd must be positive"
+            }
+          ]
+        },
+        {
+          "name": "current_month_spent_usd",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Amount already spent this month in USD. Updated after each fine-tuning run. Loaded from persisted state on initialization.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "current_month_spent_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "estimated_cost_per_run_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Estimated cost of a single fine-tuning run in USD. Used for pre-flight budget check. For local backends this may be near zero (compute cost only); for remote backends it reflects API pricing.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "estimated_cost_per_run_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_reset_day",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Day of month when the budget resets (1-28). Values above 28 are not allowed to avoid month-length ambiguity.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 28",
+              "error_message": "budget_reset_day must be between 1 and 28"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Budget constraints for the pipeline. Budget enforcement is hard — the system stops spending, never exceeds limits. Projected cost is compared against remaining budget before fine-tuning starts."
+    },
+    {
+      "name": "PipelineTriggerPolicy",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "min_new_examples",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of new training examples (since last successful run) required before triggering. Must be at least 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "min_new_examples must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "min_interval_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "3600.0",
+          "description": "Minimum time in seconds between pipeline runs. Prevents rapid re-triggering. 0.0 disables cooldown.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "min_interval_seconds must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "max_consecutive_failures",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Maximum consecutive pipeline failures before trigger is suppressed until manual reset. After this threshold, should_trigger() returns false and logs at ERROR level.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "max_consecutive_failures must be between 1 and 100"
+            }
+          ]
+        },
+        {
+          "name": "confidence_ceiling",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.95",
+          "description": "If the current local model's aggregate confidence score already exceeds this ceiling, skip fine-tuning (diminishing returns). Set to 1.0 to disable.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "confidence_ceiling must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Policy configuration controlling when the pipeline should trigger a new fine-tuning run. Evaluated by should_trigger() against current pipeline state."
+    },
+    {
+      "name": "PipelineConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type this pipeline instance manages. Maps to the task_type in the training data store. Must match the regex ^[a-zA-Z0-9_\\-]+$ and be 1-128 characters.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must contain only alphanumeric characters, underscores, and hyphens"
+            },
+            {
+              "kind": "length",
+              "expression": "1 <= len(value) <= 128",
+              "error_message": "task_type must be 1-128 characters"
+            }
+          ]
+        },
+        {
+          "name": "base_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the base model to fine-tune, e.g. 'meta-llama/Llama-3.1-8B' or 'gpt-4o-mini-2024-07-18'. Passed to the fine-tuning orchestrator.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "base_model must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "trigger_policy",
+          "type_ref": "PipelineTriggerPolicy",
+          "required": true,
+          "default": "",
+          "description": "Policy controlling when pipeline runs are triggered.",
+          "validators": []
+        },
+        {
+          "name": "budget",
+          "type_ref": "BudgetConstraint",
+          "required": true,
+          "default": "",
+          "description": "Budget constraints for fine-tuning operations.",
+          "validators": []
+        },
+        {
+          "name": "state_file_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File path for persisting PipelineRun records and pipeline state as JSON. Created if it does not exist.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "state_file_path must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "run_history_limit",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum number of PipelineRun records to retain in state file. Oldest runs are pruned when limit is exceeded.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "run_history_limit must be between 1 and 10000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Top-level Pydantic configuration for the TrainingPipeline, aggregating sub-component configs and pipeline-specific policies. Parsed from YAML. Strict validation — fails fast on invalid config, never silently defaults."
+    },
+    {
+      "name": "DataSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type this snapshot covers.",
+          "validators": []
+        },
+        {
+          "name": "data_version_hash",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "SHA-256 hex digest computed over the ordered training example inputs at snapshot time. Uniquely identifies this data state.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-f0-9]{64}$",
+              "error_message": "data_version_hash must be a valid 64-char lowercase hex SHA-256 digest"
+            }
+          ]
+        },
+        {
+          "name": "total_examples",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of examples (training + validation) at snapshot time.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_examples must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "training_examples",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training-split examples at snapshot time.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_examples must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "validation_examples",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of validation-split examples at snapshot time.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "validation_examples must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "snapshot_timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this snapshot was taken.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable record of the training data state at the start of a pipeline run. Provides traceability from a run to the exact data used."
+    },
+    {
+      "name": "PipelineStepRecord",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "step_name",
+          "type_ref": "PipelineStepName",
+          "required": true,
+          "default": "",
+          "description": "Which step this record pertains to.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "PipelineStepStatus",
+          "required": true,
+          "default": "",
+          "description": "Current status of this step.",
+          "validators": []
+        },
+        {
+          "name": "started_at_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when the step started. Empty if step has not started.",
+          "validators": []
+        },
+        {
+          "name": "completed_at_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when the step completed. Empty if step has not completed.",
+          "validators": []
+        },
+        {
+          "name": "duration_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Wall-clock duration of this step in seconds. 0.0 if not started or still running.",
+          "validators": []
+        },
+        {
+          "name": "error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable error detail if the step failed. Empty on success or if not yet run.",
+          "validators": []
+        },
+        {
+          "name": "result_summary",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Step-specific summary data as a JSON-serializable dict. Contents vary by step (e.g., data snapshot hash, fine-tune run_id, validation scores, promotion decision).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Record of a single step's execution within a pipeline run. Used for tracking progress, resumability, and detailed failure diagnosis."
+    },
+    {
+      "name": "PipelineStepRecordList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PipelineStepRecord",
+      "variants": [],
+      "inner_types": [],
+      "description": "Ordered list of PipelineStepRecord entries for a pipeline run, one per pipeline step."
+    },
+    {
+      "name": "PipelineRun",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "run_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this pipeline run (UUID4). Used as correlation ID in all structured log entries.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "run_id must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type this run processed.",
+          "validators": []
+        },
+        {
+          "name": "status",
+          "type_ref": "PipelineStatus",
+          "required": true,
+          "default": "",
+          "description": "Final status of this pipeline run.",
+          "validators": []
+        },
+        {
+          "name": "data_snapshot",
+          "type_ref": "DataSnapshot",
+          "required": false,
+          "default": "",
+          "description": "Snapshot of training data at run start. None if run failed before data snapshot step.",
+          "validators": []
+        },
+        {
+          "name": "steps",
+          "type_ref": "PipelineStepRecordList",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of step records, one per pipeline step. Always contains all 5 steps; incomplete steps have PENDING or SKIPPED status.",
+          "validators": []
+        },
+        {
+          "name": "started_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when the pipeline run started.",
+          "validators": []
+        },
+        {
+          "name": "completed_at_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp when the pipeline run completed. Empty if still running.",
+          "validators": []
+        },
+        {
+          "name": "duration_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Total wall-clock duration of the run in seconds.",
+          "validators": []
+        },
+        {
+          "name": "fine_tune_run_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Correlation ID of the fine-tuning run within the orchestrator, if fine-tuning was attempted.",
+          "validators": []
+        },
+        {
+          "name": "model_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The model version ID produced by a successful fine-tuning step. Empty if fine-tuning was not attempted or failed.",
+          "validators": []
+        },
+        {
+          "name": "promotion_decision",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The final promotion decision string (matches PromotionDecision enum values from model_validator). Empty if promotion step was not reached.",
+          "validators": []
+        },
+        {
+          "name": "error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Top-level error detail if the run failed. Empty on success.",
+          "validators": []
+        },
+        {
+          "name": "budget_spent_usd",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Actual or estimated cost of this run in USD. Recorded for budget tracking.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional run metadata for extensibility. All values must be JSON-serializable.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable record of a single pipeline execution. Contains the full trace from trigger through completion or failure. Persisted as JSON for audit trail and resumability."
+    },
+    {
+      "name": "PipelineRunList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PipelineRun",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of PipelineRun records."
+    },
+    {
+      "name": "PipelineSuccess",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, always 'success' for PipelineSuccess.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'success'",
+              "error_message": "status must be 'success'"
+            }
+          ]
+        },
+        {
+          "name": "run",
+          "type_ref": "PipelineRun",
+          "required": true,
+          "default": "",
+          "description": "The complete pipeline run record.",
+          "validators": []
+        },
+        {
+          "name": "model_version_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model version ID of the fine-tuned model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "model_version_id must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "promotion_decision",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The final promotion decision string (e.g. 'PROMOTED', 'REJECTED_BELOW_THRESHOLD'). Mirrors model_validator PromotionDecision values.",
+          "validators": []
+        },
+        {
+          "name": "aggregate_validation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Aggregate validation score from the model validator.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "aggregate_validation_score must be between 0.0 and 1.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Successful pipeline result, containing the fine-tune result, validation result, and promotion decision. Discriminated by status='success'."
+    },
+    {
+      "name": "PipelineFailure",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, always 'failure' for PipelineFailure.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'failure'",
+              "error_message": "status must be 'failure'"
+            }
+          ]
+        },
+        {
+          "name": "run",
+          "type_ref": "PipelineRun",
+          "required": true,
+          "default": "",
+          "description": "The complete pipeline run record (with failure details in steps).",
+          "validators": []
+        },
+        {
+          "name": "failed_step",
+          "type_ref": "PipelineStepName",
+          "required": true,
+          "default": "",
+          "description": "The step at which the pipeline failed.",
+          "validators": []
+        },
+        {
+          "name": "error_detail",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of the failure.",
+          "validators": []
+        },
+        {
+          "name": "retry_recommended",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the pipeline should be retried. Based on the error category of the underlying failure.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Failed pipeline result, containing the step that failed and error detail. Discriminated by status='failure'."
+    },
+    {
+      "name": "PipelineResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "PipelineSuccess",
+        "PipelineFailure"
+      ],
+      "description": "Discriminated union of pipeline execution outcomes. Either PipelineSuccess (fine-tuning completed, validation ran, promotion attempted) or PipelineFailure (pipeline stopped at some step with an error or skip condition)."
+    },
+    {
+      "name": "PipelineRunHistory",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type this history covers.",
+          "validators": []
+        },
+        {
+          "name": "runs",
+          "type_ref": "PipelineRunList",
+          "required": true,
+          "default": "",
+          "description": "List of pipeline run records, ordered by started_at_utc descending (most recent first).",
+          "validators": []
+        },
+        {
+          "name": "total_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of pipeline runs recorded.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "successful_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of runs that completed successfully (status=COMPLETED).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "successful_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "failed_runs",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of runs that failed (status=FAILED).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "failed_runs must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "consecutive_failures",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Current count of consecutive failures (reset to 0 on success).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_failures must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "total_budget_spent_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget spent across all runs in the history.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "total_budget_spent_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "last_successful_run_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "run_id of the most recent successful run. Empty if no successful runs exist.",
+          "validators": []
+        },
+        {
+          "name": "last_run_completed_at_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the most recent run completion. Empty if no runs exist.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Aggregated pipeline run history with summary statistics for monitoring and audit."
+    },
+    {
+      "name": "TriggerEvaluation",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "should_trigger",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the pipeline should trigger a new run.",
+          "validators": []
+        },
+        {
+          "name": "reason",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation of the trigger decision.",
+          "validators": []
+        },
+        {
+          "name": "new_examples_since_last_run",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of new training examples added since the last successful run.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "new_examples_since_last_run must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "seconds_since_last_run",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Seconds elapsed since the last pipeline run completed. -1.0 if no previous run exists.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= -1.0",
+              "error_message": "seconds_since_last_run must be >= -1.0"
+            }
+          ]
+        },
+        {
+          "name": "consecutive_failures",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Current count of consecutive failures.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_failures must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget for the current period in USD.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "budget_remaining_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "evaluated_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the evaluation was performed.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of evaluating whether the pipeline should trigger. Contains the decision and the reasoning behind it for auditability."
+    },
+    {
+      "name": "PipelineState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type this state covers.",
+          "validators": []
+        },
+        {
+          "name": "current_status",
+          "type_ref": "PipelineStatus",
+          "required": true,
+          "default": "",
+          "description": "Current pipeline status.",
+          "validators": []
+        },
+        {
+          "name": "consecutive_failures",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Current count of consecutive failures. Reset to 0 on success.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_failures must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "last_run_completed_at_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the most recent run completion. Empty if no runs have completed.",
+          "validators": []
+        },
+        {
+          "name": "last_successful_data_version_hash",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "data_version_hash of the last successful run's data snapshot. Used to compute new examples since last successful run.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count_at_last_success",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Number of training examples at the time of the last successful run. Used with current count to determine new_examples_since_last_run.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_example_count_at_last_success must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "current_month_spent_usd",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Budget spent in the current billing period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "current_month_spent_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_period_start_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the current budget period started.",
+          "validators": []
+        },
+        {
+          "name": "active_model_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The model version ID currently promoted and serving. Empty if no model has been promoted yet.",
+          "validators": []
+        },
+        {
+          "name": "run_history",
+          "type_ref": "PipelineRunList",
+          "required": false,
+          "default": "[]",
+          "description": "List of recent pipeline run records, pruned to run_history_limit.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal mutable state of the pipeline, persisted as JSON between restarts. Contains the run history and tracking counters needed for trigger evaluation and budget enforcement."
+    },
+    {
+      "name": "AddExampleInput",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "input",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The original input text sent to the remote model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "input must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response text received from the remote model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "output must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier for this example.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must match ^[a-zA-Z0-9_\\-]+$"
+            },
+            {
+              "kind": "length",
+              "expression": "1 <= len(value) <= 128",
+              "error_message": "task_type must be 1-128 characters"
+            }
+          ]
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 datetime string when this example was captured.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+              "error_message": "timestamp must be a valid ISO 8601 datetime string"
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional metadata dictionary for additional context.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Input for the add_example function. Wraps the training example fields needed by the training data store."
+    },
+    {
+      "name": "AddExampleOutput",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type of the example that was just added.",
+          "validators": []
+        },
+        {
+          "name": "example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of examples stored for this task type after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "example_count must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "training_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training-split examples after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "validation_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of validation-split examples after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "validation_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "batch_ready",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the training-set count has reached or exceeded fine_tune_batch_size.",
+          "validators": []
+        },
+        {
+          "name": "trigger_evaluation",
+          "type_ref": "TriggerEvaluation",
+          "required": true,
+          "default": "",
+          "description": "Result of evaluating the trigger policy after adding this example.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of adding an example through the pipeline. Wraps the data store result with trigger evaluation."
+    },
+    {
+      "name": "HyperparameterOverrides",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "learning_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Learning rate override.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "learning_rate must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "num_epochs",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Number of training epochs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "num_epochs must be between 1 and 100"
+            }
+          ]
+        },
+        {
+          "name": "batch_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Training batch size.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 512",
+              "error_message": "batch_size must be between 1 and 512"
+            }
+          ]
+        },
+        {
+          "name": "lora_rank",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "LoRA rank for local backends.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 256",
+              "error_message": "lora_rank must be between 1 and 256"
+            }
+          ]
+        },
+        {
+          "name": "lora_alpha",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "LoRA alpha scaling factor.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 512",
+              "error_message": "lora_alpha must be between 1 and 512"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Optional hyperparameter overrides passed through to the fine-tuning orchestrator. All fields are optional; backends use their own defaults when not specified."
+    }
+  ],
+  "functions": [
+    {
+      "name": "initialize",
+      "description": "Initializes the TrainingPipeline with the given configuration and injected dependencies. Creates the state file directory if needed, loads persisted state from JSON (or creates fresh state if no state file exists), initializes the training data store dependency, checks for incomplete runs from a prior crash (marks them as FAILED), and reconciles budget period tracking. Must be called before any other method. Fails fast on invalid configuration per project standards.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "PipelineConfig",
+          "required": true,
+          "default": "",
+          "description": "Top-level pipeline configuration. Validated strictly at construction time.",
+          "validators": []
+        },
+        {
+          "name": "data_store",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Injected training_data_store dependency implementing the TrainingDataStore protocol.",
+          "validators": []
+        },
+        {
+          "name": "orchestrator",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Injected fine_tuning_orchestrator dependency implementing the FineTuningOrchestrator protocol.",
+          "validators": []
+        },
+        {
+          "name": "validator",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Injected model_validator dependency implementing the ModelValidator protocol.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "config_validation_error",
+          "condition": "PipelineConfig fails Pydantic validation (invalid task_type, base_model, trigger_policy, budget, or state_file_path).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Pydantic validation error message describing which field(s) failed."
+          }
+        },
+        {
+          "name": "state_file_io_error",
+          "condition": "The state file directory cannot be created or the state file cannot be read/written (permission denied, disk full, etc.).",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The state file path.",
+            "detail": "OS-level error description."
+          }
+        },
+        {
+          "name": "data_store_init_error",
+          "condition": "The injected training data store's initialize() method fails.",
+          "error_type": "IOError",
+          "error_data": {
+            "detail": "Error detail from the data store initialization failure."
+          }
+        },
+        {
+          "name": "state_file_corrupt",
+          "condition": "The state file exists but contains invalid JSON or does not conform to PipelineState schema.",
+          "error_type": "ValueError",
+          "error_data": {
+            "path": "The state file path.",
+            "detail": "Description of the parse/validation error. State file will be rebuilt from scratch with a warning."
+          }
+        },
+        {
+          "name": "dependency_missing",
+          "condition": "One or more injected dependencies is None or does not implement the required protocol.",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "Description of which dependency is missing or invalid."
+          }
+        }
+      ],
+      "preconditions": [
+        "config passes all PipelineConfig Pydantic validation.",
+        "data_store, orchestrator, and validator are non-null and implement their respective protocols.",
+        "initialize() has not already been called on this instance (not re-entrant)."
+      ],
+      "postconditions": [
+        "The state file directory exists on the filesystem.",
+        "Pipeline state has been loaded from the state file or initialized fresh.",
+        "Any incomplete run from a previous crash has been marked as FAILED with error_detail describing the crash recovery.",
+        "Budget period has been reconciled: if the current date is past the budget reset day, current_month_spent_usd has been reset to 0.0.",
+        "The training data store has been initialized via its initialize() method.",
+        "Pipeline status is IDLE and ready to accept add_example() and run_pipeline() calls.",
+        "A structured log entry has been emitted recording initialization completion."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "PipelineConfig.state_file_path",
+          "description": "Creates or updates the pipeline state JSON file."
+        },
+        {
+          "kind": "writes_file",
+          "target": "TrainingDataStoreConfig.base_dir",
+          "description": "Delegates to training data store initialization which may create directories."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.training_pipeline",
+          "description": "Emits structured JSON log entries for initialization events."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "add_example",
+      "description": "Delegates a training example to the training data store and evaluates the trigger policy. This is a pass-through to the data store's add_example() with added trigger evaluation. The pipeline does NOT auto-trigger a run — callers must check trigger_evaluation.should_trigger and call run_pipeline() explicitly. This design supports both automated and manual-review workflows.",
+      "inputs": [
+        {
+          "name": "example",
+          "type_ref": "AddExampleInput",
+          "required": true,
+          "default": "",
+          "description": "The training example to add.",
+          "validators": []
+        }
+      ],
+      "output_type": "AddExampleOutput",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        },
+        {
+          "name": "task_type_mismatch",
+          "condition": "example.task_type does not match the pipeline's configured task_type.",
+          "error_type": "ValueError",
+          "error_data": {
+            "expected": "The configured task_type.",
+            "actual": "The provided task_type.",
+            "detail": "Example task_type does not match pipeline task_type."
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "The example fails Pydantic field validation (empty input, empty output, invalid task_type format, invalid timestamp).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Pydantic validation error message."
+          }
+        },
+        {
+          "name": "data_store_write_error",
+          "condition": "The training data store's add_example() fails due to I/O or serialization error.",
+          "error_type": "IOError",
+          "error_data": {
+            "detail": "Error detail from the data store."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully.",
+        "example passes all AddExampleInput field validations.",
+        "example.task_type matches the pipeline's configured task_type."
+      ],
+      "postconditions": [
+        "The example has been persisted in the training data store.",
+        "The returned AddExampleOutput.trigger_evaluation reflects the current state of the trigger policy after the addition.",
+        "No pipeline run has been initiated by this method.",
+        "A structured log entry has been emitted recording the example addition and trigger evaluation."
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "TrainingDataStore JSONL and _counts.json",
+          "description": "Delegates to training data store which appends to JSONL files."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.training_pipeline",
+          "description": "Emits structured JSON log entries for example addition and trigger evaluation."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "should_trigger",
+      "description": "Evaluates the trigger policy against the current pipeline state and returns a detailed TriggerEvaluation. Checks: (1) sufficient new examples since last successful run, (2) minimum interval since last run, (3) consecutive failure count below threshold, (4) budget remaining, (5) confidence ceiling not already exceeded, (6) pipeline not currently running. All checks are logged for auditability. This is a read-only evaluation — no state is mutated.",
+      "inputs": [],
+      "output_type": "TriggerEvaluation",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        },
+        {
+          "name": "state_read_error",
+          "condition": "Pipeline state cannot be read from the state file (corruption, I/O error).",
+          "error_type": "IOError",
+          "error_data": {
+            "detail": "Error reading pipeline state."
+          }
+        },
+        {
+          "name": "data_store_count_error",
+          "condition": "The training data store's get_example_count() fails.",
+          "error_type": "IOError",
+          "error_data": {
+            "detail": "Error querying data store for example counts."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully."
+      ],
+      "postconditions": [
+        "Returned TriggerEvaluation accurately reflects the current state of all trigger policy conditions.",
+        "TriggerEvaluation.reason provides a human-readable explanation of the decision.",
+        "No pipeline state has been mutated.",
+        "A structured log entry has been emitted with the trigger evaluation result."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.training_pipeline",
+          "description": "Emits structured JSON log entry with trigger evaluation details."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "run_pipeline",
+      "description": "Executes the full pipeline: DATA_SNAPSHOT → BUDGET_CHECK → FINE_TUNE → VALIDATE → PROMOTE. This is the main orchestration method. Acquires an async lock to prevent concurrent runs. On each step: updates the PipelineRun record, persists state, and logs. On any step failure: marks remaining steps as SKIPPED, persists the failed run, increments consecutive failure count, and returns PipelineFailure. On success: resets consecutive failure count, updates active model version, and returns PipelineSuccess. Budget is checked before fine-tuning starts — if projected cost exceeds remaining budget, the run is skipped with SKIPPED_BUDGET status. The pipeline is resumable: on restart after a crash, initialize() marks incomplete runs as FAILED.",
+      "inputs": [
+        {
+          "name": "hyperparameter_overrides",
+          "type_ref": "HyperparameterOverrides",
+          "required": false,
+          "default": "",
+          "description": "Optional hyperparameter overrides for the fine-tuning step. Passed through to the orchestrator.",
+          "validators": []
+        }
+      ],
+      "output_type": "PipelineResult",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        },
+        {
+          "name": "already_running",
+          "condition": "Another pipeline run is already in progress (asyncio.Lock held).",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline is already running. Concurrent runs are not permitted."
+          }
+        },
+        {
+          "name": "insufficient_data",
+          "condition": "Not enough training examples to proceed with fine-tuning (below orchestrator's min_training_examples).",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "DATA_SNAPSHOT",
+            "detail": "Insufficient training examples for fine-tuning.",
+            "retry_recommended": "false"
+          }
+        },
+        {
+          "name": "budget_exhausted",
+          "condition": "Projected cost of the fine-tuning run would exceed the remaining monthly budget.",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "BUDGET_CHECK",
+            "detail": "Budget exhausted. Remaining: {remaining_usd} USD, estimated cost: {estimated_cost_usd} USD.",
+            "retry_recommended": "false"
+          }
+        },
+        {
+          "name": "fine_tune_failed",
+          "condition": "The fine-tuning orchestrator returns a FineTuneError.",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "FINE_TUNE",
+            "detail": "Fine-tuning failed: {error_message}",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "validation_failed",
+          "condition": "Model validation fails or candidate is rejected below threshold.",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "VALIDATE",
+            "detail": "Validation failed: {decision}",
+            "retry_recommended": "false"
+          }
+        },
+        {
+          "name": "promotion_swap_failed",
+          "condition": "Model promotion succeeds in validation but the model server swap fails.",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "PROMOTE",
+            "detail": "Model swap failed: {swap_error_detail}",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "data_store_error",
+          "condition": "The training data store is unavailable or returns an error during data snapshot.",
+          "error_type": "PipelineFailure",
+          "error_data": {
+            "failed_step": "DATA_SNAPSHOT",
+            "detail": "Data store error: {error_detail}",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "state_persist_error",
+          "condition": "Pipeline state cannot be persisted to the state file during or after the run.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The state file path.",
+            "detail": "State persistence failure. Run may need manual recovery."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully.",
+        "Pipeline is not currently running another run (status != RUNNING)."
+      ],
+      "postconditions": [
+        "A PipelineRun record has been created and persisted to the state file.",
+        "On success: PipelineRun.status is COMPLETED, consecutive_failures is reset to 0, active_model_version_id is updated if promoted.",
+        "On failure: PipelineRun.status is FAILED (or INSUFFICIENT_DATA or SKIPPED_BUDGET), consecutive_failures is incremented.",
+        "All five PipelineStepRecords are present in the run with appropriate statuses.",
+        "Pipeline state has been persisted to the state file after each step transition.",
+        "Pipeline status has been returned to IDLE (or the appropriate terminal status) after completion.",
+        "Structured log entries have been emitted for each step start/completion/failure.",
+        "Budget tracking has been updated with actual or estimated run cost."
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "PipelineConfig.state_file_path",
+          "description": "Persists PipelineRun record and updated PipelineState after each step."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "PipelineState",
+          "description": "Updates consecutive_failures, current_month_spent_usd, active_model_version_id, run_history."
+        },
+        {
+          "kind": "network_call",
+          "target": "fine_tuning_orchestrator",
+          "description": "Delegates to fine-tuning orchestrator which may call remote APIs or local model servers."
+        },
+        {
+          "kind": "network_call",
+          "target": "model_validator",
+          "description": "Delegates to model validator which runs inference against model server and evaluation."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.training_pipeline",
+          "description": "Emits structured JSON log entries for each pipeline step and decision."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_status",
+      "description": "Returns the current pipeline status. This is a lightweight read from in-memory state. Reflects whether the pipeline is idle, running, or in a terminal state from the last run.",
+      "inputs": [],
+      "output_type": "PipelineStatus",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully."
+      ],
+      "postconditions": [
+        "Returned PipelineStatus accurately reflects the current state of the pipeline.",
+        "No state has been mutated."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "get_run_history",
+      "description": "Returns the pipeline run history for the configured task type. Reads from the persisted state file. Results are ordered by started_at_utc descending (most recent first). Includes summary statistics for monitoring.",
+      "inputs": [
+        {
+          "name": "limit",
+          "type_ref": "int",
+          "required": false,
+          "default": "50",
+          "description": "Maximum number of runs to return.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 1000",
+              "error_message": "limit must be between 1 and 1000"
+            }
+          ]
+        }
+      ],
+      "output_type": "PipelineRunHistory",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        },
+        {
+          "name": "state_read_error",
+          "condition": "Pipeline state file cannot be read.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The state file path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully."
+      ],
+      "postconditions": [
+        "Returned PipelineRunHistory.runs contains at most 'limit' entries.",
+        "Runs are ordered by started_at_utc descending.",
+        "Summary statistics (total_runs, successful_runs, failed_runs, consecutive_failures) are accurate.",
+        "No state has been mutated."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "PipelineConfig.state_file_path",
+          "description": "Reads pipeline state from the persisted JSON file."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "reset_consecutive_failures",
+      "description": "Manually resets the consecutive failure counter to 0, allowing the pipeline to trigger again after hitting max_consecutive_failures. This is an administrative escape hatch for operators who have resolved the underlying issue. Logs the reset for audit trail.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "not_initialized",
+          "condition": "initialize() has not been called.",
+          "error_type": "RuntimeError",
+          "error_data": {
+            "detail": "Pipeline has not been initialized. Call initialize() first."
+          }
+        },
+        {
+          "name": "state_persist_error",
+          "condition": "Pipeline state cannot be persisted after reset.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The state file path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "initialize() has been called successfully."
+      ],
+      "postconditions": [
+        "PipelineState.consecutive_failures is set to 0.",
+        "Pipeline state has been persisted to the state file.",
+        "A structured log entry has been emitted recording the manual reset."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "PipelineConfig.state_file_path",
+          "description": "Persists updated PipelineState with reset failure counter."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.training_pipeline",
+          "description": "Emits structured JSON log entry for the manual failure counter reset."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "training_data_store",
+    "fine_tuning_orchestrator",
+    "model_validator"
+  ],
+  "dependency_contracts": {
+    "training_data_store": [
+      "add_example",
+      "iter_training_examples",
+      "iter_validation_examples",
+      "get_example_count",
+      "get_task_types",
+      "initialize"
+    ],
+    "fine_tuning_orchestrator": [
+      "trigger_fine_tuning",
+      "fine_tune",
+      "save_model_version",
+      "get_model_version",
+      "get_latest_model_version",
+      "list_model_versions",
+      "parse_orchestrator_config"
+    ],
+    "model_validator": [
+      "validate_candidate",
+      "promote_candidate",
+      "validate_and_promote",
+      "get_validation_history"
+    ]
+  },
+  "invariants": [
+    "No exceptions are raised past the public interface boundary for expected failure conditions — all expected failures (insufficient data, validation regression, budget exhausted, fine-tuning failure) are represented as PipelineFailure in PipelineResult.",
+    "Only RuntimeError (not_initialized, already_running), ValueError (config/validation errors at construction), IOError (unrecoverable I/O), and TypeError (dependency protocol mismatch) may be raised as exceptions.",
+    "Pipeline runs are serialized: at most one run_pipeline() execution is active at any time, enforced by an asyncio.Lock. Attempting a concurrent run raises RuntimeError.",
+    "PipelineState is persisted to the state file after every state transition (step completion, failure, status change). On crash and restart, initialize() recovers the last persisted state.",
+    "Consecutive failure count is incremented on every pipeline run that ends in FAILED status, and reset to 0 on every run that ends in COMPLETED status. It is never modified by other operations except reset_consecutive_failures().",
+    "PipelineRun.steps always contains exactly 5 PipelineStepRecord entries — one per PipelineStepName — in the canonical order: DATA_SNAPSHOT, BUDGET_CHECK, FINE_TUNE, VALIDATE, PROMOTE.",
+    "If a step fails, all subsequent steps in the run are marked SKIPPED (not PENDING).",
+    "Budget enforcement is hard: if current_month_spent_usd + estimated_cost_per_run_usd > max_monthly_budget_usd, the run is immediately rejected with SKIPPED_BUDGET status before any fine-tuning resources are consumed.",
+    "Budget period resets are computed against budget_reset_day: when the current UTC date's day >= budget_reset_day and the last reset was in a prior period, current_month_spent_usd is set to 0.0.",
+    "DataSnapshot.data_version_hash is computed as SHA-256 over the sorted, concatenated input strings of all training examples for the task type at snapshot time. This makes the hash deterministic and independent of insertion order.",
+    "The pipeline never mutates the currently serving model on failure — if any step after fine-tuning fails (validation, promotion), the previous model version continues serving.",
+    "All structured log entries within a pipeline run include the same run_id as a correlation field.",
+    "No global mutable state: all state is scoped to the pipeline instance, its PipelineState, and its injected dependencies.",
+    "Config parsing is strict — all PipelineConfig validation happens at construction/initialization time. Invalid config causes immediate ValueError, never silently defaults.",
+    "PipelineRun records in run_history are pruned to run_history_limit after each run. Oldest runs are removed first.",
+    "add_example() never auto-triggers a pipeline run. Callers must check trigger_evaluation.should_trigger and call run_pipeline() explicitly.",
+    "PipelineResult is a discriminated union on the 'status' field: 'success' resolves to PipelineSuccess, 'failure' resolves to PipelineFailure."
+  ],
+  "requires": [
+    "training_data_store",
+    "fine_tuning_orchestrator",
+    "model_validator"
+  ]
+}

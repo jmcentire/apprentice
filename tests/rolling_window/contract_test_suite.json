@@ -1,0 +1,895 @@
+{
+  "component_id": "rolling_window",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_happy_path",
+      "description": "DequeRollingWindow constructs with valid config and empty window",
+      "function": "DequeRollingWindow.__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "window_size": "10",
+        "max_window_age_seconds": "3600.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 0",
+        "window_size stored correctly",
+        "threading.Lock initialized"
+      ]
+    },
+    {
+      "id": "init_invalid_window_size_zero",
+      "description": "DequeRollingWindow raises error when window_size < 1",
+      "function": "DequeRollingWindow.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "window_size": "0",
+        "max_window_age_seconds": "3600.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_window_size",
+      "assertions": []
+    },
+    {
+      "id": "init_invalid_window_size_exceeds_max",
+      "description": "DequeRollingWindow raises error when window_size > 10000",
+      "function": "DequeRollingWindow.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "window_size": "10001",
+        "max_window_age_seconds": "3600.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_window_size",
+      "assertions": []
+    },
+    {
+      "id": "init_invalid_max_age_zero",
+      "description": "DequeRollingWindow raises error when max_window_age_seconds <= 0",
+      "function": "DequeRollingWindow.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "window_size": "5",
+        "max_window_age_seconds": "0.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid config",
+      "assertions": []
+    },
+    {
+      "id": "add_happy_path",
+      "description": "add() creates ComparisonPair with timestamp and correct fields from ComparisonPairInput",
+      "function": "DequeRollingWindow.add",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_data": "test prompt",
+        "local_response": "local resp",
+        "remote_response": "remote resp",
+        "evaluation_score": "0.85"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned pair has timestamp set",
+        "returned pair.input_data == input",
+        "returned pair.evaluation_score == 0.85",
+        "len(window) == 1"
+      ]
+    },
+    {
+      "id": "add_at_capacity_evicts_oldest",
+      "description": "add() on a full window evicts the oldest pair and retains window_size pairs",
+      "function": "DequeRollingWindow.add",
+      "category": "edge_case",
+      "setup_description": "Create window with window_size=3, add 3 pairs, then add a 4th",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 3 after 4th add",
+        "oldest pair is the 2nd added, not the 1st",
+        "newest pair is the 4th added"
+      ]
+    },
+    {
+      "id": "add_invalid_score_negative",
+      "description": "add() raises error when evaluation_score < 0.0",
+      "function": "DequeRollingWindow.add",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "evaluation_score": "-0.1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_evaluation_score",
+      "assertions": []
+    },
+    {
+      "id": "add_invalid_score_above_one",
+      "description": "add() raises error when evaluation_score > 1.0",
+      "function": "DequeRollingWindow.add",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "evaluation_score": "1.1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_evaluation_score",
+      "assertions": []
+    },
+    {
+      "id": "add_empty_input_data",
+      "description": "add() raises error when input_data is empty string",
+      "function": "DequeRollingWindow.add",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_data": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_input_data",
+      "assertions": []
+    },
+    {
+      "id": "add_boundary_score_zero",
+      "description": "add() accepts evaluation_score of exactly 0.0",
+      "function": "DequeRollingWindow.add",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "evaluation_score": "0.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned pair.evaluation_score == 0.0"
+      ]
+    },
+    {
+      "id": "add_boundary_score_one",
+      "description": "add() accepts evaluation_score of exactly 1.0",
+      "function": "DequeRollingWindow.add",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "evaluation_score": "1.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned pair.evaluation_score == 1.0"
+      ]
+    },
+    {
+      "id": "aggregate_empty_window",
+      "description": "aggregate() on empty window returns None/INSUFFICIENT_DATA/stale",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "trend_window": "None"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.sample_count == 0",
+        "result.mean_score is None",
+        "result.trend_slope is None",
+        "result.trend_direction == INSUFFICIENT_DATA",
+        "result.is_stale == True",
+        "result.oldest_timestamp is None"
+      ]
+    },
+    {
+      "id": "aggregate_single_pair",
+      "description": "aggregate() with one pair returns mean but no trend (INSUFFICIENT_DATA)",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "edge_case",
+      "setup_description": "Add one pair with score 0.7",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.sample_count == 1",
+        "result.mean_score == 0.7",
+        "result.trend_slope is None",
+        "result.trend_direction == INSUFFICIENT_DATA"
+      ]
+    },
+    {
+      "id": "aggregate_improving_trend",
+      "description": "aggregate() with increasing scores shows IMPROVING trend direction",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "happy_path",
+      "setup_description": "Add pairs with scores 0.2, 0.4, 0.6, 0.8",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.trend_slope > 0",
+        "result.trend_direction == IMPROVING",
+        "result.mean_score == approx(0.5)"
+      ]
+    },
+    {
+      "id": "aggregate_degrading_trend",
+      "description": "aggregate() with decreasing scores shows DEGRADING trend direction",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "happy_path",
+      "setup_description": "Add pairs with scores 0.8, 0.6, 0.4, 0.2",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.trend_slope < 0",
+        "result.trend_direction == DEGRADING"
+      ]
+    },
+    {
+      "id": "aggregate_stable_trend",
+      "description": "aggregate() with identical scores shows STABLE trend direction",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "happy_path",
+      "setup_description": "Add pairs all with score 0.5",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.trend_slope == 0",
+        "result.trend_direction == STABLE"
+      ]
+    },
+    {
+      "id": "aggregate_with_trend_window",
+      "description": "aggregate() with explicit trend_window uses only most recent N pairs for slope",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "happy_path",
+      "setup_description": "Add 5 pairs with scores 0.9, 0.1, 0.3, 0.5, 0.7 then aggregate with trend_window=3",
+      "mock_dependencies": {},
+      "input_values": {
+        "trend_window": "3"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.sample_count == 5",
+        "result.mean_score uses all 5 pairs",
+        "trend computed from last 3 pairs only"
+      ]
+    },
+    {
+      "id": "aggregate_invalid_trend_window",
+      "description": "aggregate() raises error when trend_window < 2",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "trend_window": "1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_trend_window",
+      "assertions": []
+    },
+    {
+      "id": "aggregate_trend_window_exceeds_sample_count",
+      "description": "aggregate() returns None trend_slope when trend_window > sample_count",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "edge_case",
+      "setup_description": "Add 2 pairs, aggregate with trend_window=5",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.trend_slope is None",
+        "result.trend_direction == INSUFFICIENT_DATA"
+      ]
+    },
+    {
+      "id": "aggregate_mean_in_range",
+      "description": "aggregate() mean_score is always in [0.0, 1.0]",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "0.0 <= result.mean_score <= 1.0"
+      ]
+    },
+    {
+      "id": "check_staleness_empty_window",
+      "description": "check_staleness() returns True for empty window",
+      "function": "DequeRollingWindow.check_staleness",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is True"
+      ]
+    },
+    {
+      "id": "check_staleness_fresh",
+      "description": "check_staleness() returns False when oldest pair is within max_age",
+      "function": "DequeRollingWindow.check_staleness",
+      "category": "happy_path",
+      "setup_description": "Add a pair just now, check staleness with large max_age",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is False"
+      ]
+    },
+    {
+      "id": "check_staleness_stale",
+      "description": "check_staleness() returns True when oldest pair is older than max_age",
+      "function": "DequeRollingWindow.check_staleness",
+      "category": "happy_path",
+      "setup_description": "Add a pair with old timestamp, check staleness with small max_age",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is True"
+      ]
+    },
+    {
+      "id": "check_staleness_invalid_max_age",
+      "description": "check_staleness() raises error when max_age_seconds <= 0",
+      "function": "DequeRollingWindow.check_staleness",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "max_age_seconds": "-1.0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_max_age",
+      "assertions": []
+    },
+    {
+      "id": "pairs_returns_snapshot",
+      "description": "pairs() returns ordered copy that doesn't affect window on mutation",
+      "function": "DequeRollingWindow.pairs",
+      "category": "happy_path",
+      "setup_description": "Add 3 pairs, get pairs, mutate returned list",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(result) == 3",
+        "result ordered oldest to newest",
+        "mutating result does not affect window"
+      ]
+    },
+    {
+      "id": "pairs_empty_window",
+      "description": "pairs() returns empty list for empty window",
+      "function": "DequeRollingWindow.pairs",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == []"
+      ]
+    },
+    {
+      "id": "len_empty",
+      "description": "__len__ returns 0 for empty window",
+      "function": "DequeRollingWindow.__len__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 0"
+      ]
+    },
+    {
+      "id": "len_after_adds",
+      "description": "__len__ returns correct count after multiple adds",
+      "function": "DequeRollingWindow.__len__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == number of adds"
+      ]
+    },
+    {
+      "id": "len_never_exceeds_window_size",
+      "description": "__len__ never exceeds window_size even after many adds",
+      "function": "DequeRollingWindow.__len__",
+      "category": "invariant",
+      "setup_description": "Window of size 3, add 10 pairs",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 3"
+      ]
+    },
+    {
+      "id": "persist_happy_path",
+      "description": "persist() delegates to store.save() with correct task_type and pairs snapshot",
+      "function": "DequeRollingWindow.persist",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store": "mock WindowStore"
+      },
+      "input_values": {
+        "task_type": "summarization"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "store.save called once with task_type and pairs"
+      ]
+    },
+    {
+      "id": "persist_empty_task_type",
+      "description": "persist() raises error when task_type is empty",
+      "function": "DequeRollingWindow.persist",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_type": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_type",
+      "assertions": []
+    },
+    {
+      "id": "persist_no_store_noop",
+      "description": "persist() is silent no-op when no store injected",
+      "function": "DequeRollingWindow.persist",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "no error raised",
+        "no side effects"
+      ]
+    },
+    {
+      "id": "persist_store_write_error",
+      "description": "persist() propagates store I/O error",
+      "function": "DequeRollingWindow.persist",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store": "store.save raises IOError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "store_write_error",
+      "assertions": []
+    },
+    {
+      "id": "load_from_store_happy_path",
+      "description": "load_from_store() loads pairs from store and replaces window contents",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store": "mock WindowStore returning 3 pairs"
+      },
+      "input_values": {
+        "task_type": "summarization"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned int == 3",
+        "len(window) == 3",
+        "pairs match stored data"
+      ]
+    },
+    {
+      "id": "load_from_store_empty_task_type",
+      "description": "load_from_store() raises error when task_type is empty",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_type": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_type",
+      "assertions": []
+    },
+    {
+      "id": "load_from_store_no_store_noop",
+      "description": "load_from_store() returns 0 when no store injected",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned int == 0"
+      ]
+    },
+    {
+      "id": "load_from_store_truncates_excess",
+      "description": "load_from_store() retains only most recent window_size pairs when store returns more",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "edge_case",
+      "setup_description": "window_size=3, store returns 5 pairs",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 3",
+        "retained pairs are the 3 most recent"
+      ]
+    },
+    {
+      "id": "load_from_store_read_error",
+      "description": "load_from_store() propagates store read error",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store": "store.load raises IOError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "store_read_error",
+      "assertions": []
+    },
+    {
+      "id": "load_from_store_corrupt_data",
+      "description": "load_from_store() handles corrupt data gracefully (empty list returned by store)",
+      "function": "DequeRollingWindow.load_from_store",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store": "store.load returns empty list due to corruption"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 0",
+        "returned int == 0"
+      ]
+    },
+    {
+      "id": "json_store_init_happy_path",
+      "description": "JsonFileWindowStore creates base_dir if not exists",
+      "function": "JsonFileWindowStore.__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "base_dir exists on filesystem"
+      ]
+    },
+    {
+      "id": "json_store_init_empty_base_dir",
+      "description": "JsonFileWindowStore raises error for empty base_dir",
+      "function": "JsonFileWindowStore.__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "base_dir": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_path",
+      "assertions": []
+    },
+    {
+      "id": "json_store_save_load_roundtrip",
+      "description": "save() then load() returns identical pairs",
+      "function": "JsonFileWindowStore.save",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "loaded pairs match saved pairs exactly",
+        "all fields preserved"
+      ]
+    },
+    {
+      "id": "json_store_save_empty_task_type",
+      "description": "save() raises error for empty task_type",
+      "function": "JsonFileWindowStore.save",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_type": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_type",
+      "assertions": []
+    },
+    {
+      "id": "json_store_load_missing_file",
+      "description": "load() returns empty list when file does not exist",
+      "function": "JsonFileWindowStore.load",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == []"
+      ]
+    },
+    {
+      "id": "json_store_load_corrupt_json",
+      "description": "load() returns empty list and logs warning for corrupt JSON file",
+      "function": "JsonFileWindowStore.load",
+      "category": "edge_case",
+      "setup_description": "Write invalid JSON to the expected file path",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result == []"
+      ]
+    },
+    {
+      "id": "json_store_load_empty_task_type",
+      "description": "load() raises error for empty task_type",
+      "function": "JsonFileWindowStore.load",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "task_type": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_type",
+      "assertions": []
+    },
+    {
+      "id": "invariant_deque_maxlen",
+      "description": "Internal deque length never exceeds window_size after many adds",
+      "function": "DequeRollingWindow.add",
+      "category": "invariant",
+      "setup_description": "Add 100 pairs to window of size 5",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == 5 at all times"
+      ]
+    },
+    {
+      "id": "invariant_score_range",
+      "description": "All ComparisonPair evaluation_scores are in [0.0, 1.0]",
+      "function": "DequeRollingWindow.pairs",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "all(0.0 <= p.evaluation_score <= 1.0 for p in pairs)"
+      ]
+    },
+    {
+      "id": "invariant_nonempty_input_data",
+      "description": "All ComparisonPair input_data values are non-empty strings",
+      "function": "DequeRollingWindow.pairs",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "all(len(p.input_data) > 0 for p in pairs)"
+      ]
+    },
+    {
+      "id": "invariant_chronological_order",
+      "description": "Pairs are ordered chronologically oldest to newest",
+      "function": "DequeRollingWindow.pairs",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "timestamps are non-decreasing from index 0 to -1"
+      ]
+    },
+    {
+      "id": "invariant_frozen_pairs",
+      "description": "ComparisonPair instances are immutable (frozen)",
+      "function": "DequeRollingWindow.add",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "attempting to set attribute on returned pair raises error"
+      ]
+    },
+    {
+      "id": "persist_load_roundtrip",
+      "description": "persist() followed by load_from_store() on new window preserves all pair data",
+      "function": "DequeRollingWindow.persist",
+      "category": "happy_path",
+      "setup_description": "Add pairs, persist, create new window, load_from_store",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "new window has same pairs as original",
+        "all fields match"
+      ]
+    },
+    {
+      "id": "aggregate_is_stale_with_data",
+      "description": "aggregate() is_stale reflects staleness of oldest pair relative to max_window_age_seconds",
+      "function": "DequeRollingWindow.aggregate",
+      "category": "happy_path",
+      "setup_description": "Add pair, aggregate immediately",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.is_stale == False when data is fresh"
+      ]
+    },
+    {
+      "id": "add_timestamp_is_utc",
+      "description": "add() assigns timestamp as approximately current UTC time",
+      "function": "DequeRollingWindow.add",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "returned pair timestamp is valid ISO-8601",
+        "timestamp is within a few seconds of now UTC"
+      ]
+    },
+    {
+      "id": "rapid_adds_no_data_loss",
+      "description": "Rapid sequential adds do not lose data within window_size",
+      "function": "DequeRollingWindow.add",
+      "category": "edge_case",
+      "setup_description": "Add window_size pairs rapidly in sequence",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(window) == window_size",
+        "all pairs present and distinct"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for the Rolling Comparison Window component.\n\nOrganized into sections:\n1. conftest-style fixtures and helpers (inline)\n2. DequeRollingWindow unit tests (mocked store)\n3. JsonFileWindowStore integration tests (tmp_path)\n4. Invariant and property tests\n\"\"\"\n\nimport json\nimport os\nimport time\nfrom datetime import datetime, timezone, timedelta\nfrom unittest.mock import MagicMock, patch, PropertyMock\nfrom typing import List, Optional\n\nimport pytest\n\n# ── Component imports ──────────────────────────────────────────────────────\nfrom src.rolling_window import (\n    DequeRollingWindow,\n    JsonFileWindowStore,\n    ComparisonPair,\n    ComparisonPairInput,\n    WindowAggregate,\n    WindowConfig,\n    StoreConfig,\n    TrendDirection,\n)\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# FIXTURES & HELPERS\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass FakeWindowStore:\n    \"\"\"In-memory fake implementing the WindowStore interface for unit tests.\"\"\"\n\n    def __init__(self):\n        self._data = {}\n        self.save_calls = []\n        self.load_calls = []\n\n    def save(self, task_type: str, pairs):\n        self.save_calls.append((task_type, list(pairs)))\n        self._data[task_type] = list(pairs)\n\n    def load(self, task_type: str):\n        self.load_calls.append(task_type)\n        return list(self._data.get(task_type, []))\n\n\ndef make_config(window_size=10, max_window_age_seconds=3600.0):\n    return WindowConfig(window_size=window_size, max_window_age_seconds=max_window_age_seconds)\n\n\ndef make_pair_input(input_data=\"test prompt\", local_response=\"local\", remote_response=\"remote\", evaluation_score=0.5):\n    return ComparisonPairInput(\n        input_data=input_data,\n        local_response=local_response,\n        remote_response=remote_response,\n        evaluation_score=evaluation_score,\n    )\n\n\n@pytest.fixture\ndef fake_store():\n    return FakeWindowStore()\n\n\n@pytest.fixture\ndef window(fake_store):\n    \"\"\"A default DequeRollingWindow with size 10, 1hr max age, and a fake store.\"\"\"\n    return DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n\n\n@pytest.fixture\ndef small_window(fake_store):\n    \"\"\"A small window of size 3 for eviction tests.\"\"\"\n    return DequeRollingWindow(config=make_config(3, 3600.0), store=fake_store)\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — INIT\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowInit:\n\n    def test_init_happy_path(self, fake_store):\n        w = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        assert len(w) == 0, \"Newly constructed window should be empty\"\n\n    def test_init_window_size_one(self, fake_store):\n        w = DequeRollingWindow(config=make_config(1, 1.0), store=fake_store)\n        assert len(w) == 0\n\n    def test_init_window_size_max(self, fake_store):\n        w = DequeRollingWindow(config=make_config(10000, 1.0), store=fake_store)\n        assert len(w) == 0\n\n    def test_init_invalid_window_size_zero(self, fake_store):\n        with pytest.raises(Exception):\n            DequeRollingWindow(config=make_config(0, 3600.0), store=fake_store)\n\n    def test_init_invalid_window_size_negative(self, fake_store):\n        with pytest.raises(Exception):\n            DequeRollingWindow(config=make_config(-1, 3600.0), store=fake_store)\n\n    def test_init_invalid_window_size_exceeds_max(self, fake_store):\n        with pytest.raises(Exception):\n            DequeRollingWindow(config=make_config(10001, 3600.0), store=fake_store)\n\n    def test_init_invalid_max_age_zero(self, fake_store):\n        with pytest.raises(Exception):\n            DequeRollingWindow(config=make_config(5, 0.0), store=fake_store)\n\n    def test_init_invalid_max_age_negative(self, fake_store):\n        with pytest.raises(Exception):\n            DequeRollingWindow(config=make_config(5, -1.0), store=fake_store)\n\n    def test_init_no_store_accepted(self):\n        \"\"\"Passing None as store should be accepted (no-op persistence).\"\"\"\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=None)\n        assert len(w) == 0\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — ADD\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowAdd:\n\n    def test_add_happy_path(self, window):\n        pair_input = make_pair_input(input_data=\"hello\", evaluation_score=0.85)\n        result = window.add(pair_input)\n\n        assert result.input_data == \"hello\", \"input_data should match\"\n        assert result.local_response == \"local\", \"local_response should match\"\n        assert result.remote_response == \"remote\", \"remote_response should match\"\n        assert result.evaluation_score == pytest.approx(0.85), \"score should match\"\n        assert result.timestamp is not None, \"timestamp must be set\"\n        assert len(window) == 1, \"Window should have 1 pair\"\n\n    def test_add_timestamp_is_utc_and_recent(self, window):\n        before = datetime.now(timezone.utc)\n        result = window.add(make_pair_input())\n        after = datetime.now(timezone.utc)\n\n        ts = datetime.fromisoformat(result.timestamp)\n        assert ts >= before - timedelta(seconds=2), \"timestamp should be near current time\"\n        assert ts <= after + timedelta(seconds=2), \"timestamp should be near current time\"\n\n    def test_add_boundary_score_zero(self, window):\n        result = window.add(make_pair_input(evaluation_score=0.0))\n        assert result.evaluation_score == pytest.approx(0.0)\n\n    def test_add_boundary_score_one(self, window):\n        result = window.add(make_pair_input(evaluation_score=1.0))\n        assert result.evaluation_score == pytest.approx(1.0)\n\n    def test_add_invalid_score_negative(self, window):\n        with pytest.raises(Exception):\n            window.add(make_pair_input(evaluation_score=-0.1))\n\n    def test_add_invalid_score_above_one(self, window):\n        with pytest.raises(Exception):\n            window.add(make_pair_input(evaluation_score=1.1))\n\n    def test_add_empty_input_data(self, window):\n        with pytest.raises(Exception):\n            window.add(make_pair_input(input_data=\"\"))\n\n    def test_add_at_capacity_evicts_oldest(self, small_window):\n        pairs = []\n        for i in range(3):\n            p = small_window.add(make_pair_input(input_data=f\"prompt_{i}\", evaluation_score=0.1 * (i + 1)))\n            pairs.append(p)\n\n        assert len(small_window) == 3\n\n        # Add a 4th pair — should evict the first\n        p4 = small_window.add(make_pair_input(input_data=\"prompt_3\", evaluation_score=0.9))\n        assert len(small_window) == 3, \"Window should still be at capacity\"\n\n        current_pairs = small_window.pairs()\n        assert current_pairs[0].input_data == \"prompt_1\", \"Oldest should now be prompt_1 (prompt_0 evicted)\"\n        assert current_pairs[-1].input_data == \"prompt_3\", \"Newest should be prompt_3\"\n\n    def test_add_newest_is_last(self, window):\n        window.add(make_pair_input(input_data=\"first\"))\n        p2 = window.add(make_pair_input(input_data=\"second\"))\n        pairs = window.pairs()\n        assert pairs[-1].input_data == \"second\", \"Newest pair should be last\"\n\n    def test_rapid_adds_no_data_loss(self, fake_store):\n        ws = 50\n        w = DequeRollingWindow(config=make_config(ws, 3600.0), store=fake_store)\n        added = []\n        for i in range(ws):\n            p = w.add(make_pair_input(input_data=f\"rapid_{i}\", evaluation_score=i / ws))\n            added.append(p)\n        assert len(w) == ws, f\"Window should contain exactly {ws} pairs\"\n        current = w.pairs()\n        for i, pair in enumerate(current):\n            assert pair.input_data == f\"rapid_{i}\", f\"Pair at index {i} should match\"\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — AGGREGATE\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowAggregate:\n\n    def test_aggregate_empty_window(self, window):\n        result = window.aggregate(trend_window=None)\n        assert result.sample_count == 0\n        assert result.mean_score is None\n        assert result.trend_slope is None\n        assert result.trend_direction == TrendDirection.INSUFFICIENT_DATA\n        assert result.is_stale is True\n        assert result.oldest_timestamp is None\n\n    def test_aggregate_single_pair(self, window):\n        window.add(make_pair_input(evaluation_score=0.7))\n        result = window.aggregate(trend_window=None)\n        assert result.sample_count == 1\n        assert result.mean_score == pytest.approx(0.7)\n        assert result.trend_slope is None, \"Need >= 2 pairs for trend\"\n        assert result.trend_direction == TrendDirection.INSUFFICIENT_DATA\n\n    def test_aggregate_improving_trend(self, window):\n        scores = [0.2, 0.4, 0.6, 0.8]\n        for s in scores:\n            window.add(make_pair_input(evaluation_score=s))\n\n        result = window.aggregate(trend_window=None)\n        assert result.sample_count == 4\n        assert result.mean_score == pytest.approx(0.5)\n        assert result.trend_slope is not None\n        assert result.trend_slope > 0, \"Slope should be positive for improving scores\"\n        assert result.trend_direction == TrendDirection.IMPROVING\n\n    def test_aggregate_degrading_trend(self, window):\n        for s in [0.8, 0.6, 0.4, 0.2]:\n            window.add(make_pair_input(evaluation_score=s))\n\n        result = window.aggregate(trend_window=None)\n        assert result.trend_slope is not None\n        assert result.trend_slope < 0, \"Slope should be negative for degrading scores\"\n        assert result.trend_direction == TrendDirection.DEGRADING\n\n    def test_aggregate_stable_trend(self, window):\n        for _ in range(5):\n            window.add(make_pair_input(evaluation_score=0.5))\n\n        result = window.aggregate(trend_window=None)\n        assert result.trend_slope is not None\n        assert result.trend_slope == pytest.approx(0.0), \"Slope should be 0 for identical scores\"\n        assert result.trend_direction == TrendDirection.STABLE\n\n    def test_aggregate_with_trend_window(self, window):\n        # First 2 pairs: high scores, last 3 pairs: increasing\n        scores = [0.9, 0.1, 0.3, 0.5, 0.7]\n        for s in scores:\n            window.add(make_pair_input(evaluation_score=s))\n\n        result = window.aggregate(trend_window=3)\n        assert result.sample_count == 5\n        assert result.mean_score == pytest.approx(sum(scores) / len(scores))\n        # Trend only considers last 3: 0.3, 0.5, 0.7 → improving\n        assert result.trend_slope is not None\n        assert result.trend_slope > 0, \"Trend over last 3 should be improving\"\n        assert result.trend_direction == TrendDirection.IMPROVING\n\n    def test_aggregate_trend_window_exceeds_sample_count(self, window):\n        window.add(make_pair_input(evaluation_score=0.3))\n        window.add(make_pair_input(evaluation_score=0.7))\n        result = window.aggregate(trend_window=5)\n        assert result.trend_slope is None, \"trend_window > sample_count → None slope\"\n        assert result.trend_direction == TrendDirection.INSUFFICIENT_DATA\n\n    def test_aggregate_invalid_trend_window_one(self, window):\n        with pytest.raises(Exception):\n            window.aggregate(trend_window=1)\n\n    def test_aggregate_invalid_trend_window_zero(self, window):\n        with pytest.raises(Exception):\n            window.aggregate(trend_window=0)\n\n    def test_aggregate_mean_in_range(self, window):\n        for s in [0.0, 0.25, 0.5, 0.75, 1.0]:\n            window.add(make_pair_input(evaluation_score=s))\n        result = window.aggregate(trend_window=None)\n        assert result.mean_score is not None\n        assert 0.0 <= result.mean_score <= 1.0, \"mean_score must be in [0, 1]\"\n\n    def test_aggregate_is_stale_false_when_fresh(self, window):\n        window.add(make_pair_input())\n        result = window.aggregate(trend_window=None)\n        # max_window_age_seconds is 3600, pair was just added → not stale\n        assert result.is_stale is False, \"Freshly added data should not be stale\"\n\n    def test_aggregate_oldest_timestamp_set_when_nonempty(self, window):\n        window.add(make_pair_input())\n        result = window.aggregate(trend_window=None)\n        assert result.oldest_timestamp is not None\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — CHECK_STALENESS\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowCheckStaleness:\n\n    def test_check_staleness_empty_window(self, window):\n        assert window.check_staleness(max_age_seconds=3600.0) is True\n\n    def test_check_staleness_fresh(self, window):\n        window.add(make_pair_input())\n        assert window.check_staleness(max_age_seconds=3600.0) is False\n\n    def test_check_staleness_stale_pair(self, fake_store):\n        \"\"\"Simulate staleness by using a very small max_age and time.sleep.\"\"\"\n        w = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        w.add(make_pair_input())\n        # Check with a tiny max_age to ensure staleness\n        # The pair was just added, so 0.0001 sec is likely too small\n        # Use time.sleep to ensure the pair becomes stale\n        time.sleep(0.05)\n        result = w.check_staleness(max_age_seconds=0.01)\n        assert result is True, \"Pair older than 0.01s should be stale after 0.05s sleep\"\n\n    def test_check_staleness_not_stale_with_large_age(self, window):\n        window.add(make_pair_input())\n        assert window.check_staleness(max_age_seconds=999999.0) is False\n\n    def test_check_staleness_invalid_max_age_negative(self, window):\n        with pytest.raises(Exception):\n            window.check_staleness(max_age_seconds=-1.0)\n\n    def test_check_staleness_invalid_max_age_zero(self, window):\n        with pytest.raises(Exception):\n            window.check_staleness(max_age_seconds=0.0)\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — PAIRS\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowPairs:\n\n    def test_pairs_empty(self, window):\n        result = window.pairs()\n        assert result == [], \"Empty window should return empty list\"\n\n    def test_pairs_returns_ordered_copy(self, window):\n        for i in range(3):\n            window.add(make_pair_input(input_data=f\"p_{i}\"))\n\n        result = window.pairs()\n        assert len(result) == 3\n        assert result[0].input_data == \"p_0\"\n        assert result[1].input_data == \"p_1\"\n        assert result[2].input_data == \"p_2\"\n\n    def test_pairs_snapshot_isolation(self, window):\n        window.add(make_pair_input(input_data=\"before\"))\n        snapshot = window.pairs()\n        assert len(snapshot) == 1\n\n        window.add(make_pair_input(input_data=\"after\"))\n        assert len(snapshot) == 1, \"Snapshot should not be affected by subsequent adds\"\n        assert len(window.pairs()) == 2, \"Window should have 2 pairs now\"\n\n    def test_pairs_mutation_does_not_affect_window(self, window):\n        window.add(make_pair_input())\n        snapshot = window.pairs()\n        snapshot.clear()\n        assert len(window) == 1, \"Clearing snapshot should not affect window\"\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — __LEN__\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowLen:\n\n    def test_len_empty(self, window):\n        assert len(window) == 0\n\n    def test_len_after_adds(self, window):\n        for i in range(5):\n            window.add(make_pair_input(input_data=f\"item_{i}\"))\n        assert len(window) == 5\n\n    def test_len_never_exceeds_window_size(self, small_window):\n        for i in range(10):\n            small_window.add(make_pair_input(input_data=f\"item_{i}\"))\n        assert len(small_window) == 3, \"len should never exceed window_size=3\"\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — PERSIST\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowPersist:\n\n    def test_persist_happy_path(self, window, fake_store):\n        window.add(make_pair_input(input_data=\"p1\"))\n        window.add(make_pair_input(input_data=\"p2\"))\n        window.persist(task_type=\"summarization\")\n\n        assert len(fake_store.save_calls) == 1\n        task, pairs = fake_store.save_calls[0]\n        assert task == \"summarization\"\n        assert len(pairs) == 2\n        assert pairs[0].input_data == \"p1\"\n        assert pairs[1].input_data == \"p2\"\n\n    def test_persist_empty_task_type(self, window):\n        with pytest.raises(Exception):\n            window.persist(task_type=\"\")\n\n    def test_persist_no_store_noop(self):\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=None)\n        w.add(make_pair_input())\n        # Should not raise\n        w.persist(task_type=\"test\")\n\n    def test_persist_store_write_error(self, fake_store):\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=fake_store)\n        w.add(make_pair_input())\n        fake_store.save = MagicMock(side_effect=IOError(\"disk full\"))\n        with pytest.raises(Exception):\n            w.persist(task_type=\"test\")\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# DEQUE ROLLING WINDOW — LOAD_FROM_STORE\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestDequeRollingWindowLoadFromStore:\n\n    def test_load_from_store_happy_path(self, window, fake_store):\n        # Pre-populate store via persist\n        for i in range(3):\n            window.add(make_pair_input(input_data=f\"item_{i}\", evaluation_score=0.1 * (i + 1)))\n        window.persist(task_type=\"test_task\")\n\n        # Create fresh window and load\n        w2 = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        count = w2.load_from_store(task_type=\"test_task\")\n        assert count == 3\n        assert len(w2) == 3\n        loaded_pairs = w2.pairs()\n        assert loaded_pairs[0].input_data == \"item_0\"\n        assert loaded_pairs[2].input_data == \"item_2\"\n\n    def test_load_from_store_empty_task_type(self, window):\n        with pytest.raises(Exception):\n            window.load_from_store(task_type=\"\")\n\n    def test_load_from_store_no_store_noop(self):\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=None)\n        result = w.load_from_store(task_type=\"test\")\n        assert result == 0\n\n    def test_load_from_store_truncates_excess(self, fake_store):\n        # Create a big window, add 5 pairs, persist\n        big_w = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        for i in range(5):\n            big_w.add(make_pair_input(input_data=f\"pair_{i}\"))\n        big_w.persist(task_type=\"trunc_test\")\n\n        # Load into a window of size 3 → should only keep last 3\n        small_w = DequeRollingWindow(config=make_config(3, 3600.0), store=fake_store)\n        count = small_w.load_from_store(task_type=\"trunc_test\")\n        assert count == 3, \"Should load only window_size pairs\"\n        assert len(small_w) == 3\n        loaded = small_w.pairs()\n        # Most recent 3 should be pair_2, pair_3, pair_4\n        assert loaded[0].input_data == \"pair_2\"\n        assert loaded[1].input_data == \"pair_3\"\n        assert loaded[2].input_data == \"pair_4\"\n\n    def test_load_from_store_store_read_error(self, fake_store):\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=fake_store)\n        fake_store.load = MagicMock(side_effect=IOError(\"read error\"))\n        with pytest.raises(Exception):\n            w.load_from_store(task_type=\"test\")\n\n    def test_load_from_store_corrupt_data_empty_fallback(self, fake_store):\n        \"\"\"Store returns empty list (corrupt data graceful fallback).\"\"\"\n        fake_store._data[\"corrupt_task\"] = []\n        w = DequeRollingWindow(config=make_config(5, 3600.0), store=fake_store)\n        count = w.load_from_store(task_type=\"corrupt_task\")\n        assert count == 0\n        assert len(w) == 0\n\n    def test_load_replaces_existing_data(self, fake_store):\n        \"\"\"load_from_store replaces current window contents, not appends.\"\"\"\n        w = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        w.add(make_pair_input(input_data=\"original\"))\n        assert len(w) == 1\n\n        # Store has different data\n        fake_store._data[\"replace_test\"] = []\n        count = w.load_from_store(task_type=\"replace_test\")\n        assert count == 0, \"Loading empty data should clear the window\"\n        assert len(w) == 0\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# PERSIST/LOAD ROUND-TRIP\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestPersistLoadRoundTrip:\n\n    def test_roundtrip_preserves_all_fields(self, fake_store):\n        w1 = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        p1 = w1.add(make_pair_input(\n            input_data=\"prompt A\",\n            local_response=\"local A\",\n            remote_response=\"remote A\",\n            evaluation_score=0.42,\n        ))\n        p2 = w1.add(make_pair_input(\n            input_data=\"prompt B\",\n            local_response=\"local B\",\n            remote_response=\"remote B\",\n            evaluation_score=0.99,\n        ))\n        w1.persist(task_type=\"roundtrip\")\n\n        w2 = DequeRollingWindow(config=make_config(10, 3600.0), store=fake_store)\n        count = w2.load_from_store(task_type=\"roundtrip\")\n        assert count == 2\n\n        loaded = w2.pairs()\n        assert loaded[0].input_data == \"prompt A\"\n        assert loaded[0].local_response == \"local A\"\n        assert loaded[0].remote_response == \"remote A\"\n        assert loaded[0].evaluation_score == pytest.approx(0.42)\n        assert loaded[0].timestamp == p1.timestamp\n\n        assert loaded[1].input_data == \"prompt B\"\n        assert loaded[1].local_response == \"local B\"\n        assert loaded[1].remote_response == \"remote B\"\n        assert loaded[1].evaluation_score == pytest.approx(0.99)\n        assert loaded[1].timestamp == p2.timestamp\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# JSON FILE WINDOW STORE — INTEGRATION TESTS\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestJsonFileWindowStoreInit:\n\n    def test_init_creates_directory(self, tmp_path):\n        base = str(tmp_path / \"new_subdir\" / \"store\")\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=base))\n        assert os.path.isdir(base), \"base_dir should be created\"\n\n    def test_init_existing_directory(self, tmp_path):\n        base = str(tmp_path)\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=base))\n        assert os.path.isdir(base)\n\n    def test_init_empty_base_dir(self):\n        with pytest.raises(Exception):\n            JsonFileWindowStore(config=StoreConfig(base_dir=\"\"))\n\n\nclass TestJsonFileWindowStoreSaveLoad:\n\n    def _make_pairs(self, window, n=3):\n        \"\"\"Helper: create n pairs via a window and return them.\"\"\"\n        pairs = []\n        for i in range(n):\n            p = window.add(make_pair_input(\n                input_data=f\"data_{i}\",\n                local_response=f\"local_{i}\",\n                remote_response=f\"remote_{i}\",\n                evaluation_score=round(i * 0.25, 2),\n            ))\n            pairs.append(p)\n        return pairs\n\n    def test_save_load_roundtrip(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        # Use a window to create valid ComparisonPair objects\n        w = DequeRollingWindow(config=make_config(10, 3600.0), store=store)\n        pairs = self._make_pairs(w, 3)\n\n        store.save(\"my_task\", pairs)\n        loaded = store.load(\"my_task\")\n\n        assert len(loaded) == 3, \"Should load all 3 pairs\"\n        for orig, loaded_p in zip(pairs, loaded):\n            assert loaded_p.input_data == orig.input_data\n            assert loaded_p.local_response == orig.local_response\n            assert loaded_p.remote_response == orig.remote_response\n            assert loaded_p.evaluation_score == pytest.approx(orig.evaluation_score)\n            assert loaded_p.timestamp == orig.timestamp\n\n    def test_save_empty_task_type(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        with pytest.raises(Exception):\n            store.save(\"\", [])\n\n    def test_save_empty_pairs_list(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        store.save(\"empty_task\", [])\n        loaded = store.load(\"empty_task\")\n        assert loaded == []\n\n    def test_load_missing_file(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        result = store.load(\"nonexistent_task\")\n        assert result == [], \"Missing file should return empty list\"\n\n    def test_load_corrupt_json(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        # Write garbage to the expected file\n        # We need to figure out the filename pattern; try common patterns\n        # The contract says filename is derived from task_type with sanitization\n        corrupt_file = tmp_path / \"corrupt_task.json\"\n        corrupt_file.write_text(\"{{{not valid json!!!\", encoding=\"utf-8\")\n\n        result = store.load(\"corrupt_task\")\n        assert result == [], \"Corrupt JSON should return empty list\"\n\n    def test_load_empty_task_type(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        with pytest.raises(Exception):\n            store.load(\"\")\n\n    def test_save_overwrite(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        w = DequeRollingWindow(config=make_config(10, 3600.0), store=store)\n        p1 = w.add(make_pair_input(input_data=\"first_version\"))\n        store.save(\"overwrite_task\", [p1])\n\n        p2 = w.add(make_pair_input(input_data=\"second_version\"))\n        store.save(\"overwrite_task\", [p2])\n\n        loaded = store.load(\"overwrite_task\")\n        assert len(loaded) == 1\n        assert loaded[0].input_data == \"second_version\"\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# END-TO-END: WINDOW + REAL STORE\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestEndToEndWithRealStore:\n\n    def test_full_workflow(self, tmp_path):\n        store = JsonFileWindowStore(config=StoreConfig(base_dir=str(tmp_path)))\n        w1 = DequeRollingWindow(config=make_config(5, 3600.0), store=store)\n\n        for i in range(4):\n            w1.add(make_pair_input(input_data=f\"q_{i}\", evaluation_score=0.2 * (i + 1)))\n\n        w1.persist(task_type=\"e2e_test\")\n\n        # New window, load from store\n        w2 = DequeRollingWindow(config=make_config(5, 3600.0), store=store)\n        count = w2.load_from_store(task_type=\"e2e_test\")\n        assert count == 4\n        assert len(w2) == 4\n\n        agg = w2.aggregate(trend_window=None)\n        assert agg.sample_count == 4\n        assert agg.mean_score is not None\n        assert 0.0 <= agg.mean_score <= 1.0\n        assert agg.trend_direction == TrendDirection.IMPROVING\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# INVARIANT TESTS\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestInvariants:\n\n    def test_deque_maxlen_never_exceeded(self, fake_store):\n        ws = 5\n        w = DequeRollingWindow(config=make_config(ws, 3600.0), store=fake_store)\n        for i in range(100):\n            w.add(make_pair_input(input_data=f\"inv_{i}\", evaluation_score=(i % 11) / 10.0))\n            assert len(w) <= ws, f\"len={len(w)} exceeded window_size={ws} at add #{i}\"\n\n    def test_all_scores_in_range(self, window):\n        scores = [0.0, 0.1, 0.5, 0.9, 1.0]\n        for s in scores:\n            window.add(make_pair_input(evaluation_score=s))\n        for p in window.pairs():\n            assert 0.0 <= p.evaluation_score <= 1.0, f\"Score {p.evaluation_score} out of range\"\n\n    def test_all_input_data_nonempty(self, window):\n        for i in range(5):\n            window.add(make_pair_input(input_data=f\"nonempty_{i}\"))\n        for p in window.pairs():\n            assert len(p.input_data) > 0, \"input_data must be non-empty\"\n\n    def test_chronological_order(self, window):\n        for i in range(5):\n            window.add(make_pair_input(input_data=f\"chrono_{i}\"))\n            # small sleep to ensure distinct timestamps in edge-case environments\n            time.sleep(0.001)\n\n        pairs = window.pairs()\n        for i in range(len(pairs) - 1):\n            ts_a = datetime.fromisoformat(pairs[i].timestamp)\n            ts_b = datetime.fromisoformat(pairs[i + 1].timestamp)\n            assert ts_a <= ts_b, f\"Pair {i} timestamp {ts_a} should be <= pair {i+1} timestamp {ts_b}\"\n\n    def test_frozen_pairs_immutable(self, window):\n        pair = window.add(make_pair_input())\n        with pytest.raises(Exception):\n            pair.input_data = \"mutated\"\n        with pytest.raises(Exception):\n            pair.evaluation_score = 0.99\n\n    def test_empty_window_is_stale(self, window):\n        result = window.aggregate(trend_window=None)\n        assert result.is_stale is True, \"Empty window must always be stale\"\n\n    def test_trend_requires_two_points(self, window):\n        window.add(make_pair_input(evaluation_score=0.5))\n        result = window.aggregate(trend_window=None)\n        assert result.trend_slope is None\n        assert result.trend_direction == TrendDirection.INSUFFICIENT_DATA\n\n    def test_aggregate_snapshot_immutability(self, window):\n        \"\"\"WindowAggregate should not change when the window changes after computation.\"\"\"\n        window.add(make_pair_input(evaluation_score=0.3))\n        window.add(make_pair_input(evaluation_score=0.7))\n        agg = window.aggregate(trend_window=None)\n\n        # Add more pairs\n        window.add(make_pair_input(evaluation_score=0.1))\n        window.add(make_pair_input(evaluation_score=0.9))\n\n        # Original aggregate should be unchanged\n        assert agg.sample_count == 2, \"Aggregate snapshot should not be affected by later adds\"\n        assert agg.mean_score == pytest.approx(0.5)\n\n    def test_window_aggregate_is_frozen(self, window):\n        window.add(make_pair_input())\n        agg = window.aggregate(trend_window=None)\n        with pytest.raises(Exception):\n            agg.sample_count = 999\n\n    def test_timestamps_are_valid_iso8601(self, window):\n        window.add(make_pair_input())\n        pair = window.pairs()[0]\n        # Should not raise\n        dt = datetime.fromisoformat(pair.timestamp)\n        assert dt.tzinfo is not None or \"Z\" in pair.timestamp or \"+\" in pair.timestamp, \\\n            \"Timestamp should include timezone info\"\n\n\n# ═══════════════════════════════════════════════════════════════════════════\n# PROPERTY-BASED TESTS (using parameterize as lightweight hypothesis)\n# ═══════════════════════════════════════════════════════════════════════════\n\nclass TestPropertyBased:\n    \"\"\"Parameterized tests covering property-like invariants across various inputs.\"\"\"\n\n    @pytest.mark.parametrize(\"ws\", [1, 2, 5, 10, 100])\n    def test_len_bounded_by_window_size(self, ws, fake_store):\n        w = DequeRollingWindow(config=make_config(ws, 3600.0), store=fake_store)\n        for i in range(ws * 3):\n            w.add(make_pair_input(input_data=f\"prop_{i}\", evaluation_score=(i % 101) / 100.0))\n        assert len(w) == ws\n\n    @pytest.mark.parametrize(\"scores\", [\n        [0.0, 0.0, 0.0],\n        [1.0, 1.0, 1.0],\n        [0.0, 0.5, 1.0],\n        [0.1, 0.2, 0.3, 0.4],\n        [0.9, 0.7, 0.5, 0.3, 0.1],\n    ])\n    def test_mean_score_correctness(self, scores, fake_store):\n        w = DequeRollingWindow(config=make_config(len(scores) + 5, 3600.0), store=fake_store)\n        for s in scores:\n            w.add(make_pair_input(evaluation_score=s))\n        agg = w.aggregate(trend_window=None)\n        expected_mean = sum(scores) / len(scores)\n        assert agg.mean_score == pytest.approx(expected_mean), \\\n            f\"Expected mean {expected_mean}, got {agg.mean_score}\"\n\n    @pytest.mark.parametrize(\"n_pairs\", [0, 1, 2, 5, 10])\n    def test_sample_count_matches_len(self, n_pairs, fake_store):\n        w = DequeRollingWindow(config=make_config(20, 3600.0), store=fake_store)\n        for i in range(n_pairs):\n            w.add(make_pair_input(input_data=f\"sc_{i}\", evaluation_score=0.5))\n        agg = w.aggregate(trend_window=None)\n        assert agg.sample_count == n_pairs == len(w)\n\n    @pytest.mark.parametrize(\"ws\", [1, 3, 5])\n    def test_persist_load_identity(self, ws, fake_store):\n        w1 = DequeRollingWindow(config=make_config(ws, 3600.0), store=fake_store)\n        for i in range(ws):\n            w1.add(make_pair_input(input_data=f\"id_{i}\", evaluation_score=i / max(ws, 1)))\n        w1.persist(task_type=\"identity_test\")\n\n        w2 = DequeRollingWindow(config=make_config(ws, 3600.0), store=fake_store)\n        count = w2.load_from_store(task_type=\"identity_test\")\n        assert count == ws\n\n        original = w1.pairs()\n        restored = w2.pairs()\n        assert len(original) == len(restored)\n        for o, r in zip(original, restored):\n            assert o.input_data == r.input_data\n            assert o.evaluation_score == pytest.approx(r.evaluation_score)\n            assert o.timestamp == r.timestamp\n"
+}

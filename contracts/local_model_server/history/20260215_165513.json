@@ -1,0 +1,1074 @@
+{
+  "component_id": "local_model_server",
+  "name": "Local Model Server Client",
+  "description": "Async abstraction over local inference servers (Ollama, vLLM, llama.cpp). Implements a LocalModelClient Protocol (structural typing) as the public contract with concrete implementations per backend using composition. Handles model loading status checks, health checks, inference requests, and model version swapping on fine-tuned model promotion. Returns structured LocalModelUnavailable status (not an exception) when no model exists yet (Phase 1) or server is down. On model promotion: loads new model, runs smoke test, swaps to new version atomically, unloads old. All operational failures are captured in return value types — never crashes the system on local model failure. Only programming errors (wrong types, missing config) raise exceptions. Uses asyncio.Lock for promotion serialization. Accepts optional httpx.AsyncClient via dependency injection for testability. Structured JSON logging at all decision points.",
+  "version": 2,
+  "types": [
+    {
+      "name": "UnavailableReason",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "server_not_running",
+        "no_model_loaded",
+        "model_loading",
+        "inference_timeout",
+        "inference_error"
+      ],
+      "inner_types": [],
+      "description": "Discriminated reason why the local model server cannot fulfill a request. Used by Router and audit log to distinguish operational states."
+    },
+    {
+      "name": "PromotionStatus",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "success",
+        "smoke_test_failed",
+        "load_failed",
+        "server_unavailable",
+        "already_active",
+        "lock_timeout"
+      ],
+      "inner_types": [],
+      "description": "Outcome status of a model promotion attempt."
+    },
+    {
+      "name": "LocalBackendType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "ollama",
+        "vllm",
+        "llamacpp"
+      ],
+      "inner_types": [],
+      "description": "Supported local inference server backend types."
+    },
+    {
+      "name": "InferenceRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The rendered prompt text to send to the local model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "Prompt must be non-empty."
+            }
+          ]
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional model identifier override. If empty, uses the currently active model. Primarily for testing and smoke tests during promotion.",
+          "validators": []
+        },
+        {
+          "name": "max_tokens",
+          "type_ref": "int",
+          "required": false,
+          "default": "512",
+          "description": "Maximum number of tokens to generate.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1,max=32768",
+              "error_message": "max_tokens must be between 1 and 32768."
+            }
+          ]
+        },
+        {
+          "name": "temperature",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.7",
+          "description": "Sampling temperature for generation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.0,max=2.0",
+              "error_message": "Temperature must be between 0.0 and 2.0."
+            }
+          ]
+        },
+        {
+          "name": "stop_sequences",
+          "type_ref": "list[str]",
+          "required": false,
+          "default": "[]",
+          "description": "Optional stop sequences to halt generation.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Caller-supplied request identifier for correlation in audit logs. If empty, a UUID is generated internally.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured request for local model inference. Pydantic v2 model. Prompt is the rendered text to send; parameters control generation behavior."
+    },
+    {
+      "name": "InferenceSuccess",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "success",
+          "description": "Discriminator field. Always 'success' for this variant.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'success'",
+              "error_message": "result_type must be 'success' for InferenceSuccess."
+            }
+          ]
+        },
+        {
+          "name": "text",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The generated text response from the local model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the model that produced this response.",
+          "validators": []
+        },
+        {
+          "name": "tokens_generated",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of tokens generated in this response.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0",
+              "error_message": "tokens_generated must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "tokens_prompt",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of tokens in the prompt as counted by the backend.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0",
+              "error_message": "tokens_prompt must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock inference latency in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.0",
+              "error_message": "latency_ms must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "backend",
+          "type_ref": "LocalBackendType",
+          "required": true,
+          "default": "",
+          "description": "Which backend produced this result.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Correlated request identifier from the InferenceRequest.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Successful inference result from any local backend. Backend-agnostic — concrete clients normalize their backend-specific responses into this shape. Tagged with result_type='success' for discriminated union."
+    },
+    {
+      "name": "LocalModelUnavailable",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "unavailable",
+          "description": "Discriminator field. Always 'unavailable' for this variant.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'unavailable'",
+              "error_message": "result_type must be 'unavailable' for LocalModelUnavailable."
+            }
+          ]
+        },
+        {
+          "name": "reason",
+          "type_ref": "UnavailableReason",
+          "required": true,
+          "default": "",
+          "description": "Categorized reason why the local model is unavailable.",
+          "validators": []
+        },
+        {
+          "name": "detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable detail message for logging and diagnostics.",
+          "validators": []
+        },
+        {
+          "name": "backend",
+          "type_ref": "LocalBackendType",
+          "required": true,
+          "default": "",
+          "description": "Which backend was attempted.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Correlated request identifier from the InferenceRequest.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Time spent before determining unavailability, in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.0",
+              "error_message": "latency_ms must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured unavailability result. NOT an exception — this is a normal return value indicating the local model cannot serve the request. Tagged with result_type='unavailable' for discriminated union."
+    },
+    {
+      "name": "InferenceResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "InferenceSuccess",
+        "LocalModelUnavailable"
+      ],
+      "description": "Discriminated union of inference outcomes. Discriminator field is 'result_type'. Exactly one of InferenceSuccess or LocalModelUnavailable. The caller (Router) pattern-matches on result_type to decide whether to fall back to remote."
+    },
+    {
+      "name": "HealthStatus",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "is_alive",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the server process is reachable (HTTP connectivity).",
+          "validators": []
+        },
+        {
+          "name": "is_ready",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the server has a model loaded and is ready to serve inference. is_ready implies is_alive.",
+          "validators": []
+        },
+        {
+          "name": "loaded_model",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Identifier of the currently loaded model, or empty string if none.",
+          "validators": []
+        },
+        {
+          "name": "backend",
+          "type_ref": "LocalBackendType",
+          "required": true,
+          "default": "",
+          "description": "Which backend this health status is for.",
+          "validators": []
+        },
+        {
+          "name": "reason",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable reason when not alive or not ready.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Time taken for the health check in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.0",
+              "error_message": "latency_ms must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured health check result for a local inference server. Not a boolean — carries sufficient detail for the Router to make routing decisions and for audit logging."
+    },
+    {
+      "name": "PromotionResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "PromotionStatus",
+          "required": true,
+          "default": "",
+          "description": "Outcome status of the promotion attempt.",
+          "validators": []
+        },
+        {
+          "name": "previous_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Model identifier that was active before promotion, or empty if no model was loaded.",
+          "validators": []
+        },
+        {
+          "name": "new_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier that was requested for promotion.",
+          "validators": []
+        },
+        {
+          "name": "is_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the new model is now the active model. True only when status is 'success'.",
+          "validators": []
+        },
+        {
+          "name": "smoke_test_passed",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "Whether the smoke test passed. False if smoke test was not run (e.g., load_failed).",
+          "validators": []
+        },
+        {
+          "name": "smoke_test_response",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The actual response from the smoke test inference, for audit logging.",
+          "validators": []
+        },
+        {
+          "name": "detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Human-readable detail message on failure, empty on success.",
+          "validators": []
+        },
+        {
+          "name": "duration_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total wall-clock time for the promotion operation in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.0",
+              "error_message": "duration_ms must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of a model promotion attempt. Captures old/new model versions, smoke test outcome, and whether the swap was committed. On failure, the old model remains active and the reason is captured."
+    },
+    {
+      "name": "BaseClientConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL of the local inference server (e.g., 'http://localhost:11434').",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "base_url must be a valid HTTP(S) URL."
+            }
+          ]
+        },
+        {
+          "name": "connect_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "5.0",
+          "description": "TCP connection timeout in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=60.0",
+              "error_message": "connect_timeout_s must be between 0.1 and 60.0 seconds."
+            }
+          ]
+        },
+        {
+          "name": "inference_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "Maximum time to wait for an inference response in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1.0,max=600.0",
+              "error_message": "inference_timeout_s must be between 1.0 and 600.0 seconds."
+            }
+          ]
+        },
+        {
+          "name": "health_check_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "3.0",
+          "description": "Maximum time to wait for a health check response in seconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=30.0",
+              "error_message": "health_check_timeout_s must be between 0.1 and 30.0 seconds."
+            }
+          ]
+        },
+        {
+          "name": "promotion_lock_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "300.0",
+          "description": "Maximum time to wait for the promotion asyncio.Lock before returning lock_timeout status.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=10.0,max=900.0",
+              "error_message": "promotion_lock_timeout_s must be between 10.0 and 900.0 seconds."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Common configuration fields shared by all local model client backends. Pydantic v2 model with strict validation. Concrete backend configs embed these fields plus backend-specific options."
+    },
+    {
+      "name": "OllamaClientConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "http://localhost:11434",
+          "description": "Ollama API base URL.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "base_url must be a valid HTTP(S) URL."
+            }
+          ]
+        },
+        {
+          "name": "connect_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "5.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=60.0",
+              "error_message": "connect_timeout_s must be between 0.1 and 60.0."
+            }
+          ]
+        },
+        {
+          "name": "inference_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1.0,max=600.0",
+              "error_message": "inference_timeout_s must be between 1.0 and 600.0."
+            }
+          ]
+        },
+        {
+          "name": "health_check_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "3.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=30.0",
+              "error_message": "health_check_timeout_s must be between 0.1 and 30.0."
+            }
+          ]
+        },
+        {
+          "name": "promotion_lock_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "300.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=10.0,max=900.0",
+              "error_message": "promotion_lock_timeout_s must be between 10.0 and 900.0."
+            }
+          ]
+        },
+        {
+          "name": "keep_alive",
+          "type_ref": "str",
+          "required": false,
+          "default": "5m",
+          "description": "Ollama keep_alive parameter controlling how long models stay loaded after last use.",
+          "validators": []
+        },
+        {
+          "name": "num_gpu_layers",
+          "type_ref": "int",
+          "required": false,
+          "default": "-1",
+          "description": "Number of GPU layers to offload. -1 means auto/all available.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=-1",
+              "error_message": "num_gpu_layers must be -1 (auto) or non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the Ollama backend client. Extends BaseClientConfig fields with Ollama-specific options."
+    },
+    {
+      "name": "VLLMClientConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "http://localhost:8000",
+          "description": "vLLM OpenAI-compatible API base URL.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "base_url must be a valid HTTP(S) URL."
+            }
+          ]
+        },
+        {
+          "name": "connect_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "5.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=60.0",
+              "error_message": "connect_timeout_s must be between 0.1 and 60.0."
+            }
+          ]
+        },
+        {
+          "name": "inference_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1.0,max=600.0",
+              "error_message": "inference_timeout_s must be between 1.0 and 600.0."
+            }
+          ]
+        },
+        {
+          "name": "health_check_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "3.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=30.0",
+              "error_message": "health_check_timeout_s must be between 0.1 and 30.0."
+            }
+          ]
+        },
+        {
+          "name": "promotion_lock_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "300.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=10.0,max=900.0",
+              "error_message": "promotion_lock_timeout_s must be between 10.0 and 900.0."
+            }
+          ]
+        },
+        {
+          "name": "api_key",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional API key for vLLM server authentication. Empty string means no auth.",
+          "validators": []
+        },
+        {
+          "name": "model_name_override",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If non-empty, use this as the model name in vLLM API requests instead of the model_id. Useful when vLLM registers models under different names.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the vLLM backend client. Extends BaseClientConfig fields with vLLM-specific options."
+    },
+    {
+      "name": "LlamaCppClientConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "http://localhost:8080",
+          "description": "llama.cpp server API base URL.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "base_url must be a valid HTTP(S) URL."
+            }
+          ]
+        },
+        {
+          "name": "connect_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "5.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=60.0",
+              "error_message": "connect_timeout_s must be between 0.1 and 60.0."
+            }
+          ]
+        },
+        {
+          "name": "inference_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1.0,max=600.0",
+              "error_message": "inference_timeout_s must be between 1.0 and 600.0."
+            }
+          ]
+        },
+        {
+          "name": "health_check_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "3.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=0.1,max=30.0",
+              "error_message": "health_check_timeout_s must be between 0.1 and 30.0."
+            }
+          ]
+        },
+        {
+          "name": "promotion_lock_timeout_s",
+          "type_ref": "float",
+          "required": false,
+          "default": "300.0",
+          "description": "",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=10.0,max=900.0",
+              "error_message": "promotion_lock_timeout_s must be between 10.0 and 900.0."
+            }
+          ]
+        },
+        {
+          "name": "n_predict",
+          "type_ref": "int",
+          "required": false,
+          "default": "512",
+          "description": "Default maximum tokens to predict, maps to llama.cpp n_predict parameter.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "min=1,max=32768",
+              "error_message": "n_predict must be between 1 and 32768."
+            }
+          ]
+        },
+        {
+          "name": "slot_id",
+          "type_ref": "int",
+          "required": false,
+          "default": "-1",
+          "description": "Slot ID to use for multi-slot llama.cpp servers. -1 means auto-assign.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the llama.cpp server backend client. Extends BaseClientConfig fields with llama.cpp-specific options."
+    }
+  ],
+  "functions": [
+    {
+      "name": "infer",
+      "description": "Send an inference request to the local model server and return the result. Returns InferenceSuccess on successful generation, or LocalModelUnavailable when the server cannot fulfill the request for any operational reason. Never raises exceptions for expected failures (network errors, timeouts, server down, no model loaded). Only raises for programming errors (invalid request types). The caller (Router) pattern-matches on result_type to decide routing. Structured logging emits inference latency, model used, token counts, and any unavailability reasons.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "InferenceRequest",
+          "required": true,
+          "default": "",
+          "description": "The inference request containing prompt, generation parameters, and optional request correlation ID.",
+          "validators": []
+        }
+      ],
+      "output_type": "InferenceResult",
+      "error_cases": [
+        {
+          "name": "invalid_request_type",
+          "condition": "request is not an InferenceRequest instance or fails Pydantic validation.",
+          "error_type": "TypeError",
+          "error_data": {
+            "description": "Programming error — caller passed wrong type. This is the only case that raises."
+          }
+        }
+      ],
+      "preconditions": [
+        "Client has been initialized via async context manager (__aenter__) or explicit initialization.",
+        "request.prompt is non-empty.",
+        "request.max_tokens is within valid range (1-32768).",
+        "request.temperature is within valid range (0.0-2.0)."
+      ],
+      "postconditions": [
+        "Return value is exactly one of InferenceSuccess or LocalModelUnavailable.",
+        "Return value always contains a non-empty request_id (generated if not provided in request).",
+        "Return value always contains latency_ms >= 0.",
+        "Return value always contains the backend type that was attempted.",
+        "If result_type is 'success', text is non-empty and model_id is non-empty.",
+        "If result_type is 'unavailable', reason is a valid UnavailableReason variant.",
+        "Structured log entry emitted with inference outcome, latency, and request_id."
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Performs HTTP request to local inference server.",
+        "Emits structured JSON log entry with inference outcome."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Local inference server HTTP API (Ollama/vLLM/llama.cpp)",
+          "description": "POST request with prompt and generation parameters to the configured backend."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.clients.<backend>",
+          "description": "Structured JSON log with request_id, model_id, latency_ms, tokens_generated, result_type, and unavailable_reason if applicable."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "health",
+      "description": "Perform a health check against the local inference server. Returns a structured HealthStatus with is_alive (server reachable), is_ready (model loaded and serving), loaded model identifier, and diagnostic detail. Uses the configured health_check_timeout_s. Never raises for operational failures — returns HealthStatus with is_alive=false on network errors. Callers should not cache this result beyond a few seconds; the Router calls this to gate local inference attempts.",
+      "inputs": [],
+      "output_type": "HealthStatus",
+      "error_cases": [],
+      "preconditions": [
+        "Client has been initialized via async context manager or explicit initialization."
+      ],
+      "postconditions": [
+        "Return value is always a valid HealthStatus.",
+        "If is_ready is true, then is_alive is also true.",
+        "If is_ready is true, loaded_model is non-empty.",
+        "If is_alive is false, is_ready is false.",
+        "latency_ms reflects actual time spent on health check.",
+        "Structured log entry emitted on health state transitions (alive->dead, ready->not_ready, model change)."
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Performs HTTP health check request to local inference server.",
+        "Emits structured JSON log on health transitions."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Local inference server health endpoint",
+          "description": "GET request to backend-specific health/status endpoint with health_check_timeout_s."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.clients.<backend>",
+          "description": "Structured JSON log on health state transitions (not every call — only when state changes from previous check)."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "promote_model",
+      "description": "Perform a blue-green model swap: load the new model, run a smoke test inference, and if successful, atomically swap the active model reference and unload the old model. Serialized via asyncio.Lock — concurrent promotion attempts return lock_timeout. The old model continues serving inference during the entire promotion process. On any failure (load, smoke test, timeout), the old model remains active and the failure is fully captured in PromotionResult. Backend-specific: Ollama pulls/loads model; vLLM may require server restart (returns load_failed with detail); llama.cpp loads new GGUF file.",
+      "inputs": [
+        {
+          "name": "new_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the new model to promote (e.g., Ollama model tag, vLLM model path, llama.cpp GGUF path).",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "new_model_id must be non-empty."
+            }
+          ]
+        },
+        {
+          "name": "smoke_test_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Prompt to use for the smoke test inference after loading the new model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "smoke_test_prompt must be non-empty."
+            }
+          ]
+        },
+        {
+          "name": "expected_substring",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If non-empty, the smoke test response must contain this substring (case-insensitive) to pass. If empty, any non-empty response passes the smoke test.",
+          "validators": []
+        }
+      ],
+      "output_type": "PromotionResult",
+      "error_cases": [
+        {
+          "name": "invalid_model_id_type",
+          "condition": "new_model_id is not a string or is empty after stripping.",
+          "error_type": "ValueError",
+          "error_data": {
+            "description": "Programming error — new_model_id must be a non-empty string."
+          }
+        },
+        {
+          "name": "invalid_smoke_test_prompt",
+          "condition": "smoke_test_prompt is not a string or is empty after stripping.",
+          "error_type": "ValueError",
+          "error_data": {
+            "description": "Programming error — smoke_test_prompt must be a non-empty string."
+          }
+        }
+      ],
+      "preconditions": [
+        "Client has been initialized via async context manager or explicit initialization.",
+        "new_model_id is a non-empty string.",
+        "smoke_test_prompt is a non-empty string."
+      ],
+      "postconditions": [
+        "If status is 'success': is_active is true, smoke_test_passed is true, the new model is now the active model, and the old model has been unloaded (best-effort).",
+        "If status is 'already_active': new_model_id matches the currently active model, no work is done, is_active is true.",
+        "If status is 'smoke_test_failed': the old model remains active, is_active is false, smoke_test_response contains the failing response.",
+        "If status is 'load_failed': the old model remains active, is_active is false, detail contains the failure reason.",
+        "If status is 'server_unavailable': the server was not reachable, is_active is false.",
+        "If status is 'lock_timeout': another promotion is in progress, is_active is false.",
+        "previous_model_id reflects the model that was active when promotion started (empty if none).",
+        "duration_ms reflects total wall-clock time of the promotion attempt.",
+        "Structured log entry emitted with full promotion details including status, old/new model IDs, smoke test outcome, and duration."
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Loads new model on inference server.",
+        "Runs smoke test inference.",
+        "Swaps active model reference on success.",
+        "Unloads old model (best-effort) on success.",
+        "Acquires and releases asyncio.Lock.",
+        "Emits structured JSON log entries for each promotion step."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Local inference server model management API",
+          "description": "Sequence of HTTP calls: load/pull new model, smoke test inference, unload old model."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "Active model reference (in-memory)",
+          "description": "Atomically swaps the active model identifier after successful smoke test. Protected by asyncio.Lock."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.clients.<backend>",
+          "description": "Structured JSON log entries for: promotion started, model load result, smoke test result, swap committed/rolled back, old model unloaded, total duration."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_active_model",
+      "description": "Return the identifier of the currently active (loaded and serving) model, or empty string if no model is loaded. This is a local read of the client's tracked state, not a server call. To verify the server's actual state, use health() instead.",
+      "inputs": [],
+      "output_type": "str",
+      "error_cases": [],
+      "preconditions": [
+        "Client has been initialized via async context manager or explicit initialization."
+      ],
+      "postconditions": [
+        "Returns the model identifier string that was last successfully promoted/loaded, or empty string if no model has been loaded.",
+        "The returned value matches the model_id field in InferenceSuccess results.",
+        "This is a local memory read with no I/O — returns immediately."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure local state read, no I/O."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All operational failures (network errors, timeouts, server unavailable, model not loaded) are represented as return values (LocalModelUnavailable or PromotionResult with failure status), never as exceptions.",
+    "Only programming errors (wrong types, invalid arguments, missing config) raise exceptions.",
+    "The active model reference is only updated after a successful smoke test during promotion. The old model continues serving during the entire promotion process.",
+    "Model promotion is serialized via asyncio.Lock — at most one promotion runs at a time per client instance.",
+    "All public methods are async (coroutines) and must be awaited.",
+    "Concrete client instances are async context managers (__aenter__/__aexit__) that manage httpx.AsyncClient lifecycle. An optional pre-constructed httpx.AsyncClient can be injected for testing.",
+    "HealthStatus.is_ready implies HealthStatus.is_alive — a server cannot be ready without being alive.",
+    "Every InferenceResult (success or unavailable) carries a non-empty request_id for audit log correlation.",
+    "Structured JSON logging is emitted at all decision points: inference outcomes, health transitions, promotion events. Uses logging.getLogger(__name__) per module.",
+    "Configuration is validated at construction time via Pydantic strict mode — invalid config raises ValidationError at startup, never at runtime.",
+    "Each concrete implementation file (ollama_client.py, vllm_client.py, llamacpp_client.py) stays under 300 lines.",
+    "LocalModelClient is a Protocol (structural typing), not an ABC. Concrete implementations satisfy the protocol through duck typing, not inheritance."
+  ],
+  "requires": []
+}

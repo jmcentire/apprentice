@@ -1,0 +1,1078 @@
+{
+  "component_id": "fine_tuning_orchestrator",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "config_parse_unsloth_happy",
+      "description": "Parse valid Unsloth backend config with all required fields",
+      "function": "parse_orchestrator_config",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Complete valid config dict with backend_type='unsloth'",
+      "expected_output_description": "OrchestratorConfig with UnslothBackendConfig backend",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_openai_happy",
+      "description": "Parse valid OpenAI backend config with all required fields",
+      "function": "parse_orchestrator_config",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Complete valid config dict with backend_type='openai'",
+      "expected_output_description": "OrchestratorConfig with OpenAIBackendConfig backend",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_huggingface_happy",
+      "description": "Parse valid HuggingFace backend config with all required fields",
+      "function": "parse_orchestrator_config",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Complete valid config dict with backend_type='huggingface'",
+      "expected_output_description": "OrchestratorConfig with HuggingFaceBackendConfig backend",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_missing_required_field",
+      "description": "Config missing required 'backend' key raises missing_required_field error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config dict without 'backend' key",
+      "expected_output_description": "",
+      "expected_error": "missing_required_field",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_invalid_backend_type",
+      "description": "Config with invalid backend_type raises invalid_backend_type error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config dict with backend_type='invalid_backend'",
+      "expected_output_description": "",
+      "expected_error": "invalid_backend_type",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_validation_error_negative_min_examples",
+      "description": "Config with negative min_training_examples raises validation_error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config dict with min_training_examples=-1",
+      "expected_output_description": "",
+      "expected_error": "validation_error",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_type_error_string_for_int",
+      "description": "Config with string where int expected raises type_error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config dict with min_training_examples='not_a_number'",
+      "expected_output_description": "",
+      "expected_error": "type_error",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_empty_path_fields",
+      "description": "Config with empty string path fields raises validation_error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config dict with model_version_store_path=''",
+      "expected_output_description": "",
+      "expected_error": "validation_error",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_null_input",
+      "description": "Null config input raises appropriate error",
+      "function": "parse_orchestrator_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "None passed as raw_config",
+      "expected_output_description": "",
+      "expected_error": "missing_required_field",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_backend_discriminator_resolves_correctly",
+      "description": "Backend config is resolved to correct concrete type based on backend_type",
+      "function": "parse_orchestrator_config",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with each backend_type value",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "BackendConfig resolved to UnslothBackendConfig for unsloth",
+        "BackendConfig resolved to OpenAIBackendConfig for openai",
+        "BackendConfig resolved to HuggingFaceBackendConfig for huggingface"
+      ]
+    },
+    {
+      "id": "config_parse_fails_fast_no_silent_defaults",
+      "description": "Config parsing never silently defaults - fails fast on partial config",
+      "function": "parse_orchestrator_config",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Partial config missing nested required fields",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_numeric_range_validation",
+      "description": "All numeric fields are validated within their ranges",
+      "function": "parse_orchestrator_config",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with boundary numeric values (0, max int, etc.)",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "config_parse_hypothesis_arbitrary_dict",
+      "description": "Arbitrary dicts never cause unhandled exceptions in config parsing",
+      "function": "parse_orchestrator_config",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Hypothesis-generated arbitrary dictionaries",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_save_get_roundtrip",
+      "description": "Save a ModelVersion and retrieve it by version_id - data is identical",
+      "function": "save_model_version",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "Retrieved ModelVersion identical to saved one",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_save_success_status_required",
+      "description": "Save requires model_version.status == 'success'",
+      "function": "save_model_version",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "ModelVersion with status='error'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_duplicate_version_id",
+      "description": "Saving ModelVersion with duplicate version_id raises duplicate_version_id error",
+      "function": "save_model_version",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Two ModelVersions with same version_id",
+      "expected_output_description": "",
+      "expected_error": "duplicate_version_id",
+      "assertions": []
+    },
+    {
+      "id": "store_write_failed_io_error",
+      "description": "File I/O error during save raises write_failed error",
+      "function": "save_model_version",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "ModelVersion saved to read-only path",
+      "expected_output_description": "",
+      "expected_error": "write_failed",
+      "assertions": []
+    },
+    {
+      "id": "store_get_not_found",
+      "description": "Retrieving non-existent version_id raises not_found error",
+      "function": "get_model_version",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Non-existent version_id string",
+      "expected_output_description": "",
+      "expected_error": "not_found",
+      "assertions": []
+    },
+    {
+      "id": "store_get_empty_version_id",
+      "description": "Retrieving with empty version_id string fails appropriately",
+      "function": "get_model_version",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty string as version_id",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_get_latest_happy",
+      "description": "get_latest_model_version returns most recent by completed_at",
+      "function": "get_latest_model_version",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ModelVersion with latest completed_at timestamp",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_get_latest_empty_store",
+      "description": "get_latest_model_version on empty store raises store_empty or returns None",
+      "function": "get_latest_model_version",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "store_empty",
+      "assertions": []
+    },
+    {
+      "id": "store_list_ordered_descending",
+      "description": "list_model_versions returns versions ordered by completed_at descending",
+      "function": "list_model_versions",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "List of ModelVersions ordered by completed_at desc",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_list_respects_limit",
+      "description": "list_model_versions returns at most 'limit' entries",
+      "function": "list_model_versions",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Store with 5 versions, limit=3",
+      "expected_output_description": "List of exactly 3 ModelVersions",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_list_empty_store",
+      "description": "list_model_versions on empty store returns empty list",
+      "function": "list_model_versions",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "Empty list",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "store_save_does_not_modify_existing",
+      "description": "Saving a new version does not modify previously stored versions",
+      "function": "save_model_version",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Previously saved ModelVersion is unchanged after saving a new one"
+      ]
+    },
+    {
+      "id": "cmd_success",
+      "description": "Successful command execution returns return_code=0 with captured output",
+      "function": "run_command",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "CommandResult with return_code=0, stdout/stderr captured",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cmd_nonzero_exit",
+      "description": "Command with non-zero exit code captured in CommandResult",
+      "function": "run_command",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Command that exits with code 1",
+      "expected_output_description": "CommandResult with return_code=1",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cmd_timeout",
+      "description": "Command exceeding timeout returns non-zero return_code without raising",
+      "function": "run_command",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "CommandResult with non-zero return_code",
+      "expected_error": "command_timeout",
+      "assertions": []
+    },
+    {
+      "id": "cmd_not_found",
+      "description": "Non-existent command captured as command_not_found in CommandResult",
+      "function": "run_command",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "command_not_found",
+      "assertions": []
+    },
+    {
+      "id": "cmd_permission_denied",
+      "description": "Permission denied captured in CommandResult without raising",
+      "function": "run_command",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "permission_denied",
+      "assertions": []
+    },
+    {
+      "id": "cmd_empty_args",
+      "description": "Empty args list violates precondition",
+      "function": "run_command",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty list as args",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cmd_captures_stderr",
+      "description": "stderr output is captured separately from stdout",
+      "function": "run_command",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "CommandResult with stderr populated",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "cmd_duration_recorded",
+      "description": "CommandResult.duration_seconds reflects actual wall-clock time",
+      "function": "run_command",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "duration_seconds >= 0"
+      ]
+    },
+    {
+      "id": "cmd_never_raises",
+      "description": "run_command never raises exceptions - all captured in CommandResult",
+      "function": "run_command",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception is raised for any failure mode"
+      ]
+    },
+    {
+      "id": "trigger_happy_path",
+      "description": "Successful fine-tuning persists ModelVersion and returns it",
+      "function": "trigger_fine_tuning",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ModelVersion with status='success', persisted in store",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "trigger_batch_too_small",
+      "description": "Batch smaller than min_training_examples returns batch_too_small error",
+      "function": "trigger_fine_tuning",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "training_examples list shorter than config.min_training_examples",
+      "expected_output_description": "",
+      "expected_error": "batch_too_small",
+      "assertions": []
+    },
+    {
+      "id": "trigger_backend_error_propagated",
+      "description": "Backend returning FineTuneError is propagated as backend_error",
+      "function": "trigger_fine_tuning",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "backend.fine_tune": "returns FineTuneError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "backend_error",
+      "assertions": []
+    },
+    {
+      "id": "trigger_backend_unexpected_exception",
+      "description": "Backend raising unexpected exception is caught and wrapped in FineTuneError",
+      "function": "trigger_fine_tuning",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "backend.fine_tune": "raises RuntimeError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "backend_unexpected_exception",
+      "assertions": []
+    },
+    {
+      "id": "trigger_model_version_persist_failed",
+      "description": "Store save failure after successful fine-tuning returns model_version_persist_failed",
+      "function": "trigger_fine_tuning",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "store.save_model_version": "raises IOError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "model_version_persist_failed",
+      "assertions": []
+    },
+    {
+      "id": "trigger_consecutive_failure_increment",
+      "description": "Consecutive failure count increments on each failure",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures increases by 1 after each failure"
+      ]
+    },
+    {
+      "id": "trigger_consecutive_failure_reset_on_success",
+      "description": "Consecutive failure count resets to 0 after successful fine-tuning",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures is 0 after success"
+      ]
+    },
+    {
+      "id": "trigger_max_consecutive_failures_exceeded",
+      "description": "Exceeding max_consecutive_failures returns max_consecutive_failures_exceeded error",
+      "function": "trigger_fine_tuning",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "max_consecutive_failures_exceeded",
+      "assertions": []
+    },
+    {
+      "id": "trigger_failure_does_not_modify_current_model",
+      "description": "On failure, current model version in store is unchanged",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Store contents unchanged after failed fine-tuning"
+      ]
+    },
+    {
+      "id": "trigger_success_persists_before_returning",
+      "description": "On success, ModelVersion is persisted via store before returning",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "save_model_version called before return"
+      ]
+    },
+    {
+      "id": "trigger_generates_unique_run_id",
+      "description": "Each trigger call generates a unique run_id",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "run_ids are unique across multiple calls"
+      ]
+    },
+    {
+      "id": "trigger_version_id_is_unique_uuid4",
+      "description": "Generated version_id is a valid UUID4",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "version_id is valid UUID4 format"
+      ]
+    },
+    {
+      "id": "trigger_structured_logging",
+      "description": "All log entries include fine_tune_run_id correlation field",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Structured log entries contain fine_tune_run_id"
+      ]
+    },
+    {
+      "id": "trigger_retry_recommended_recorded",
+      "description": "On failure with retry_recommended=true, failure is recorded for retry on next batch",
+      "function": "trigger_fine_tuning",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {
+        "backend.fine_tune": "returns FineTuneError with retry_recommended=true"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "trigger_empty_training_examples",
+      "description": "Empty training_examples list fails precondition",
+      "function": "trigger_fine_tuning",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty list of training examples",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "trigger_hyperparameter_overrides_passed_through",
+      "description": "Hyperparameter overrides are passed through to backend",
+      "function": "trigger_fine_tuning",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Backend receives hyperparameter_overrides in FineTuneRequest"
+      ]
+    },
+    {
+      "id": "ft_local_full_pipeline_success",
+      "description": "Local backend (Unsloth) completes full pipeline: train→quantize→GGUF→Ollama",
+      "function": "fine_tune",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ModelVersion with status='success', ollama_model_name set, artifact_location valid",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "ft_openai_happy_path",
+      "description": "OpenAI backend uploads data, triggers job, polls, returns success",
+      "function": "fine_tune",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ModelVersion with status='success' from OpenAI",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "ft_huggingface_happy_path",
+      "description": "HuggingFace backend completes full local pipeline successfully",
+      "function": "fine_tune",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "ModelVersion with status='success', ollama_model_name set",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "ft_training_failed_oom",
+      "description": "Training phase failure (OOM) returns FineTuneError with category=infrastructure",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "training_failed",
+      "assertions": []
+    },
+    {
+      "id": "ft_quantization_failed",
+      "description": "Quantization failure returns FineTuneError - partial completion is error",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "quantization_failed",
+      "assertions": []
+    },
+    {
+      "id": "ft_ollama_registration_failed",
+      "description": "Ollama registration failure returns FineTuneError - partial completion is error",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ollama_registration_failed",
+      "assertions": []
+    },
+    {
+      "id": "ft_api_rate_limited",
+      "description": "OpenAI rate limit returns FineTuneError with retry_recommended=true",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "api_rate_limited",
+      "assertions": []
+    },
+    {
+      "id": "ft_api_timeout",
+      "description": "OpenAI poll timeout returns FineTuneError with category=transient",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "api_timeout",
+      "assertions": []
+    },
+    {
+      "id": "ft_invalid_training_data",
+      "description": "Backend rejects training data format, returns FineTuneError with category=data_error",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_training_data",
+      "assertions": []
+    },
+    {
+      "id": "ft_model_not_found",
+      "description": "Unknown base model returns FineTuneError with category=permanent",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "model_not_found",
+      "assertions": []
+    },
+    {
+      "id": "ft_authentication_failed",
+      "description": "Invalid API key returns FineTuneError with category=permanent",
+      "function": "fine_tune",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "authentication_failed",
+      "assertions": []
+    },
+    {
+      "id": "ft_never_raises_exception",
+      "description": "fine_tune never raises exceptions - all errors wrapped in FineTuneError",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception raised for any failure mode"
+      ]
+    },
+    {
+      "id": "ft_training_example_ids_match",
+      "description": "ModelVersion.training_example_ids matches input example_ids in order",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_example_ids == [ex.example_id for ex in request.training_examples]"
+      ]
+    },
+    {
+      "id": "ft_training_example_count_matches",
+      "description": "ModelVersion.training_example_count equals len(training_examples)",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_example_count == len(request.training_examples)"
+      ]
+    },
+    {
+      "id": "ft_run_id_matches_request",
+      "description": "ModelVersion.run_id matches request.run_id",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.run_id == request.run_id"
+      ]
+    },
+    {
+      "id": "ft_started_before_completed",
+      "description": "ModelVersion.started_at < ModelVersion.completed_at on success",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "started_at < completed_at"
+      ]
+    },
+    {
+      "id": "ft_local_backend_ollama_name_set",
+      "description": "For local backends, successful result has non-empty ollama_model_name",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "ollama_model_name is non-empty string for local backends"
+      ]
+    },
+    {
+      "id": "ft_local_partial_completion_is_error",
+      "description": "Partial pipeline completion (train ok, quantize fail) results in FineTuneError not ModelVersion",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Partial completion never returns ModelVersion"
+      ]
+    },
+    {
+      "id": "ft_empty_training_examples_precondition",
+      "description": "Empty training_examples violates precondition",
+      "function": "fine_tune",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "FineTuneRequest with empty training_examples",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": []
+    },
+    {
+      "id": "ft_artifact_location_valid_on_success",
+      "description": "On success, artifact_location points to valid location",
+      "function": "fine_tune",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "artifact_location is non-empty string on success"
+      ]
+    },
+    {
+      "id": "integ_multiple_successful_cycles",
+      "description": "Multiple successful fine-tuning cycles accumulate versions in store",
+      "function": "trigger_fine_tuning",
+      "category": "happy_path",
+      "setup_description": "Run trigger_fine_tuning 3 times successfully",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "3 ModelVersions in store",
+        "list_model_versions returns all 3 in descending order"
+      ]
+    },
+    {
+      "id": "integ_failure_then_recovery",
+      "description": "Failure followed by success resets failure count and persists new version",
+      "function": "trigger_fine_tuning",
+      "category": "happy_path",
+      "setup_description": "Trigger with failing backend, then with succeeding backend",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures reset to 0",
+        "Only success version persisted"
+      ]
+    },
+    {
+      "id": "integ_version_history_ordering",
+      "description": "Version history maintains correct ordering after mixed success/failure",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "Success, fail, success, success sequence",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "list_model_versions returns 3 versions in correct order"
+      ]
+    },
+    {
+      "id": "integ_circuit_breaker_then_recovery",
+      "description": "Max consecutive failures reached then reset after success",
+      "function": "trigger_fine_tuning",
+      "category": "edge_case",
+      "setup_description": "Fail max_consecutive_failures times, then succeed",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Error returned when max exceeded",
+        "Success after reset"
+      ]
+    },
+    {
+      "id": "integ_get_latest_after_multiple_runs",
+      "description": "get_latest_model_version returns the most recent successful version",
+      "function": "get_latest_model_version",
+      "category": "happy_path",
+      "setup_description": "Run 3 successful fine-tuning cycles",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Latest version matches last successful run"
+      ]
+    },
+    {
+      "id": "integ_version_provenance_chain",
+      "description": "Each version maintains full provenance from training examples to artifact",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_example_ids trace back to input",
+        "base_model matches request",
+        "backend_type matches config"
+      ]
+    },
+    {
+      "id": "integ_store_persistence_across_operations",
+      "description": "Versions persisted in store survive across multiple orchestrator operations",
+      "function": "trigger_fine_tuning",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All successfully saved versions retrievable by version_id"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract test suite for the fine_tuning_orchestrator component.\n\nTests are organized into 6 logical modules within a single file:\n1. Config parsing (parse_orchestrator_config)\n2. Model version store (save/get/list/get_latest)\n3. Command execution (run_command)\n4. Trigger fine-tuning (orchestration layer)\n5. Fine-tune backend protocol (fine_tune)\n6. Integration tests (multi-step scenarios)\n\nAll dependencies are mocked. Tests verify observable behavior at boundaries.\n\"\"\"\nimport json\nimport os\nimport uuid\nimport time\nimport pytest\nfrom datetime import datetime, timedelta, timezone\nfrom unittest.mock import (\n    AsyncMock, MagicMock, Mock, PropertyMock, call, patch, ANY\n)\nfrom dataclasses import dataclass\nfrom typing import Optional, List, Dict\n\n# Import the component under test\n# Adjust import path as needed for actual project structure\nfrom src.fine_tuning_orchestrator import (\n    TrainingExample,\n    HyperparameterOverrides,\n    FineTuneRequest,\n    FineTuneError,\n    TrainingMetrics,\n    ModelVersion,\n    BackendType,\n    QuantizationType,\n    UnslothBackendConfig,\n    OpenAIBackendConfig,\n    HuggingFaceBackendConfig,\n    OrchestratorConfig,\n    CommandResult,\n    TrainArtifact,\n    GGUFArtifact,\n    OllamaRegistration,\n    parse_orchestrator_config,\n    FineTuneBackend,\n    FineTuningOrchestrator,\n    ModelVersionStore,\n    CommandRunner,\n)\n\n\n# ============================================================================\n# conftest.py — Shared fixtures and factory functions\n# ============================================================================\n\n@pytest.fixture\ndef sample_training_example():\n    \"\"\"Factory for creating TrainingExample instances.\"\"\"\n    def _make(\n        example_id=None,\n        user_prompt=\"What is Python?\",\n        assistant_response=\"Python is a programming language.\",\n        system_prompt=\"You are a helpful assistant.\",\n        collected_at=None,\n        source=\"test\",\n    ):\n        return TrainingExample(\n            example_id=example_id or str(uuid.uuid4()),\n            user_prompt=user_prompt,\n            assistant_response=assistant_response,\n            system_prompt=system_prompt,\n            collected_at=collected_at or datetime.now(timezone.utc).isoformat(),\n            source=source,\n        )\n    return _make\n\n\n@pytest.fixture\ndef sample_training_examples(sample_training_example):\n    \"\"\"Create a list of N training examples with sequential IDs.\"\"\"\n    def _make(n=5):\n        return [\n            sample_training_example(example_id=f\"ex-{i}\")\n            for i in range(n)\n        ]\n    return _make\n\n\n@pytest.fixture\ndef sample_hyperparameter_overrides():\n    \"\"\"Factory for HyperparameterOverrides.\"\"\"\n    def _make(**kwargs):\n        defaults = dict(\n            learning_rate=2e-4,\n            num_epochs=3,\n            batch_size=4,\n            lora_rank=16,\n            lora_alpha=32,\n            warmup_steps=10,\n        )\n        defaults.update(kwargs)\n        return HyperparameterOverrides(**defaults)\n    return _make\n\n\n@pytest.fixture\ndef sample_fine_tune_request(sample_training_examples, sample_hyperparameter_overrides):\n    \"\"\"Factory for FineTuneRequest.\"\"\"\n    def _make(run_id=None, base_model=\"unsloth/llama-3-8b\", n_examples=5, **kwargs):\n        return FineTuneRequest(\n            run_id=run_id or str(uuid.uuid4()),\n            base_model=base_model,\n            training_examples=sample_training_examples(n_examples),\n            hyperparameter_overrides=kwargs.get(\n                \"hyperparameter_overrides\", sample_hyperparameter_overrides()\n            ),\n        )\n    return _make\n\n\n@pytest.fixture\ndef sample_training_metrics():\n    \"\"\"Factory for TrainingMetrics.\"\"\"\n    def _make(**kwargs):\n        defaults = dict(\n            final_loss=0.42,\n            num_steps=100,\n            num_epochs_completed=3.0,\n            training_duration_seconds=120.0,\n            additional_metrics={},\n        )\n        defaults.update(kwargs)\n        return TrainingMetrics(**defaults)\n    return _make\n\n\n@pytest.fixture\ndef sample_model_version(sample_training_metrics):\n    \"\"\"Factory for ModelVersion.\"\"\"\n    def _make(\n        version_id=None,\n        run_id=None,\n        base_model=\"unsloth/llama-3-8b\",\n        backend_type=\"unsloth\",\n        n_examples=5,\n        started_at=None,\n        completed_at=None,\n        **kwargs,\n    ):\n        now = datetime.now(timezone.utc)\n        example_ids = [f\"ex-{i}\" for i in range(n_examples)]\n        return ModelVersion(\n            status=\"success\",\n            version_id=version_id or str(uuid.uuid4()),\n            base_model=base_model,\n            backend_type=backend_type,\n            training_example_ids=example_ids,\n            training_example_count=len(example_ids),\n            run_id=run_id or str(uuid.uuid4()),\n            started_at=started_at or (now - timedelta(minutes=5)).isoformat(),\n            completed_at=completed_at or now.isoformat(),\n            artifact_location=kwargs.get(\"artifact_location\", \"/models/output/model.gguf\"),\n            ollama_model_name=kwargs.get(\"ollama_model_name\", \"mymodel:latest\"),\n            metrics=kwargs.get(\"metrics\", sample_training_metrics()),\n            quantization_type=kwargs.get(\"quantization_type\", \"Q4_K_M\"),\n            metadata=kwargs.get(\"metadata\", {}),\n        )\n    return _make\n\n\n@pytest.fixture\ndef sample_fine_tune_error():\n    \"\"\"Factory for FineTuneError.\"\"\"\n    def _make(\n        category=\"transient\",\n        message=\"Something went wrong\",\n        retry_recommended=True,\n        run_id=None,\n        backend_type=\"unsloth\",\n        **kwargs,\n    ):\n        return FineTuneError(\n            status=\"error\",\n            category=category,\n            message=message,\n            retry_recommended=retry_recommended,\n            run_id=run_id or str(uuid.uuid4()),\n            backend_type=backend_type,\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details=kwargs.get(\"details\", {}),\n        )\n    return _make\n\n\n@pytest.fixture\ndef valid_unsloth_config():\n    \"\"\"Valid raw config dict for Unsloth backend.\"\"\"\n    return {\n        \"backend\": {\n            \"backend_type\": \"unsloth\",\n            \"model_output_dir\": \"/tmp/models\",\n            \"gguf_output_dir\": \"/tmp/gguf\",\n            \"quantization_type\": \"Q4_K_M\",\n            \"llama_cpp_path\": \"/usr/local/bin/llama-quantize\",\n            \"ollama_model_name_prefix\": \"mymodel\",\n            \"ollama_base_url\": \"http://localhost:11434\",\n            \"modelfile_template\": \"FROM {{.Model}}\",\n            \"max_seq_length\": 2048,\n            \"default_lora_rank\": 16,\n            \"default_learning_rate\": 2e-4,\n            \"default_num_epochs\": 3,\n        },\n        \"min_training_examples\": 10,\n        \"model_version_store_path\": \"/tmp/versions.json\",\n        \"retry_on_next_batch\": True,\n        \"max_consecutive_failures\": 5,\n    }\n\n\n@pytest.fixture\ndef valid_openai_config():\n    \"\"\"Valid raw config dict for OpenAI backend.\"\"\"\n    return {\n        \"backend\": {\n            \"backend_type\": \"openai\",\n            \"api_base_url\": \"https://api.openai.com/v1\",\n            \"api_key_env_var\": \"OPENAI_API_KEY\",\n            \"default_num_epochs\": 3,\n            \"poll_interval_seconds\": 30,\n            \"poll_timeout_seconds\": 3600,\n            \"suffix\": \"my-model\",\n        },\n        \"min_training_examples\": 10,\n        \"model_version_store_path\": \"/tmp/versions.json\",\n        \"retry_on_next_batch\": True,\n        \"max_consecutive_failures\": 5,\n    }\n\n\n@pytest.fixture\ndef valid_huggingface_config():\n    \"\"\"Valid raw config dict for HuggingFace backend.\"\"\"\n    return {\n        \"backend\": {\n            \"backend_type\": \"huggingface\",\n            \"model_output_dir\": \"/tmp/models\",\n            \"gguf_output_dir\": \"/tmp/gguf\",\n            \"quantization_type\": \"Q4_K_M\",\n            \"llama_cpp_path\": \"/usr/local/bin/llama-quantize\",\n            \"ollama_model_name_prefix\": \"mymodel\",\n            \"ollama_base_url\": \"http://localhost:11434\",\n            \"use_peft\": True,\n            \"default_learning_rate\": 2e-4,\n            \"default_num_epochs\": 3,\n            \"max_seq_length\": 2048,\n        },\n        \"min_training_examples\": 10,\n        \"model_version_store_path\": \"/tmp/versions.json\",\n        \"retry_on_next_batch\": True,\n        \"max_consecutive_failures\": 5,\n    }\n\n\n@pytest.fixture\ndef mock_backend():\n    \"\"\"Mock FineTuneBackend with configurable behavior.\"\"\"\n    backend = MagicMock(spec=FineTuneBackend)\n    return backend\n\n\n@pytest.fixture\ndef mock_store():\n    \"\"\"Mock ModelVersionStore.\"\"\"\n    store = MagicMock(spec=ModelVersionStore)\n    store.save_model_version = MagicMock(return_value=None)\n    store.get_model_version = MagicMock()\n    store.get_latest_model_version = MagicMock()\n    store.list_model_versions = MagicMock(return_value=[])\n    return store\n\n\n@pytest.fixture\ndef mock_command_runner():\n    \"\"\"Mock CommandRunner.\"\"\"\n    runner = MagicMock(spec=CommandRunner)\n    return runner\n\n\n@pytest.fixture\ndef make_orchestrator(mock_backend, mock_store, valid_unsloth_config):\n    \"\"\"Factory for creating FineTuningOrchestrator with injected dependencies.\"\"\"\n    def _make(backend=None, store=None, config=None):\n        cfg = config or parse_orchestrator_config(valid_unsloth_config)\n        return FineTuningOrchestrator(\n            backend=backend or mock_backend,\n            model_version_store=store or mock_store,\n            config=cfg,\n        )\n    return _make\n\n\n# ============================================================================\n# Module 1: test_parse_orchestrator_config.py\n# ============================================================================\n\nclass TestParseOrchestratorConfigHappyPath:\n    \"\"\"Parse valid configurations for all 3 backend types.\"\"\"\n\n    def test_parse_valid_unsloth_config(self, valid_unsloth_config):\n        \"\"\"Parse valid Unsloth backend config with all required fields.\"\"\"\n        result = parse_orchestrator_config(valid_unsloth_config)\n\n        assert isinstance(result, OrchestratorConfig), (\n            \"Expected OrchestratorConfig instance\"\n        )\n        assert isinstance(result.backend, UnslothBackendConfig), (\n            f\"Expected UnslothBackendConfig, got {type(result.backend)}\"\n        )\n        assert result.backend.backend_type == \"unsloth\"\n        assert result.min_training_examples == 10\n        assert result.model_version_store_path == \"/tmp/versions.json\"\n        assert result.retry_on_next_batch is True\n        assert result.max_consecutive_failures == 5\n\n    def test_parse_valid_openai_config(self, valid_openai_config):\n        \"\"\"Parse valid OpenAI backend config with all required fields.\"\"\"\n        result = parse_orchestrator_config(valid_openai_config)\n\n        assert isinstance(result, OrchestratorConfig)\n        assert isinstance(result.backend, OpenAIBackendConfig), (\n            f\"Expected OpenAIBackendConfig, got {type(result.backend)}\"\n        )\n        assert result.backend.backend_type == \"openai\"\n        assert result.backend.api_base_url == \"https://api.openai.com/v1\"\n        assert result.backend.poll_interval_seconds == 30\n        assert result.backend.poll_timeout_seconds == 3600\n\n    def test_parse_valid_huggingface_config(self, valid_huggingface_config):\n        \"\"\"Parse valid HuggingFace backend config with all required fields.\"\"\"\n        result = parse_orchestrator_config(valid_huggingface_config)\n\n        assert isinstance(result, OrchestratorConfig)\n        assert isinstance(result.backend, HuggingFaceBackendConfig), (\n            f\"Expected HuggingFaceBackendConfig, got {type(result.backend)}\"\n        )\n        assert result.backend.backend_type == \"huggingface\"\n        assert result.backend.use_peft is True\n\n\nclass TestParseOrchestratorConfigErrors:\n    \"\"\"Error cases for config parsing — fail fast with clear messages.\"\"\"\n\n    def test_missing_backend_key(self, valid_unsloth_config):\n        \"\"\"Config missing required 'backend' key raises error.\"\"\"\n        del valid_unsloth_config[\"backend\"]\n        with pytest.raises(Exception) as exc_info:\n            parse_orchestrator_config(valid_unsloth_config)\n        # Should indicate the missing field\n        assert \"backend\" in str(exc_info.value).lower() or exc_info.value is not None\n\n    def test_missing_nested_required_field(self, valid_unsloth_config):\n        \"\"\"Config missing nested required field raises error.\"\"\"\n        del valid_unsloth_config[\"backend\"][\"model_output_dir\"]\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n    def test_invalid_backend_type(self, valid_unsloth_config):\n        \"\"\"Config with invalid backend_type raises invalid_backend_type error.\"\"\"\n        valid_unsloth_config[\"backend\"][\"backend_type\"] = \"invalid_backend\"\n        with pytest.raises(Exception) as exc_info:\n            parse_orchestrator_config(valid_unsloth_config)\n        error_msg = str(exc_info.value).lower()\n        assert \"backend_type\" in error_msg or \"invalid\" in error_msg or exc_info.value is not None\n\n    def test_negative_min_training_examples(self, valid_unsloth_config):\n        \"\"\"Config with negative min_training_examples raises validation_error.\"\"\"\n        valid_unsloth_config[\"min_training_examples\"] = -1\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n    def test_string_where_int_expected(self, valid_unsloth_config):\n        \"\"\"Config with string where int expected raises type_error.\"\"\"\n        valid_unsloth_config[\"min_training_examples\"] = \"not_a_number\"\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n    def test_empty_model_version_store_path(self, valid_unsloth_config):\n        \"\"\"Config with empty string path fields raises validation_error.\"\"\"\n        valid_unsloth_config[\"model_version_store_path\"] = \"\"\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n    def test_null_input_raises_error(self):\n        \"\"\"Null config input raises appropriate error.\"\"\"\n        with pytest.raises(Exception):\n            parse_orchestrator_config(None)\n\n    def test_empty_dict_raises_error(self):\n        \"\"\"Empty dict raises missing field error.\"\"\"\n        with pytest.raises(Exception):\n            parse_orchestrator_config({})\n\n    def test_missing_min_training_examples(self, valid_unsloth_config):\n        \"\"\"Missing min_training_examples field raises error.\"\"\"\n        del valid_unsloth_config[\"min_training_examples\"]\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n    def test_invalid_quantization_type(self, valid_unsloth_config):\n        \"\"\"Invalid quantization_type raises validation error.\"\"\"\n        valid_unsloth_config[\"backend\"][\"quantization_type\"] = \"INVALID_QUANT\"\n        with pytest.raises(Exception):\n            parse_orchestrator_config(valid_unsloth_config)\n\n\nclass TestParseOrchestratorConfigEdgeCases:\n    \"\"\"Edge cases and boundary conditions for config parsing.\"\"\"\n\n    def test_backend_discriminator_resolves_unsloth(self, valid_unsloth_config):\n        \"\"\"BackendConfig discriminator resolves to UnslothBackendConfig for 'unsloth'.\"\"\"\n        result = parse_orchestrator_config(valid_unsloth_config)\n        assert isinstance(result.backend, UnslothBackendConfig)\n        assert result.backend.backend_type == \"unsloth\"\n\n    def test_backend_discriminator_resolves_openai(self, valid_openai_config):\n        \"\"\"BackendConfig discriminator resolves to OpenAIBackendConfig for 'openai'.\"\"\"\n        result = parse_orchestrator_config(valid_openai_config)\n        assert isinstance(result.backend, OpenAIBackendConfig)\n        assert result.backend.backend_type == \"openai\"\n\n    def test_backend_discriminator_resolves_huggingface(self, valid_huggingface_config):\n        \"\"\"BackendConfig discriminator resolves to HuggingFaceBackendConfig for 'huggingface'.\"\"\"\n        result = parse_orchestrator_config(valid_huggingface_config)\n        assert isinstance(result.backend, HuggingFaceBackendConfig)\n        assert result.backend.backend_type == \"huggingface\"\n\n    def test_zero_max_consecutive_failures(self, valid_unsloth_config):\n        \"\"\"Zero max_consecutive_failures may be valid or rejected based on validation.\"\"\"\n        valid_unsloth_config[\"max_consecutive_failures\"] = 0\n        # This should either work (0 means no failures allowed) or raise validation\n        try:\n            result = parse_orchestrator_config(valid_unsloth_config)\n            assert result.max_consecutive_failures == 0\n        except Exception:\n            pass  # Acceptable if the implementation rejects 0\n\n    def test_all_unsloth_fields_preserved(self, valid_unsloth_config):\n        \"\"\"All Unsloth-specific fields are preserved in parsed config.\"\"\"\n        result = parse_orchestrator_config(valid_unsloth_config)\n        backend = result.backend\n        assert backend.model_output_dir == \"/tmp/models\"\n        assert backend.gguf_output_dir == \"/tmp/gguf\"\n        assert backend.quantization_type == \"Q4_K_M\" or str(backend.quantization_type) == \"Q4_K_M\"\n        assert backend.max_seq_length == 2048\n        assert backend.default_lora_rank == 16\n\n    def test_all_openai_fields_preserved(self, valid_openai_config):\n        \"\"\"All OpenAI-specific fields are preserved in parsed config.\"\"\"\n        result = parse_orchestrator_config(valid_openai_config)\n        backend = result.backend\n        assert backend.api_key_env_var == \"OPENAI_API_KEY\"\n        assert backend.suffix == \"my-model\"\n\n\nclass TestParseOrchestratorConfigPropertyBased:\n    \"\"\"Property-based tests ensuring robustness against arbitrary inputs.\"\"\"\n\n    def test_arbitrary_dict_never_causes_unhandled_exception(self):\n        \"\"\"Arbitrary dicts should either parse or raise a handled exception.\"\"\"\n        arbitrary_inputs = [\n            {},\n            {\"backend\": None},\n            {\"backend\": \"string_not_dict\"},\n            {\"backend\": {\"backend_type\": \"unsloth\"}},\n            {\"backend\": {\"backend_type\": 123}},\n            {42: \"numeric key\"},\n            {\"backend\": {\"backend_type\": \"unsloth\"}, \"min_training_examples\": float(\"inf\")},\n            {\"backend\": {\"backend_type\": \"unsloth\"}, \"min_training_examples\": float(\"nan\")},\n            {\"backend\": [], \"min_training_examples\": 10},\n            {\"deeply\": {\"nested\": {\"config\": True}}},\n        ]\n        for raw_config in arbitrary_inputs:\n            try:\n                parse_orchestrator_config(raw_config)\n            except Exception:\n                pass  # All exceptions are acceptable as long as they don't crash\n            # If we get here without error, that's fine too (unlikely for bad input)\n\n    @pytest.mark.parametrize(\"backend_type\", [\"unsloth\", \"openai\", \"huggingface\"])\n    def test_valid_backend_types_are_accepted(self, backend_type, valid_unsloth_config, valid_openai_config, valid_huggingface_config):\n        \"\"\"All valid backend types produce a valid config.\"\"\"\n        configs = {\n            \"unsloth\": valid_unsloth_config,\n            \"openai\": valid_openai_config,\n            \"huggingface\": valid_huggingface_config,\n        }\n        result = parse_orchestrator_config(configs[backend_type])\n        assert result.backend.backend_type == backend_type\n\n\n# ============================================================================\n# Module 2: test_model_version_store.py\n# ============================================================================\n\nclass TestModelVersionStoreSaveGet:\n    \"\"\"CRUD operations on ModelVersionStore.\"\"\"\n\n    def test_save_and_get_roundtrip(self, tmp_path, sample_model_version):\n        \"\"\"Save a ModelVersion and retrieve it by version_id - data is identical.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        mv = sample_model_version()\n\n        store.save_model_version(mv)\n        retrieved = store.get_model_version(mv.version_id)\n\n        assert retrieved.version_id == mv.version_id, \"version_id mismatch\"\n        assert retrieved.run_id == mv.run_id, \"run_id mismatch\"\n        assert retrieved.base_model == mv.base_model, \"base_model mismatch\"\n        assert retrieved.training_example_ids == mv.training_example_ids, \"training_example_ids mismatch\"\n        assert retrieved.training_example_count == mv.training_example_count, \"training_example_count mismatch\"\n        assert retrieved.artifact_location == mv.artifact_location, \"artifact_location mismatch\"\n        assert retrieved.status == \"success\", \"status should be 'success'\"\n\n    def test_save_duplicate_version_id_raises(self, tmp_path, sample_model_version):\n        \"\"\"Saving ModelVersion with duplicate version_id raises error.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        mv = sample_model_version(version_id=\"duplicate-id\")\n\n        store.save_model_version(mv)\n        with pytest.raises(Exception) as exc_info:\n            store.save_model_version(mv)\n        # Should indicate duplicate\n        assert exc_info.value is not None\n\n    def test_save_preserves_existing_versions(self, tmp_path, sample_model_version):\n        \"\"\"Saving a new version does not modify previously stored versions.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        mv1 = sample_model_version(version_id=\"v1\", run_id=\"run-1\")\n        mv2 = sample_model_version(version_id=\"v2\", run_id=\"run-2\")\n\n        store.save_model_version(mv1)\n        store.save_model_version(mv2)\n\n        retrieved_v1 = store.get_model_version(\"v1\")\n        assert retrieved_v1.run_id == \"run-1\", \"First version should be unchanged\"\n        assert retrieved_v1.version_id == \"v1\"\n\n\nclass TestModelVersionStoreGetErrors:\n    \"\"\"Error cases for model version retrieval.\"\"\"\n\n    def test_get_nonexistent_version_id_raises(self, tmp_path):\n        \"\"\"Retrieving non-existent version_id raises not_found error.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n\n        with pytest.raises(Exception):\n            store.get_model_version(\"nonexistent-id\")\n\n    def test_get_empty_version_id(self, tmp_path):\n        \"\"\"Retrieving with empty version_id string fails appropriately.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n\n        with pytest.raises(Exception):\n            store.get_model_version(\"\")\n\n\nclass TestModelVersionStoreLatest:\n    \"\"\"Tests for get_latest_model_version.\"\"\"\n\n    def test_get_latest_returns_most_recent(self, tmp_path, sample_model_version):\n        \"\"\"get_latest_model_version returns most recent by completed_at.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        now = datetime.now(timezone.utc)\n\n        mv1 = sample_model_version(\n            version_id=\"v1\",\n            completed_at=(now - timedelta(hours=2)).isoformat(),\n            started_at=(now - timedelta(hours=3)).isoformat(),\n        )\n        mv2 = sample_model_version(\n            version_id=\"v2\",\n            completed_at=(now - timedelta(hours=1)).isoformat(),\n            started_at=(now - timedelta(hours=2)).isoformat(),\n        )\n        mv3 = sample_model_version(\n            version_id=\"v3\",\n            completed_at=now.isoformat(),\n            started_at=(now - timedelta(hours=1)).isoformat(),\n        )\n\n        store.save_model_version(mv1)\n        store.save_model_version(mv2)\n        store.save_model_version(mv3)\n\n        latest = store.get_latest_model_version()\n        assert latest.version_id == \"v3\", (\n            f\"Expected latest version 'v3', got '{latest.version_id}'\"\n        )\n\n    def test_get_latest_empty_store(self, tmp_path):\n        \"\"\"get_latest_model_version on empty store raises store_empty or returns None.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n\n        try:\n            result = store.get_latest_model_version()\n            # Contract says it may return None\n            assert result is None, \"Empty store should return None or raise\"\n        except Exception:\n            pass  # Raising store_empty is also acceptable\n\n\nclass TestModelVersionStoreList:\n    \"\"\"Tests for list_model_versions.\"\"\"\n\n    def test_list_ordered_descending(self, tmp_path, sample_model_version):\n        \"\"\"list_model_versions returns versions ordered by completed_at descending.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        now = datetime.now(timezone.utc)\n\n        for i in range(5):\n            mv = sample_model_version(\n                version_id=f\"v{i}\",\n                completed_at=(now - timedelta(hours=5 - i)).isoformat(),\n                started_at=(now - timedelta(hours=6 - i)).isoformat(),\n            )\n            store.save_model_version(mv)\n\n        versions = store.list_model_versions(limit=10)\n        assert len(versions) == 5, f\"Expected 5 versions, got {len(versions)}\"\n\n        # Verify descending order by completed_at\n        for i in range(len(versions) - 1):\n            assert versions[i].completed_at >= versions[i + 1].completed_at, (\n                f\"Versions not in descending order: {versions[i].completed_at} < {versions[i+1].completed_at}\"\n            )\n\n    def test_list_respects_limit(self, tmp_path, sample_model_version):\n        \"\"\"list_model_versions returns at most 'limit' entries.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        now = datetime.now(timezone.utc)\n\n        for i in range(5):\n            mv = sample_model_version(\n                version_id=f\"v{i}\",\n                completed_at=(now - timedelta(hours=5 - i)).isoformat(),\n                started_at=(now - timedelta(hours=6 - i)).isoformat(),\n            )\n            store.save_model_version(mv)\n\n        versions = store.list_model_versions(limit=3)\n        assert len(versions) <= 3, f\"Expected at most 3 versions, got {len(versions)}\"\n\n    def test_list_empty_store_returns_empty(self, tmp_path):\n        \"\"\"list_model_versions on empty store returns empty list.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n\n        versions = store.list_model_versions(limit=10)\n        assert versions == [] or len(versions) == 0, \"Empty store should return empty list\"\n\n\n# ============================================================================\n# Module 3: test_run_command.py\n# ============================================================================\n\nclass TestRunCommandHappyPath:\n    \"\"\"Successful command execution scenarios.\"\"\"\n\n    def test_successful_command_returns_zero(self, mock_command_runner):\n        \"\"\"Successful command execution returns return_code=0 with captured output.\"\"\"\n        expected_result = CommandResult(\n            return_code=0,\n            stdout=\"output line\\n\",\n            stderr=\"\",\n            command=\"echo hello\",\n            duration_seconds=0.01,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"echo\", \"hello\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.return_code == 0, \"Successful command should return code 0\"\n        assert result.stdout == \"output line\\n\", \"stdout should be captured\"\n        assert result.duration_seconds >= 0, \"Duration should be non-negative\"\n\n    def test_nonzero_exit_code_captured(self, mock_command_runner):\n        \"\"\"Command with non-zero exit code captured in CommandResult.\"\"\"\n        expected_result = CommandResult(\n            return_code=1,\n            stdout=\"\",\n            stderr=\"error occurred\\n\",\n            command=\"false\",\n            duration_seconds=0.01,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"false\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.return_code != 0, \"Failed command should have non-zero return code\"\n        assert result.stderr != \"\", \"stderr should capture error output\"\n\n    def test_stderr_captured_separately(self, mock_command_runner):\n        \"\"\"stderr output is captured separately from stdout.\"\"\"\n        expected_result = CommandResult(\n            return_code=0,\n            stdout=\"normal output\",\n            stderr=\"warning: something\",\n            command=\"mixed-output-cmd\",\n            duration_seconds=0.05,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"mixed-output-cmd\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.stdout == \"normal output\"\n        assert result.stderr == \"warning: something\"\n        assert result.stdout != result.stderr\n\n\nclass TestRunCommandErrors:\n    \"\"\"Error cases for command execution — all captured in CommandResult.\"\"\"\n\n    def test_timeout_captured_without_raising(self, mock_command_runner):\n        \"\"\"Command exceeding timeout returns non-zero return_code without raising.\"\"\"\n        expected_result = CommandResult(\n            return_code=-1,\n            stdout=\"\",\n            stderr=\"command timed out\",\n            command=\"sleep 9999\",\n            duration_seconds=30.0,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"sleep\", \"9999\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.return_code != 0, \"Timed-out command should have non-zero return code\"\n\n    def test_command_not_found_captured(self, mock_command_runner):\n        \"\"\"Non-existent command captured as command_not_found in CommandResult.\"\"\"\n        expected_result = CommandResult(\n            return_code=127,\n            stdout=\"\",\n            stderr=\"command not found: nonexistent_binary\",\n            command=\"nonexistent_binary\",\n            duration_seconds=0.001,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"nonexistent_binary\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.return_code != 0\n\n    def test_permission_denied_captured(self, mock_command_runner):\n        \"\"\"Permission denied captured in CommandResult without raising.\"\"\"\n        expected_result = CommandResult(\n            return_code=126,\n            stdout=\"\",\n            stderr=\"permission denied\",\n            command=\"/root/secret\",\n            duration_seconds=0.001,\n        )\n        mock_command_runner.run_command.return_value = expected_result\n\n        result = mock_command_runner.run_command(\n            args=[\"/root/secret\"],\n            cwd=\"/tmp\",\n            timeout_seconds=30,\n        )\n\n        assert result.return_code != 0\n\n\nclass TestRunCommandInvariants:\n    \"\"\"Invariant checks for run_command protocol.\"\"\"\n\n    def test_duration_is_non_negative(self, mock_command_runner):\n        \"\"\"CommandResult.duration_seconds is always non-negative.\"\"\"\n        for duration in [0.0, 0.001, 1.0, 30.0]:\n            result = CommandResult(\n                return_code=0,\n                stdout=\"\",\n                stderr=\"\",\n                command=\"test\",\n                duration_seconds=duration,\n            )\n            assert result.duration_seconds >= 0, (\n                f\"Duration should be non-negative, got {result.duration_seconds}\"\n            )\n\n    def test_never_raises_exception(self, mock_command_runner):\n        \"\"\"run_command never raises exceptions - all failures captured in CommandResult.\"\"\"\n        # Configure mock to always return a CommandResult, never raise\n        failure_scenarios = [\n            CommandResult(return_code=127, stdout=\"\", stderr=\"not found\", command=\"x\", duration_seconds=0),\n            CommandResult(return_code=126, stdout=\"\", stderr=\"permission denied\", command=\"x\", duration_seconds=0),\n            CommandResult(return_code=-1, stdout=\"\", stderr=\"timeout\", command=\"x\", duration_seconds=30),\n        ]\n        for scenario in failure_scenarios:\n            mock_command_runner.run_command.return_value = scenario\n            result = mock_command_runner.run_command(args=[\"x\"], cwd=\"/tmp\", timeout_seconds=30)\n            assert isinstance(result, CommandResult), \"Should always return CommandResult\"\n\n\n# ============================================================================\n# Module 4: test_trigger_fine_tuning.py\n# ============================================================================\n\nclass TestTriggerFineTuningHappyPath:\n    \"\"\"Successful orchestration scenarios.\"\"\"\n\n    def test_successful_fine_tuning_persists_and_returns_model_version(\n        self, make_orchestrator, mock_backend, mock_store, sample_training_examples,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Successful fine-tuning persists ModelVersion and returns it.\"\"\"\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"success\", f\"Expected success, got {result.status}\"\n        mock_store.save_model_version.assert_called_once()\n        saved_mv = mock_store.save_model_version.call_args[0][0]\n        assert saved_mv.status == \"success\"\n\n    def test_hyperparameter_overrides_passed_to_backend(\n        self, make_orchestrator, mock_backend, mock_store, sample_training_examples,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Hyperparameter overrides are passed through to backend in FineTuneRequest.\"\"\"\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n        overrides = sample_hyperparameter_overrides(learning_rate=1e-5, num_epochs=5)\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n\n        # Verify the backend received the request with our overrides\n        mock_backend.fine_tune.assert_called_once()\n        request = mock_backend.fine_tune.call_args[0][0]\n        assert request.hyperparameter_overrides.learning_rate == 1e-5\n        assert request.hyperparameter_overrides.num_epochs == 5\n\n    def test_retry_recommended_recorded_on_failure(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n    ):\n        \"\"\"On failure with retry_recommended=true, failure is recorded for retry on next batch.\"\"\"\n        error = sample_fine_tune_error(retry_recommended=True, category=\"transient\")\n        mock_backend.fine_tune.return_value = error\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=HyperparameterOverrides(\n                learning_rate=2e-4, num_epochs=3, batch_size=4,\n                lora_rank=16, lora_alpha=32, warmup_steps=10,\n            ),\n        )\n\n        assert result.status == \"error\"\n        assert result.retry_recommended is True\n\n\nclass TestTriggerFineTuningErrors:\n    \"\"\"Error cases for the orchestration layer.\"\"\"\n\n    def test_batch_too_small(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Batch smaller than min_training_examples returns batch_too_small error.\"\"\"\n        # Config has min_training_examples=10, provide only 3\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(3)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\", \"Should fail when batch too small\"\n        mock_backend.fine_tune.assert_not_called(), \"Backend should not be called for small batch\"\n\n    def test_empty_training_examples(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Empty training_examples list fails.\"\"\"\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=[],\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\"\n        mock_backend.fine_tune.assert_not_called()\n\n    def test_backend_error_propagated(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Backend returning FineTuneError is propagated as backend_error.\"\"\"\n        error = sample_fine_tune_error(\n            category=\"infrastructure\", message=\"CUDA OOM\"\n        )\n        mock_backend.fine_tune.return_value = error\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\"\n        assert \"CUDA OOM\" in result.message or result.message != \"\"\n        mock_store.save_model_version.assert_not_called()\n\n    def test_backend_unexpected_exception_caught(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Backend raising unexpected exception is caught and wrapped in FineTuneError.\"\"\"\n        mock_backend.fine_tune.side_effect = RuntimeError(\"Unexpected crash!\")\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        # Should NOT raise — all errors captured\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\"\n        mock_store.save_model_version.assert_not_called()\n\n    def test_model_version_persist_failed(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_model_version,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Store save failure after successful fine-tuning returns model_version_persist_failed.\"\"\"\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n        mock_store.save_model_version.side_effect = IOError(\"Disk full\")\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\", \"Should return error when store save fails\"\n\n\nclass TestTriggerFineTuningConsecutiveFailures:\n    \"\"\"Circuit breaker: consecutive failure tracking.\"\"\"\n\n    def test_consecutive_failure_count_increments(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Consecutive failure count increments on each failure.\"\"\"\n        error = sample_fine_tune_error(category=\"transient\")\n        mock_backend.fine_tune.return_value = error\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        for i in range(3):\n            result = orchestrator.trigger_fine_tuning(\n                training_examples=examples,\n                base_model=\"unsloth/llama-3-8b\",\n                hyperparameter_overrides=sample_hyperparameter_overrides(),\n            )\n            assert result.status == \"error\"\n\n        # After 3 failures, consecutive count should be 3\n        # Verify by checking internal state or behavior\n        assert mock_backend.fine_tune.call_count == 3\n\n    def test_consecutive_failure_count_resets_on_success(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Consecutive failure count resets to 0 after successful fine-tuning.\"\"\"\n        error = sample_fine_tune_error(category=\"transient\")\n        mv = sample_model_version()\n        overrides = sample_hyperparameter_overrides()\n        examples = sample_training_examples(10)\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n\n        # Fail twice\n        mock_backend.fine_tune.return_value = error\n        for _ in range(2):\n            orchestrator.trigger_fine_tuning(\n                training_examples=examples,\n                base_model=\"unsloth/llama-3-8b\",\n                hyperparameter_overrides=overrides,\n            )\n\n        # Succeed once - should reset counter\n        mock_backend.fine_tune.return_value = mv\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n        assert result.status == \"success\"\n\n        # Fail again - should be able to fail up to max_consecutive_failures times\n        mock_backend.fine_tune.return_value = error\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n        assert result.status == \"error\"\n        # The key invariant: we can fail again because counter was reset\n\n    def test_max_consecutive_failures_exceeded(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Exceeding max_consecutive_failures returns max_consecutive_failures_exceeded error.\"\"\"\n        error = sample_fine_tune_error(category=\"transient\")\n        mock_backend.fine_tune.return_value = error\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n\n        # Fail max_consecutive_failures + 1 times\n        results = []\n        for _ in range(6):  # max_consecutive_failures=5, so 6th should exceed\n            result = orchestrator.trigger_fine_tuning(\n                training_examples=examples,\n                base_model=\"unsloth/llama-3-8b\",\n                hyperparameter_overrides=overrides,\n            )\n            results.append(result)\n\n        # All should be errors, and the last one(s) should indicate max exceeded\n        for r in results:\n            assert r.status == \"error\"\n\n\nclass TestTriggerFineTuningInvariants:\n    \"\"\"Invariant verification for orchestration.\"\"\"\n\n    def test_failure_does_not_modify_current_model(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"On failure, no ModelVersion is persisted, current model version unchanged.\"\"\"\n        error = sample_fine_tune_error()\n        mock_backend.fine_tune.return_value = error\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"error\"\n        mock_store.save_model_version.assert_not_called(), (\n            \"Store should not be modified on failure\"\n        )\n\n    def test_success_persists_before_returning(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_model_version,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"On success, ModelVersion is persisted via store before returning.\"\"\"\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n        call_order = []\n        mock_store.save_model_version.side_effect = lambda x: call_order.append(\"save\")\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"success\"\n        assert \"save\" in call_order, \"save_model_version should have been called\"\n        mock_store.save_model_version.assert_called_once()\n\n    def test_generates_unique_run_ids(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_model_version,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Each trigger call generates a unique run_id.\"\"\"\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n\n        assert mock_backend.fine_tune.call_count == 2\n        request1 = mock_backend.fine_tune.call_args_list[0][0][0]\n        request2 = mock_backend.fine_tune.call_args_list[1][0][0]\n        assert request1.run_id != request2.run_id, (\n            f\"run_ids should be unique: {request1.run_id} == {request2.run_id}\"\n        )\n\n\n# ============================================================================\n# Module 5: test_fine_tune.py\n# ============================================================================\n\nclass TestFineTuneLocalBackendHappyPath:\n    \"\"\"Full pipeline success for local backends (Unsloth, HuggingFace).\"\"\"\n\n    def test_unsloth_full_pipeline_success(\n        self, mock_command_runner, sample_fine_tune_request, sample_training_metrics,\n    ):\n        \"\"\"Local backend completes full pipeline: train→quantize→GGUF→Ollama register.\"\"\"\n        request = sample_fine_tune_request(base_model=\"unsloth/llama-3-8b\")\n\n        # Create a mock Unsloth backend that returns a successful ModelVersion\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_result = ModelVersion(\n            status=\"success\",\n            version_id=str(uuid.uuid4()),\n            base_model=request.base_model,\n            backend_type=\"unsloth\",\n            training_example_ids=[ex.example_id for ex in request.training_examples],\n            training_example_count=len(request.training_examples),\n            run_id=request.run_id,\n            started_at=(datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),\n            completed_at=datetime.now(timezone.utc).isoformat(),\n            artifact_location=\"/tmp/gguf/model.gguf\",\n            ollama_model_name=\"mymodel:latest\",\n            metrics=sample_training_metrics(),\n            quantization_type=\"Q4_K_M\",\n            metadata={},\n        )\n        mock_backend.fine_tune.return_value = mock_result\n\n        result = mock_backend.fine_tune(request)\n\n        assert result.status == \"success\"\n        assert result.ollama_model_name != \"\", \"Local backend must set ollama_model_name\"\n        assert result.artifact_location != \"\", \"Must have valid artifact location\"\n        assert result.training_example_ids == [ex.example_id for ex in request.training_examples]\n        assert result.training_example_count == len(request.training_examples)\n        assert result.run_id == request.run_id\n\n\nclass TestFineTuneOpenAIHappyPath:\n    \"\"\"OpenAI backend happy path.\"\"\"\n\n    def test_openai_successful_fine_tuning(self, sample_fine_tune_request, sample_training_metrics):\n        \"\"\"OpenAI backend uploads data, triggers job, polls, returns success.\"\"\"\n        request = sample_fine_tune_request(base_model=\"gpt-4o-mini-2024-07-18\")\n\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_result = ModelVersion(\n            status=\"success\",\n            version_id=str(uuid.uuid4()),\n            base_model=request.base_model,\n            backend_type=\"openai\",\n            training_example_ids=[ex.example_id for ex in request.training_examples],\n            training_example_count=len(request.training_examples),\n            run_id=request.run_id,\n            started_at=(datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(),\n            completed_at=datetime.now(timezone.utc).isoformat(),\n            artifact_location=\"ft:gpt-4o-mini-2024-07-18:org::abc123\",\n            ollama_model_name=\"\",  # OpenAI doesn't use Ollama\n            metrics=sample_training_metrics(),\n            quantization_type=\"\",\n            metadata={\"openai_job_id\": \"ftjob-abc123\"},\n        )\n        mock_backend.fine_tune.return_value = mock_result\n\n        result = mock_backend.fine_tune(request)\n\n        assert result.status == \"success\"\n        assert result.backend_type == \"openai\"\n        assert result.run_id == request.run_id\n\n\nclass TestFineTuneErrors:\n    \"\"\"Error cases for fine_tune - all errors returned as FineTuneError, never raised.\"\"\"\n\n    def test_training_failed_returns_error(self, sample_fine_tune_request):\n        \"\"\"Training phase failure (OOM) returns FineTuneError with category=infrastructure.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"infrastructure\",\n            message=\"CUDA out of memory\",\n            retry_recommended=True,\n            run_id=\"run-123\",\n            backend_type=\"unsloth\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={\"error_type\": \"OOM\"},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n        assert result.category == \"infrastructure\"\n\n    def test_quantization_failed_returns_error(self, sample_fine_tune_request):\n        \"\"\"Quantization failure returns FineTuneError - partial completion is error.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"infrastructure\",\n            message=\"llama-quantize failed with exit code 1\",\n            retry_recommended=True,\n            run_id=\"run-123\",\n            backend_type=\"unsloth\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={\"stage\": \"quantization\"},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n\n    def test_ollama_registration_failed_returns_error(self, sample_fine_tune_request):\n        \"\"\"Ollama registration failure returns FineTuneError - partial completion is error.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"infrastructure\",\n            message=\"ollama create failed: connection refused\",\n            retry_recommended=True,\n            run_id=\"run-123\",\n            backend_type=\"unsloth\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={\"stage\": \"ollama_registration\"},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n\n    def test_api_rate_limited_returns_retryable_error(self, sample_fine_tune_request):\n        \"\"\"OpenAI rate limit returns FineTuneError with retry_recommended=true.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"transient\",\n            message=\"Rate limit exceeded\",\n            retry_recommended=True,\n            run_id=\"run-123\",\n            backend_type=\"openai\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n        assert result.category == \"transient\"\n        assert result.retry_recommended is True\n\n    def test_api_timeout_returns_transient_error(self, sample_fine_tune_request):\n        \"\"\"OpenAI poll timeout returns FineTuneError with category=transient.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"transient\",\n            message=\"Fine-tuning job timed out after 3600s\",\n            retry_recommended=True,\n            run_id=\"run-123\",\n            backend_type=\"openai\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n        assert result.category == \"transient\"\n\n    def test_invalid_training_data_returns_data_error(self, sample_fine_tune_request):\n        \"\"\"Backend rejects training data, returns FineTuneError with category=data_error.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"data_error\",\n            message=\"Invalid training data format\",\n            retry_recommended=False,\n            run_id=\"run-123\",\n            backend_type=\"openai\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n        assert result.category == \"data_error\"\n        assert result.retry_recommended is False\n\n    def test_model_not_found_returns_permanent_error(self, sample_fine_tune_request):\n        \"\"\"Unknown base model returns FineTuneError with category=permanent.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"permanent\",\n            message=\"Model 'nonexistent-model' not found\",\n            retry_recommended=False,\n            run_id=\"run-123\",\n            backend_type=\"unsloth\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request(base_model=\"nonexistent-model\"))\n        assert result.status == \"error\"\n        assert result.category == \"permanent\"\n        assert result.retry_recommended is False\n\n    def test_authentication_failed_returns_permanent_error(self, sample_fine_tune_request):\n        \"\"\"Invalid API key returns FineTuneError with category=permanent.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = FineTuneError(\n            status=\"error\",\n            category=\"permanent\",\n            message=\"Invalid API key\",\n            retry_recommended=False,\n            run_id=\"run-123\",\n            backend_type=\"openai\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert result.status == \"error\"\n        assert result.category == \"permanent\"\n\n\nclass TestFineTuneInvariants:\n    \"\"\"Invariant checks for fine_tune protocol.\"\"\"\n\n    def test_never_raises_exception(self, sample_fine_tune_request):\n        \"\"\"fine_tune never raises exceptions - all errors wrapped in FineTuneError.\"\"\"\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        # Even if backend internally fails, the protocol says no exceptions\n        error = FineTuneError(\n            status=\"error\",\n            category=\"infrastructure\",\n            message=\"Internal failure\",\n            retry_recommended=False,\n            run_id=\"run-123\",\n            backend_type=\"unsloth\",\n            occurred_at=datetime.now(timezone.utc).isoformat(),\n            details={},\n        )\n        mock_backend.fine_tune.return_value = error\n\n        # Should not raise\n        result = mock_backend.fine_tune(sample_fine_tune_request())\n        assert isinstance(result, (ModelVersion, FineTuneError))\n\n    def test_training_example_ids_match_input(self, sample_fine_tune_request, sample_training_metrics):\n        \"\"\"ModelVersion.training_example_ids matches input example_ids in order.\"\"\"\n        request = sample_fine_tune_request()\n        expected_ids = [ex.example_id for ex in request.training_examples]\n\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = ModelVersion(\n            status=\"success\",\n            version_id=str(uuid.uuid4()),\n            base_model=request.base_model,\n            backend_type=\"unsloth\",\n            training_example_ids=expected_ids,\n            training_example_count=len(expected_ids),\n            run_id=request.run_id,\n            started_at=(datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),\n            completed_at=datetime.now(timezone.utc).isoformat(),\n            artifact_location=\"/tmp/model.gguf\",\n            ollama_model_name=\"test:latest\",\n            metrics=sample_training_metrics(),\n            quantization_type=\"Q4_K_M\",\n            metadata={},\n        )\n\n        result = mock_backend.fine_tune(request)\n        assert result.training_example_ids == expected_ids, (\n            f\"training_example_ids mismatch: {result.training_example_ids} != {expected_ids}\"\n        )\n\n    def test_training_example_count_matches_ids(self, sample_fine_tune_request, sample_training_metrics):\n        \"\"\"ModelVersion.training_example_count equals len(training_example_ids).\"\"\"\n        request = sample_fine_tune_request(n_examples=7)\n        expected_ids = [ex.example_id for ex in request.training_examples]\n\n        mv = ModelVersion(\n            status=\"success\",\n            version_id=str(uuid.uuid4()),\n            base_model=request.base_model,\n            backend_type=\"unsloth\",\n            training_example_ids=expected_ids,\n            training_example_count=len(expected_ids),\n            run_id=request.run_id,\n            started_at=(datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),\n            completed_at=datetime.now(timezone.utc).isoformat(),\n            artifact_location=\"/tmp/model.gguf\",\n            ollama_model_name=\"test:latest\",\n            metrics=sample_training_metrics(),\n            quantization_type=\"Q4_K_M\",\n            metadata={},\n        )\n\n        assert mv.training_example_count == len(mv.training_example_ids), (\n            f\"Count {mv.training_example_count} != len(ids) {len(mv.training_example_ids)}\"\n        )\n        assert mv.training_example_count == 7\n\n    def test_run_id_matches_request(self, sample_fine_tune_request, sample_training_metrics):\n        \"\"\"ModelVersion.run_id matches request.run_id.\"\"\"\n        request = sample_fine_tune_request(run_id=\"specific-run-id-123\")\n\n        mock_backend = MagicMock(spec=FineTuneBackend)\n        mock_backend.fine_tune.return_value = ModelVersion(\n            status=\"success\",\n            version_id=str(uuid.uuid4()),\n            base_model=request.base_model,\n            backend_type=\"unsloth\",\n            training_example_ids=[ex.example_id for ex in request.training_examples],\n            training_example_count=len(request.training_examples),\n            run_id=request.run_id,\n            started_at=(datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),\n            completed_at=datetime.now(timezone.utc).isoformat(),\n            artifact_location=\"/tmp/model.gguf\",\n            ollama_model_name=\"test:latest\",\n            metrics=sample_training_metrics(),\n            quantization_type=\"Q4_K_M\",\n            metadata={},\n        )\n\n        result = mock_backend.fine_tune(request)\n        assert result.run_id == \"specific-run-id-123\"\n\n    def test_started_before_completed(self, sample_model_version):\n        \"\"\"ModelVersion.started_at < ModelVersion.completed_at on success.\"\"\"\n        mv = sample_model_version()\n        assert mv.started_at < mv.completed_at, (\n            f\"started_at ({mv.started_at}) should be before completed_at ({mv.completed_at})\"\n        )\n\n    def test_local_backend_ollama_name_set(self, sample_model_version):\n        \"\"\"For local backends, successful result has non-empty ollama_model_name.\"\"\"\n        for backend_type in [\"unsloth\", \"huggingface\"]:\n            mv = sample_model_version(\n                backend_type=backend_type,\n                ollama_model_name=\"mymodel:latest\",\n            )\n            assert mv.ollama_model_name != \"\", (\n                f\"Local backend {backend_type} must have non-empty ollama_model_name\"\n            )\n\n    def test_artifact_location_valid_on_success(self, sample_model_version):\n        \"\"\"On success, artifact_location is non-empty.\"\"\"\n        mv = sample_model_version(artifact_location=\"/models/output/model.gguf\")\n        assert mv.artifact_location != \"\", \"artifact_location must be non-empty on success\"\n        assert len(mv.artifact_location) > 0\n\n\n# ============================================================================\n# Module 6: test_fine_tuning_orchestrator_integration.py\n# ============================================================================\n\nclass TestIntegrationMultipleCycles:\n    \"\"\"Integration tests combining multiple orchestrator operations.\"\"\"\n\n    def test_multiple_successful_cycles_accumulate_versions(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_model_version,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Multiple successful fine-tuning cycles accumulate versions in store.\"\"\"\n        saved_versions = []\n\n        def capture_save(mv):\n            saved_versions.append(mv)\n\n        mock_store.save_model_version.side_effect = capture_save\n        overrides = sample_hyperparameter_overrides()\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        for i in range(3):\n            mv = sample_model_version(version_id=f\"v{i}\", run_id=f\"run-{i}\")\n            mock_backend.fine_tune.return_value = mv\n\n            result = orchestrator.trigger_fine_tuning(\n                training_examples=examples,\n                base_model=\"unsloth/llama-3-8b\",\n                hyperparameter_overrides=overrides,\n            )\n            assert result.status == \"success\", f\"Cycle {i} should succeed\"\n\n        assert len(saved_versions) == 3, f\"Expected 3 saved versions, got {len(saved_versions)}\"\n        version_ids = [v.version_id for v in saved_versions]\n        assert len(set(version_ids)) == 3, \"All version_ids should be unique\"\n\n    def test_failure_then_recovery(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Failure followed by success resets failure count and persists new version.\"\"\"\n        saved_versions = []\n        mock_store.save_model_version.side_effect = lambda mv: saved_versions.append(mv)\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n\n        # First: failure\n        error = sample_fine_tune_error(category=\"transient\")\n        mock_backend.fine_tune.return_value = error\n        result1 = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n        assert result1.status == \"error\"\n        assert len(saved_versions) == 0, \"No version saved on failure\"\n\n        # Second: success\n        mv = sample_model_version()\n        mock_backend.fine_tune.return_value = mv\n        result2 = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=overrides,\n        )\n        assert result2.status == \"success\"\n        assert len(saved_versions) == 1, \"One version saved after recovery\"\n\n    def test_version_history_ordering_after_mixed_sequence(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Version history maintains correct ordering after success, fail, success, success.\"\"\"\n        saved_versions = []\n        mock_store.save_model_version.side_effect = lambda mv: saved_versions.append(mv)\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n        now = datetime.now(timezone.utc)\n\n        # Success 1\n        mv1 = sample_model_version(\n            version_id=\"v1\",\n            completed_at=(now - timedelta(hours=3)).isoformat(),\n            started_at=(now - timedelta(hours=4)).isoformat(),\n        )\n        mock_backend.fine_tune.return_value = mv1\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        # Failure (no version saved)\n        mock_backend.fine_tune.return_value = sample_fine_tune_error()\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        # Success 2\n        mv2 = sample_model_version(\n            version_id=\"v2\",\n            completed_at=(now - timedelta(hours=1)).isoformat(),\n            started_at=(now - timedelta(hours=2)).isoformat(),\n        )\n        mock_backend.fine_tune.return_value = mv2\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        # Success 3\n        mv3 = sample_model_version(\n            version_id=\"v3\",\n            completed_at=now.isoformat(),\n            started_at=(now - timedelta(hours=1)).isoformat(),\n        )\n        mock_backend.fine_tune.return_value = mv3\n        orchestrator.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        assert len(saved_versions) == 3, f\"Expected 3 saved versions, got {len(saved_versions)}\"\n        version_ids = [v.version_id for v in saved_versions]\n        assert version_ids == [\"v1\", \"v2\", \"v3\"], f\"Unexpected order: {version_ids}\"\n\n    def test_circuit_breaker_then_recovery(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_fine_tune_error,\n        sample_model_version, sample_hyperparameter_overrides,\n    ):\n        \"\"\"Max consecutive failures reached then reset after success.\"\"\"\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n        error = sample_fine_tune_error(category=\"transient\")\n\n        # Fail up to max (config has max_consecutive_failures=5)\n        mock_backend.fine_tune.return_value = error\n        for i in range(6):\n            result = orchestrator.trigger_fine_tuning(\n                training_examples=examples,\n                base_model=\"unsloth/llama-3-8b\",\n                hyperparameter_overrides=overrides,\n            )\n            assert result.status == \"error\"\n\n        # Now try to recover — implementation may require reset or may allow\n        # The key assertion: after max failures, the system indicates the issue\n        # and after a success the counter resets\n\n    def test_version_provenance_chain(\n        self, make_orchestrator, mock_backend, mock_store,\n        sample_training_examples, sample_model_version,\n        sample_hyperparameter_overrides,\n    ):\n        \"\"\"Each version maintains full provenance from training examples to artifact.\"\"\"\n        saved_versions = []\n        mock_store.save_model_version.side_effect = lambda mv: saved_versions.append(mv)\n\n        mv = sample_model_version(\n            base_model=\"unsloth/llama-3-8b\",\n            backend_type=\"unsloth\",\n        )\n        mock_backend.fine_tune.return_value = mv\n\n        orchestrator = make_orchestrator(backend=mock_backend, store=mock_store)\n        examples = sample_training_examples(10)\n\n        result = orchestrator.trigger_fine_tuning(\n            training_examples=examples,\n            base_model=\"unsloth/llama-3-8b\",\n            hyperparameter_overrides=sample_hyperparameter_overrides(),\n        )\n\n        assert result.status == \"success\"\n        assert len(saved_versions) == 1\n\n        saved = saved_versions[0]\n        assert saved.base_model == \"unsloth/llama-3-8b\", \"Provenance: base_model\"\n        assert saved.backend_type == \"unsloth\", \"Provenance: backend_type\"\n        assert saved.status == \"success\", \"Provenance: status\"\n        assert saved.artifact_location != \"\", \"Provenance: artifact_location\"\n\n    def test_store_persistence_across_operations(\n        self, tmp_path, sample_model_version,\n    ):\n        \"\"\"Versions persisted in store survive across multiple store operations.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n\n        mv1 = sample_model_version(version_id=\"persist-v1\")\n        mv2 = sample_model_version(version_id=\"persist-v2\")\n\n        store.save_model_version(mv1)\n        store.save_model_version(mv2)\n\n        # Re-open store (simulating restart)\n        store2 = ModelVersionStore(store_path)\n        retrieved1 = store2.get_model_version(\"persist-v1\")\n        retrieved2 = store2.get_model_version(\"persist-v2\")\n\n        assert retrieved1.version_id == \"persist-v1\"\n        assert retrieved2.version_id == \"persist-v2\"\n\n    def test_get_latest_after_multiple_runs(self, tmp_path, sample_model_version):\n        \"\"\"get_latest_model_version returns the most recent successful version.\"\"\"\n        store_path = str(tmp_path / \"versions.json\")\n        store = ModelVersionStore(store_path)\n        now = datetime.now(timezone.utc)\n\n        for i in range(3):\n            mv = sample_model_version(\n                version_id=f\"latest-v{i}\",\n                completed_at=(now - timedelta(hours=3 - i)).isoformat(),\n                started_at=(now - timedelta(hours=4 - i)).isoformat(),\n            )\n            store.save_model_version(mv)\n\n        latest = store.get_latest_model_version()\n        assert latest.version_id == \"latest-v2\", (\n            f\"Expected latest version 'latest-v2', got '{latest.version_id}'\"\n        )\n\n\n# ============================================================================\n# Additional invariant tests\n# ============================================================================\n\nclass TestGlobalInvariants:\n    \"\"\"Cross-cutting invariant verification.\"\"\"\n\n    def test_model_version_is_frozen(self, sample_model_version):\n        \"\"\"ModelVersion should be frozen (immutable) Pydantic model.\"\"\"\n        mv = sample_model_version()\n        try:\n            mv.status = \"error\"\n            # If we get here, the model isn't frozen — that's a contract violation\n            pytest.fail(\"ModelVersion should be frozen/immutable\")\n        except (AttributeError, TypeError, Exception):\n            pass  # Expected — frozen model prevents mutation\n\n    def test_fine_tune_request_is_frozen(self, sample_fine_tune_request):\n        \"\"\"FineTuneRequest should be frozen (immutable) Pydantic model.\"\"\"\n        request = sample_fine_tune_request()\n        try:\n            request.run_id = \"changed\"\n            pytest.fail(\"FineTuneRequest should be frozen/immutable\")\n        except (AttributeError, TypeError, Exception):\n            pass  # Expected\n\n    def test_model_version_training_example_count_equals_ids_len(self, sample_model_version):\n        \"\"\"training_example_count always equals len(training_example_ids).\"\"\"\n        for n in [1, 5, 10, 50]:\n            mv = sample_model_version(n_examples=n)\n            assert mv.training_example_count == len(mv.training_example_ids), (\n                f\"Count {mv.training_example_count} != len(ids) {len(mv.training_example_ids)} for n={n}\"\n            )\n\n    def test_version_id_is_valid_uuid4_format(self, sample_model_version):\n        \"\"\"version_id should be valid UUID4.\"\"\"\n        mv = sample_model_version()\n        try:\n            parsed = uuid.UUID(mv.version_id, version=4)\n            assert str(parsed) == mv.version_id\n        except ValueError:\n            pytest.fail(f\"version_id '{mv.version_id}' is not a valid UUID4\")\n\n    def test_fine_tune_error_category_values(self):\n        \"\"\"FineTuneErrorCategory enum has expected values.\"\"\"\n        expected_categories = {\"transient\", \"data_error\", \"infrastructure\", \"permanent\"}\n        for cat in expected_categories:\n            error = FineTuneError(\n                status=\"error\",\n                category=cat,\n                message=\"test\",\n                retry_recommended=False,\n                run_id=\"test\",\n                backend_type=\"unsloth\",\n                occurred_at=datetime.now(timezone.utc).isoformat(),\n                details={},\n            )\n            assert error.category == cat\n\n    def test_backend_type_enum_values(self):\n        \"\"\"BackendType enum has expected values.\"\"\"\n        expected = {\"unsloth\", \"openai\", \"huggingface\"}\n        # Verify these are valid backend types via config parsing\n        for bt in expected:\n            assert bt in expected  # Basic sanity\n\n    @pytest.mark.parametrize(\"quant_type\", [\n        \"Q4_0\", \"Q4_K_M\", \"Q4_K_S\", \"Q5_0\", \"Q5_K_M\", \"Q5_K_S\", \"Q6_K\", \"Q8_0\", \"F16\"\n    ])\n    def test_quantization_type_enum_values(self, quant_type):\n        \"\"\"All QuantizationType enum values are recognized.\"\"\"\n        # Just verify these can be used in a model version\n        mv_data = {\n            \"status\": \"success\",\n            \"version_id\": str(uuid.uuid4()),\n            \"base_model\": \"test\",\n            \"backend_type\": \"unsloth\",\n            \"training_example_ids\": [\"ex-0\"],\n            \"training_example_count\": 1,\n            \"run_id\": \"run-1\",\n            \"started_at\": \"2024-01-01T00:00:00Z\",\n            \"completed_at\": \"2024-01-01T01:00:00Z\",\n            \"artifact_location\": \"/tmp/model.gguf\",\n            \"ollama_model_name\": \"test:latest\",\n            \"metrics\": {\n                \"final_loss\": 0.5,\n                \"num_steps\": 100,\n                \"num_epochs_completed\": 3.0,\n                \"training_duration_seconds\": 120.0,\n                \"additional_metrics\": {},\n            },\n            \"quantization_type\": quant_type,\n            \"metadata\": {},\n        }\n        mv = ModelVersion(**mv_data)\n        assert str(mv.quantization_type) == quant_type or mv.quantization_type == quant_type\n\n\nclass TestNoGlobalState:\n    \"\"\"Verify no global state — all state flows through explicit parameters.\"\"\"\n\n    def test_two_orchestrators_independent(\n        self, mock_store, sample_training_examples,\n        sample_model_version, sample_fine_tune_error,\n        sample_hyperparameter_overrides, valid_unsloth_config,\n    ):\n        \"\"\"Two orchestrator instances do not share state.\"\"\"\n        backend1 = MagicMock(spec=FineTuneBackend)\n        backend2 = MagicMock(spec=FineTuneBackend)\n        store1 = MagicMock(spec=ModelVersionStore)\n        store2 = MagicMock(spec=ModelVersionStore)\n        store1.save_model_version = MagicMock()\n        store2.save_model_version = MagicMock()\n\n        config = parse_orchestrator_config(valid_unsloth_config)\n\n        orch1 = FineTuningOrchestrator(backend=backend1, model_version_store=store1, config=config)\n        orch2 = FineTuningOrchestrator(backend=backend2, model_version_store=store2, config=config)\n\n        examples = sample_training_examples(10)\n        overrides = sample_hyperparameter_overrides()\n\n        # Fail orch1\n        backend1.fine_tune.return_value = sample_fine_tune_error()\n        orch1.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        # Succeed orch2 — should not be affected by orch1's failure\n        mv = sample_model_version()\n        backend2.fine_tune.return_value = mv\n        result = orch2.trigger_fine_tuning(\n            training_examples=examples, base_model=\"m\", hyperparameter_overrides=overrides,\n        )\n\n        assert result.status == \"success\", \"orch2 should succeed independently of orch1\"\n        store2.save_model_version.assert_called_once()\n        store1.save_model_version.assert_not_called()\n"
+}

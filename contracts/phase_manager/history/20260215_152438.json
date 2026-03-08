@@ -1,0 +1,525 @@
+{
+  "component_id": "phase_manager",
+  "name": "Phase Manager",
+  "description": "Determines the current phase per task type based on training example count and confidence scores. Phase 1→2 transition: when training example count >= phase1_to_phase2 threshold AND a local model is available. Phase 2→3 transition: when rolling correlation >= phase2_to_phase3 threshold over a sustained period (consecutive_windows_above_threshold >= sustained_window_count). Phase 3→2 regression: when correlation drops below coaching_trigger. Phase 3→1 emergency: when correlation drops below emergency_threshold, revert to full remote serving. Emergency threshold also applies to phase 2 (2→1) for safety. Transitions are logged as structured JSON audit events via stdlib logging. Phase is derived (computed from snapshot state), not stored as a discrete flag — emergent from confidence scores. Initial phase at startup is always REMOTE_ONLY (Phase 1). The PhaseManager is a lightweight, near-stateless class initialized with PhaseThresholds and a logging.Logger. Its primary method evaluate() is a pure function with no side effects beyond audit logging.",
+  "version": 1,
+  "types": [
+    {
+      "name": "Phase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE_ONLY",
+        "COACHING",
+        "AUTONOMOUS"
+      ],
+      "inner_types": [],
+      "description": "IntEnum representing the three operational phases. Phase is emergent from confidence scores, not a manually triggered state. REMOTE_ONLY=1: all queries served by remote API. COACHING=2: local model serves queries with remote comparison sampling. AUTONOMOUS=3: local model serves queries independently with periodic spot-checks."
+    },
+    {
+      "name": "TransitionReason",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SUFFICIENT_TRAINING_DATA_AND_LOCAL_MODEL",
+        "SUSTAINED_HIGH_CORRELATION",
+        "CORRELATION_BELOW_COACHING_TRIGGER",
+        "CORRELATION_BELOW_EMERGENCY_THRESHOLD",
+        "LOCAL_MODEL_UNAVAILABLE",
+        "NO_TRANSITION"
+      ],
+      "inner_types": [],
+      "description": "StrEnum categorizing why a phase transition occurred. Used in audit log entries for machine-readable traceability."
+    },
+    {
+      "name": "TrendDirection",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "IMPROVING",
+        "STABLE",
+        "DEGRADING"
+      ],
+      "inner_types": [],
+      "description": "Direction of the correlation trend over recent windows, as determined by the confidence engine."
+    },
+    {
+      "name": "PhaseThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase1_to_phase2_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of training examples required to transition from Phase 1 (REMOTE_ONLY) to Phase 2 (COACHING). Must be >= 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "phase1_to_phase2_example_count must be >= 1"
+            }
+          ]
+        },
+        {
+          "name": "phase2_to_phase3_threshold",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Minimum rolling correlation score required for Phase 2→3 transition. Must be in (0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "phase2_to_phase3_threshold must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "coaching_trigger",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation threshold below which Phase 3 regresses to Phase 2. Must be in (0.0, 1.0) and less than phase2_to_phase3_threshold.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value < 1.0",
+              "error_message": "coaching_trigger must be in (0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "emergency_threshold",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation threshold below which any phase (2 or 3) emergency-reverts to Phase 1 (REMOTE_ONLY). Must be in [0.0, 1.0) and less than coaching_trigger.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value < 1.0",
+              "error_message": "emergency_threshold must be in [0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "sustained_window_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "3",
+          "description": "Number of consecutive windows that must exceed phase2_to_phase3_threshold before the 2→3 transition is allowed. Must be >= 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "sustained_window_count must be >= 1"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic v2 validated configuration model containing all threshold parameters for phase transitions. Validated at config parse time via model_validator to enforce: emergency_threshold < coaching_trigger < phase2_to_phase3. All float thresholds are correlation scores in [0.0, 1.0]."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the task type this snapshot pertains to.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_type must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "correlation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current rolling correlation score between local and remote model outputs, in [0.0, 1.0]. Computed by the confidence engine using task-specific evaluators.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "correlation_score must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of training examples accumulated for this task type. Used for Phase 1→2 transition check.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_example_count must be >= 0"
+            }
+          ]
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison-pair samples currently in the rolling window.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be >= 0"
+            }
+          ]
+        },
+        {
+          "name": "consecutive_windows_above_threshold",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of consecutive evaluation windows where correlation_score has been >= phase2_to_phase3_threshold. Tracked by the confidence engine. Used by phase manager to enforce sustained-period requirement for 2→3 transition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "consecutive_windows_above_threshold must be >= 0"
+            }
+          ]
+        },
+        {
+          "name": "trend_direction",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Direction of the correlation trend over recent evaluation windows.",
+          "validators": []
+        },
+        {
+          "name": "is_stale",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the oldest sample in the window exceeds max_window_age, indicating a coaching sample is overdue.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Point-in-time snapshot of confidence metrics for a single task, produced by the confidence engine and consumed by the phase manager. Contains all information needed to derive the current phase without the phase manager tracking any history."
+    },
+    {
+      "name": "PhaseTransition",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task type for which the transition occurred.",
+          "validators": []
+        },
+        {
+          "name": "from_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase before the transition.",
+          "validators": []
+        },
+        {
+          "name": "to_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase after the transition.",
+          "validators": []
+        },
+        {
+          "name": "reason",
+          "type_ref": "TransitionReason",
+          "required": true,
+          "default": "",
+          "description": "Machine-readable reason for the transition.",
+          "validators": []
+        },
+        {
+          "name": "correlation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Correlation score at the time of transition.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Training example count at the time of transition.",
+          "validators": []
+        },
+        {
+          "name": "consecutive_windows_above_threshold",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Consecutive windows above threshold at the time of transition.",
+          "validators": []
+        },
+        {
+          "name": "trend_direction",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Trend direction at the time of transition.",
+          "validators": []
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a local model was available at the time of transition.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Audit event representing a phase transition. Logged as a structured JSON record via stdlib logging. Contains all context needed for post-hoc analysis and debugging."
+    },
+    {
+      "name": "PhaseResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The derived phase based on the current snapshot, thresholds, and local model availability.",
+          "validators": []
+        },
+        {
+          "name": "transition",
+          "type_ref": "OptionalPhaseTransition",
+          "required": true,
+          "default": "",
+          "description": "Present only if the derived phase differs from previous_phase. Contains the full audit event for the transition. None if no transition occurred.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of a phase evaluation. Contains the derived phase and an optional transition audit event if a phase change occurred."
+    },
+    {
+      "name": "OptionalPhaseTransition",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "PhaseTransition",
+      "variants": [],
+      "inner_types": [],
+      "description": "Optional wrapper for PhaseTransition. None when no phase transition occurred."
+    }
+  ],
+  "functions": [
+    {
+      "name": "evaluate",
+      "description": "Pure function that derives the current phase for a task from its confidence snapshot, previous phase, and local model availability. Compares derived phase against previous_phase to detect transitions. Returns a PhaseResult containing the derived Phase and an optional PhaseTransition audit event. Phase derivation logic: (1) If local_model_available is false AND previous_phase is not REMOTE_ONLY, emergency revert to REMOTE_ONLY with reason LOCAL_MODEL_UNAVAILABLE. (2) If correlation_score < emergency_threshold (applies to phases 2 and 3), revert to REMOTE_ONLY. (3) If in REMOTE_ONLY: promote to COACHING only if training_example_count >= phase1_to_phase2_example_count AND local_model_available is true AND sample_count > 0. (4) If in COACHING: promote to AUTONOMOUS only if correlation_score >= phase2_to_phase3_threshold AND consecutive_windows_above_threshold >= sustained_window_count. (5) If in AUTONOMOUS: regress to COACHING if correlation_score < coaching_trigger (but >= emergency_threshold). (6) If in COACHING: remain in COACHING if correlation_score >= emergency_threshold but < phase2_to_phase3_threshold or sustained period not met. All transitions are logged as structured JSON audit events at INFO level. Emergency and regression transitions are logged at WARNING level.",
+      "inputs": [
+        {
+          "name": "snapshot",
+          "type_ref": "ConfidenceSnapshot",
+          "required": true,
+          "default": "",
+          "description": "Point-in-time confidence metrics for the task being evaluated.",
+          "validators": []
+        },
+        {
+          "name": "previous_phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase the task was in prior to this evaluation. At startup, this must be REMOTE_ONLY.",
+          "validators": []
+        },
+        {
+          "name": "local_model_available",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a local model is currently available and operational for this task type. If false, phases 2 and 3 are not reachable.",
+          "validators": []
+        }
+      ],
+      "output_type": "PhaseResult",
+      "error_cases": [
+        {
+          "name": "invalid_snapshot",
+          "condition": "snapshot fails Pydantic validation (e.g., correlation_score out of [0.0, 1.0], negative counts)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "source": "pydantic"
+          }
+        },
+        {
+          "name": "invalid_previous_phase",
+          "condition": "previous_phase is not a recognized Phase enum member",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "previous_phase must be a valid Phase member (REMOTE_ONLY=1, COACHING=2, AUTONOMOUS=3)"
+          }
+        }
+      ],
+      "preconditions": [
+        "snapshot must be a valid ConfidenceSnapshot with all fields passing validators",
+        "previous_phase must be a valid Phase enum member (REMOTE_ONLY, COACHING, or AUTONOMOUS)",
+        "PhaseThresholds must have been validated at initialization time (emergency_threshold < coaching_trigger < phase2_to_phase3_threshold)"
+      ],
+      "postconditions": [
+        "result.phase is always a valid Phase enum member",
+        "If result.transition is not None, then result.transition.from_phase == previous_phase AND result.transition.to_phase == result.phase",
+        "If result.transition is None, then result.phase == previous_phase",
+        "If local_model_available is false, result.phase is REMOTE_ONLY",
+        "If snapshot.correlation_score < emergency_threshold AND previous_phase is COACHING or AUTONOMOUS, result.phase is REMOTE_ONLY",
+        "If previous_phase is REMOTE_ONLY AND (training_example_count < phase1_to_phase2_example_count OR local_model_available is false OR sample_count == 0), result.phase is REMOTE_ONLY",
+        "If previous_phase is COACHING AND result.phase is AUTONOMOUS, then snapshot.consecutive_windows_above_threshold >= sustained_window_count AND snapshot.correlation_score >= phase2_to_phase3_threshold",
+        "If previous_phase is AUTONOMOUS AND snapshot.correlation_score < coaching_trigger AND snapshot.correlation_score >= emergency_threshold, result.phase is COACHING",
+        "Phase can only advance one step at a time (REMOTE_ONLY→COACHING, COACHING→AUTONOMOUS) but can regress multiple steps (AUTONOMOUS→REMOTE_ONLY, COACHING→REMOTE_ONLY)",
+        "result.transition.reason is never NO_TRANSITION when a transition occurs"
+      ],
+      "idempotent": true,
+      "side_effects": [
+        "Logs phase transition audit events via stdlib logging with structured JSON format. Promotions logged at INFO level, regressions and emergency reverts logged at WARNING level."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "phase_manager audit logger",
+          "description": "Logs PhaseTransition as structured JSON at INFO (promotions) or WARNING (regressions/emergencies) level when a transition occurs. No logging when phase is unchanged."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "get_initial_phase",
+      "description": "Returns the initial phase for any task at system startup. Always returns REMOTE_ONLY (Phase 1). This is a static/class-level convenience method encoding the invariant that all tasks begin in REMOTE_ONLY phase.",
+      "inputs": [],
+      "output_type": "Phase",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "Return value is always Phase.REMOTE_ONLY"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "validate_thresholds",
+      "description": "Validates that PhaseThresholds satisfy the required ordering invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold. Called automatically by PhaseThresholds Pydantic model_validator at parse time, but also exposed for explicit programmatic validation. Fails fast with a clear error message if the invariant is violated, per project config error handling policy.",
+      "inputs": [
+        {
+          "name": "thresholds",
+          "type_ref": "PhaseThresholds",
+          "required": true,
+          "default": "",
+          "description": "The threshold configuration to validate.",
+          "validators": []
+        }
+      ],
+      "output_type": "PhaseThresholds",
+      "error_cases": [
+        {
+          "name": "threshold_ordering_violation",
+          "condition": "emergency_threshold >= coaching_trigger OR coaching_trigger >= phase2_to_phase3_threshold",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Thresholds must satisfy: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold"
+          }
+        },
+        {
+          "name": "invalid_field_values",
+          "condition": "Any individual field fails its range or type validator",
+          "error_type": "ValidationError",
+          "error_data": {
+            "source": "pydantic"
+          }
+        }
+      ],
+      "preconditions": [
+        "thresholds must have all required fields populated with values passing individual field validators"
+      ],
+      "postconditions": [
+        "Returned thresholds satisfy: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold",
+        "Returned thresholds satisfy: sustained_window_count >= 1",
+        "Returned thresholds satisfy: phase1_to_phase2_example_count >= 1",
+        "If validation passes, returned object is identical to input"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "Phase is always derived from current state (snapshot + thresholds + local_model_available), never stored as a persistent flag",
+    "Threshold ordering is always enforced: emergency_threshold < coaching_trigger < phase2_to_phase3_threshold",
+    "Initial phase for any task is always REMOTE_ONLY (Phase 1)",
+    "Phase can only advance one step at a time: REMOTE_ONLY→COACHING→AUTONOMOUS",
+    "Phase can regress multiple steps in a single evaluation: AUTONOMOUS→REMOTE_ONLY or COACHING→REMOTE_ONLY",
+    "Emergency threshold (correlation < emergency_threshold) triggers revert to REMOTE_ONLY from any non-REMOTE_ONLY phase (both COACHING and AUTONOMOUS)",
+    "Local model unavailability always results in REMOTE_ONLY phase regardless of correlation scores",
+    "Every phase transition produces exactly one PhaseTransition audit event logged via structured JSON logging",
+    "No phase transition occurs without a transition reason; NO_TRANSITION is never used as a reason in a PhaseTransition event",
+    "The evaluate method is a pure function with respect to phase derivation — given the same inputs, it always produces the same output phase and transition",
+    "PhaseManager holds no mutable state between evaluate calls — all history is encoded in the ConfidenceSnapshot provided by the confidence engine",
+    "Sustained-period requirement for 2→3 is enforced via consecutive_windows_above_threshold >= sustained_window_count, not by internal state tracking"
+  ],
+  "requires": []
+}

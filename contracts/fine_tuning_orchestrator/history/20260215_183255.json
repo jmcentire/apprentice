@@ -1,0 +1,1832 @@
+{
+  "component_id": "fine_tuning_orchestrator",
+  "name": "Fine-Tuning Orchestrator",
+  "description": "Orchestrates the fine-tuning process when triggered by the training data store. Behind a FineTuneBackend protocol/ABC with implementations: UnslothBackend (local LoRA fine-tuning), OpenAIBackend (OpenAI fine-tuning API), HuggingFaceBackend (Hugging Face Trainer). For local backends: manages the full pipeline of train → quantize → GGUF conversion (via llama.cpp quantize) → register with Ollama (ollama create with Modelfile). Handles fine-tuning as a blocking operation. On failure: logs error, keeps current model version, schedules retry on next batch. Produces a ModelVersion artifact with full provenance metadata.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TrainingExample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "example_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this training example (content-addressable hash recommended).",
+          "validators": []
+        },
+        {
+          "name": "user_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The user message / input prompt.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "user_prompt must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "assistant_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The desired assistant response for fine-tuning.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "assistant_response must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "system_prompt",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional system prompt context for this example.",
+          "validators": []
+        },
+        {
+          "name": "collected_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 aware datetime string when this example was collected.",
+          "validators": []
+        },
+        {
+          "name": "source",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Origin of this example, e.g. 'openai_gpt4o', 'anthropic_claude'.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single training example consisting of a user prompt and the desired assistant response, plus metadata for provenance tracking."
+    },
+    {
+      "name": "HyperparameterOverrides",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "learning_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Learning rate override.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "learning_rate must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "num_epochs",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Number of training epochs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "num_epochs must be between 1 and 100"
+            }
+          ]
+        },
+        {
+          "name": "batch_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Training batch size.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 512",
+              "error_message": "batch_size must be between 1 and 512"
+            }
+          ]
+        },
+        {
+          "name": "lora_rank",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "LoRA rank for local LoRA backends (Unsloth).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 256",
+              "error_message": "lora_rank must be between 1 and 256"
+            }
+          ]
+        },
+        {
+          "name": "lora_alpha",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "LoRA alpha scaling factor.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 512",
+              "error_message": "lora_alpha must be between 1 and 512"
+            }
+          ]
+        },
+        {
+          "name": "warmup_steps",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Number of warmup steps.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 10000",
+              "error_message": "warmup_steps must be between 0 and 10000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Optional hyperparameter overrides for the fine-tuning run. All fields are optional; backends use their own defaults when not specified."
+    },
+    {
+      "name": "FineTuneRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "run_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique correlation ID for this fine-tuning run. Used in all structured log entries.",
+          "validators": []
+        },
+        {
+          "name": "base_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the base model to fine-tune, e.g. 'meta-llama/Llama-3.1-8B' or 'gpt-4o-mini-2024-07-18'.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "base_model must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "training_examples",
+          "type_ref": "TrainingExampleList",
+          "required": true,
+          "default": "",
+          "description": "List of training examples for this fine-tuning batch.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "training_examples must contain at least one example"
+            }
+          ]
+        },
+        {
+          "name": "hyperparameter_overrides",
+          "type_ref": "HyperparameterOverrides",
+          "required": false,
+          "default": "",
+          "description": "Optional hyperparameter overrides. When not provided, backend defaults are used.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a request to fine-tune a model. Contains the training batch, base model identifier, and optional hyperparameter overrides. Backend-specific config is injected at backend construction time, not here."
+    },
+    {
+      "name": "TrainingExampleList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TrainingExample",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of TrainingExample instances forming a fine-tuning batch."
+    },
+    {
+      "name": "FineTuneErrorCategory",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "transient",
+        "data_error",
+        "infrastructure",
+        "permanent"
+      ],
+      "inner_types": [],
+      "description": "Categorization of fine-tuning errors to drive retry and fallback logic."
+    },
+    {
+      "name": "FineTuneError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, always 'error' for FineTuneError.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'error'",
+              "error_message": "status must be 'error'"
+            }
+          ]
+        },
+        {
+          "name": "category",
+          "type_ref": "FineTuneErrorCategory",
+          "required": true,
+          "default": "",
+          "description": "Error category for retry/fallback decision.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "retry_recommended",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the orchestrator should schedule a retry on the next batch.",
+          "validators": []
+        },
+        {
+          "name": "run_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Correlation ID of the failed run.",
+          "validators": []
+        },
+        {
+          "name": "backend_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Which backend produced this error.",
+          "validators": []
+        },
+        {
+          "name": "occurred_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 aware datetime string when the error occurred.",
+          "validators": []
+        },
+        {
+          "name": "details",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Backend-specific error details for debugging.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured error result from a failed fine-tuning attempt. Carries enough information for the orchestrator to decide whether to retry, fall back, or alert."
+    },
+    {
+      "name": "TrainingMetrics",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "final_loss",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Final training loss value.",
+          "validators": []
+        },
+        {
+          "name": "num_steps",
+          "type_ref": "int",
+          "required": false,
+          "default": "",
+          "description": "Total number of training steps completed.",
+          "validators": []
+        },
+        {
+          "name": "num_epochs_completed",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Number of epochs completed (may be fractional).",
+          "validators": []
+        },
+        {
+          "name": "training_duration_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "",
+          "description": "Wall-clock duration of the training phase in seconds.",
+          "validators": []
+        },
+        {
+          "name": "additional_metrics",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Backend-specific additional metrics.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Training metrics produced by a fine-tuning run, when available."
+    },
+    {
+      "name": "ModelVersion",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "status",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, always 'success' for ModelVersion.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'success'",
+              "error_message": "status must be 'success'"
+            }
+          ]
+        },
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this model version (UUID4 recommended).",
+          "validators": []
+        },
+        {
+          "name": "base_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier of the base model that was fine-tuned.",
+          "validators": []
+        },
+        {
+          "name": "backend_type",
+          "type_ref": "BackendType",
+          "required": true,
+          "default": "",
+          "description": "Which backend produced this version.",
+          "validators": []
+        },
+        {
+          "name": "training_example_ids",
+          "type_ref": "StringList",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of example_id values from the training batch, for provenance.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training examples used.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "training_example_count must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "run_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Correlation ID of the fine-tuning run that produced this version.",
+          "validators": []
+        },
+        {
+          "name": "started_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 aware datetime when fine-tuning started.",
+          "validators": []
+        },
+        {
+          "name": "completed_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 aware datetime when fine-tuning completed.",
+          "validators": []
+        },
+        {
+          "name": "artifact_location",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path or URI to the model artifact (e.g. local GGUF path, OpenAI fine-tune ID, HF model repo).",
+          "validators": []
+        },
+        {
+          "name": "ollama_model_name",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If registered with Ollama, the model name usable via 'ollama run'. Empty if not a local backend or not yet registered.",
+          "validators": []
+        },
+        {
+          "name": "metrics",
+          "type_ref": "TrainingMetrics",
+          "required": false,
+          "default": "",
+          "description": "Training metrics, when available from the backend.",
+          "validators": []
+        },
+        {
+          "name": "quantization_type",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Quantization type applied (e.g. 'Q4_K_M', 'Q5_K_S'). Empty for remote backends.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional backend-specific metadata.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a successfully fine-tuned model version with full provenance. This is the primary output artifact of the fine-tuning orchestrator."
+    },
+    {
+      "name": "FineTuneResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "ModelVersion",
+        "FineTuneError"
+      ],
+      "description": "Discriminated union result of a fine-tuning operation. Discriminated on the 'status' literal field: 'success' → ModelVersion, 'error' → FineTuneError."
+    },
+    {
+      "name": "BackendType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "unsloth",
+        "openai",
+        "huggingface"
+      ],
+      "inner_types": [],
+      "description": "Supported fine-tuning backend types, used as discriminator in config and provenance."
+    },
+    {
+      "name": "QuantizationType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "Q4_0",
+        "Q4_K_M",
+        "Q4_K_S",
+        "Q5_0",
+        "Q5_K_M",
+        "Q5_K_S",
+        "Q6_K",
+        "Q8_0",
+        "F16"
+      ],
+      "inner_types": [],
+      "description": "Supported GGUF quantization types for local backends (llama.cpp quantize)."
+    },
+    {
+      "name": "UnslothBackendConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, must be 'unsloth'.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'unsloth'",
+              "error_message": "backend_type must be 'unsloth'"
+            }
+          ]
+        },
+        {
+          "name": "model_output_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Directory path for trained model output artifacts.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model_output_dir must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "gguf_output_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Directory path for quantized GGUF model files.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "gguf_output_dir must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "quantization_type",
+          "type_ref": "QuantizationType",
+          "required": true,
+          "default": "",
+          "description": "GGUF quantization type to apply after training.",
+          "validators": []
+        },
+        {
+          "name": "llama_cpp_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the llama.cpp quantize binary.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "llama_cpp_path must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "ollama_model_name_prefix",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Prefix for the Ollama model name, e.g. 'apprentice'. Version suffix will be appended.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "ollama_model_name_prefix must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "ollama_base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "http://localhost:11434",
+          "description": "Base URL for the Ollama HTTP API.",
+          "validators": []
+        },
+        {
+          "name": "modelfile_template",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional custom Modelfile template. If empty, a default template is used.",
+          "validators": []
+        },
+        {
+          "name": "max_seq_length",
+          "type_ref": "int",
+          "required": false,
+          "default": "2048",
+          "description": "Maximum sequence length for training.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "128 <= value <= 32768",
+              "error_message": "max_seq_length must be between 128 and 32768"
+            }
+          ]
+        },
+        {
+          "name": "default_lora_rank",
+          "type_ref": "int",
+          "required": false,
+          "default": "16",
+          "description": "Default LoRA rank when not overridden in request.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 256",
+              "error_message": "default_lora_rank must be between 1 and 256"
+            }
+          ]
+        },
+        {
+          "name": "default_learning_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "2e-4",
+          "description": "Default learning rate when not overridden in request.",
+          "validators": []
+        },
+        {
+          "name": "default_num_epochs",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Default number of training epochs when not overridden.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "default_num_epochs must be between 1 and 100"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the Unsloth local LoRA fine-tuning backend. Includes paths, quantization, and Ollama registration settings."
+    },
+    {
+      "name": "OpenAIBackendConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, must be 'openai'.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'openai'",
+              "error_message": "backend_type must be 'openai'"
+            }
+          ]
+        },
+        {
+          "name": "api_base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "https://api.openai.com/v1",
+          "description": "OpenAI API base URL. Override for proxies or compatible APIs.",
+          "validators": []
+        },
+        {
+          "name": "api_key_env_var",
+          "type_ref": "str",
+          "required": false,
+          "default": "OPENAI_API_KEY",
+          "description": "Environment variable name holding the OpenAI API key. Key is read at runtime, never stored in config.",
+          "validators": []
+        },
+        {
+          "name": "default_num_epochs",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Default number of training epochs for OpenAI fine-tuning.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 50",
+              "error_message": "default_num_epochs must be between 1 and 50"
+            }
+          ]
+        },
+        {
+          "name": "poll_interval_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "60",
+          "description": "Interval in seconds for polling OpenAI fine-tuning job status.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "5 <= value <= 600",
+              "error_message": "poll_interval_seconds must be between 5 and 600"
+            }
+          ]
+        },
+        {
+          "name": "poll_timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "7200",
+          "description": "Maximum time in seconds to wait for an OpenAI fine-tuning job to complete.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "60 <= value <= 86400",
+              "error_message": "poll_timeout_seconds must be between 60 and 86400"
+            }
+          ]
+        },
+        {
+          "name": "suffix",
+          "type_ref": "str",
+          "required": false,
+          "default": "apprentice",
+          "description": "Suffix to append to the fine-tuned model name on OpenAI.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the OpenAI fine-tuning API backend."
+    },
+    {
+      "name": "HuggingFaceBackendConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Discriminator literal, must be 'huggingface'.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value == 'huggingface'",
+              "error_message": "backend_type must be 'huggingface'"
+            }
+          ]
+        },
+        {
+          "name": "model_output_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Directory path for trained model output.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model_output_dir must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "gguf_output_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Directory path for quantized GGUF model files.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "gguf_output_dir must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "quantization_type",
+          "type_ref": "QuantizationType",
+          "required": true,
+          "default": "",
+          "description": "GGUF quantization type to apply after training.",
+          "validators": []
+        },
+        {
+          "name": "llama_cpp_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the llama.cpp quantize binary.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "llama_cpp_path must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "ollama_model_name_prefix",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Prefix for the Ollama model name.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "ollama_model_name_prefix must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "ollama_base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "http://localhost:11434",
+          "description": "Base URL for the Ollama HTTP API.",
+          "validators": []
+        },
+        {
+          "name": "use_peft",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether to use PEFT/LoRA for training.",
+          "validators": []
+        },
+        {
+          "name": "default_learning_rate",
+          "type_ref": "float",
+          "required": false,
+          "default": "2e-4",
+          "description": "Default learning rate.",
+          "validators": []
+        },
+        {
+          "name": "default_num_epochs",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Default number of training epochs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "default_num_epochs must be between 1 and 100"
+            }
+          ]
+        },
+        {
+          "name": "max_seq_length",
+          "type_ref": "int",
+          "required": false,
+          "default": "2048",
+          "description": "Maximum sequence length for training.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "128 <= value <= 32768",
+              "error_message": "max_seq_length must be between 128 and 32768"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the Hugging Face Trainer fine-tuning backend."
+    },
+    {
+      "name": "BackendConfig",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "UnslothBackendConfig",
+        "OpenAIBackendConfig",
+        "HuggingFaceBackendConfig"
+      ],
+      "description": "Discriminated union of backend configurations. Discriminated on the 'backend_type' literal field: 'unsloth' → UnslothBackendConfig, 'openai' → OpenAIBackendConfig, 'huggingface' → HuggingFaceBackendConfig."
+    },
+    {
+      "name": "OrchestratorConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend",
+          "type_ref": "BackendConfig",
+          "required": true,
+          "default": "",
+          "description": "Backend-specific configuration (discriminated union).",
+          "validators": []
+        },
+        {
+          "name": "min_training_examples",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of training examples required before fine-tuning is triggered.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "min_training_examples must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "model_version_store_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File path for persisting ModelVersion artifacts as JSON.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "model_version_store_path must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "retry_on_next_batch",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether to automatically retry failed fine-tuning on the next batch arrival.",
+          "validators": []
+        },
+        {
+          "name": "max_consecutive_failures",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Maximum consecutive fine-tuning failures before alerting. After this, the orchestrator still retries but logs at ERROR level.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100",
+              "error_message": "max_consecutive_failures must be between 1 and 100"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Top-level configuration for the FineTuningOrchestrator, parsed from the fine_tuning section of the YAML config. Strict parsing — fails fast on invalid config."
+    },
+    {
+      "name": "StringList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "str",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of strings."
+    },
+    {
+      "name": "ModelVersionList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ModelVersion",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of ModelVersion instances."
+    },
+    {
+      "name": "CommandResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "return_code",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Process exit code. 0 indicates success.",
+          "validators": []
+        },
+        {
+          "name": "stdout",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Captured standard output.",
+          "validators": []
+        },
+        {
+          "name": "stderr",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Captured standard error.",
+          "validators": []
+        },
+        {
+          "name": "command",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The command string that was executed (for logging).",
+          "validators": []
+        },
+        {
+          "name": "duration_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock execution time in seconds.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of executing a subprocess command via the CommandRunner protocol."
+    },
+    {
+      "name": "TrainArtifact",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "model_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the directory containing the trained model weights.",
+          "validators": []
+        },
+        {
+          "name": "base_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base model that was fine-tuned.",
+          "validators": []
+        },
+        {
+          "name": "adapter_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Path to LoRA adapter directory, if LoRA was used.",
+          "validators": []
+        },
+        {
+          "name": "metrics",
+          "type_ref": "TrainingMetrics",
+          "required": false,
+          "default": "",
+          "description": "Training metrics from the training phase.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal intermediate artifact produced by the training phase of local backends. Represents the native PyTorch model output before quantization. Not part of the FineTuneBackend protocol — internal to local backend implementations."
+    },
+    {
+      "name": "GGUFArtifact",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gguf_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the quantized GGUF model file.",
+          "validators": []
+        },
+        {
+          "name": "quantization_type",
+          "type_ref": "QuantizationType",
+          "required": true,
+          "default": "",
+          "description": "Quantization type that was applied.",
+          "validators": []
+        },
+        {
+          "name": "file_size_bytes",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Size of the GGUF file in bytes.",
+          "validators": []
+        },
+        {
+          "name": "source_model_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the source model directory that was quantized.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Internal intermediate artifact produced by the GGUF quantization phase of local backends. Not part of the FineTuneBackend protocol — internal to local backend implementations."
+    },
+    {
+      "name": "OllamaRegistration",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The registered Ollama model name, usable via 'ollama run'.",
+          "validators": []
+        },
+        {
+          "name": "modelfile_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the generated Modelfile used for registration.",
+          "validators": []
+        },
+        {
+          "name": "gguf_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the GGUF file that was registered.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of registering a GGUF model with Ollama via 'ollama create' with a Modelfile."
+    }
+  ],
+  "functions": [
+    {
+      "name": "fine_tune",
+      "description": "Core protocol method on FineTuneBackend. Executes a fine-tuning run against the configured backend. For local backends (Unsloth, HuggingFace), this internally runs the full pipeline: train → quantize → GGUF convert → Ollama register. For remote backends (OpenAI), this uploads training data, triggers the job, polls for completion, and returns the result. This is an async blocking operation — it awaits the full fine-tuning process before returning. The backend must not raise exceptions for fine-tuning failures; all errors are returned as FineTuneError within the FineTuneResult union.",
+      "inputs": [
+        {
+          "name": "request",
+          "type_ref": "FineTuneRequest",
+          "required": true,
+          "default": "",
+          "description": "The fine-tuning request containing training examples, base model, and optional hyperparameter overrides.",
+          "validators": []
+        }
+      ],
+      "output_type": "FineTuneResult",
+      "error_cases": [
+        {
+          "name": "training_failed",
+          "condition": "Backend training process fails (e.g. OOM, CUDA error, API rejection)",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "quantization_failed",
+          "condition": "llama.cpp quantize subprocess fails (local backends only)",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "ollama_registration_failed",
+          "condition": "ollama create command fails or Ollama HTTP API is unreachable (local backends only)",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "api_rate_limited",
+          "condition": "Remote API returns rate limit / quota exceeded (OpenAI backend)",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "transient",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "api_timeout",
+          "condition": "Remote API fine-tuning job exceeds poll_timeout_seconds",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "transient",
+            "retry_recommended": "true"
+          }
+        },
+        {
+          "name": "invalid_training_data",
+          "condition": "Backend rejects training data format or content",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "data_error",
+            "retry_recommended": "false"
+          }
+        },
+        {
+          "name": "model_not_found",
+          "condition": "Base model identifier is not recognized by the backend",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "permanent",
+            "retry_recommended": "false"
+          }
+        },
+        {
+          "name": "authentication_failed",
+          "condition": "API key missing, invalid, or expired (remote backends)",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "permanent",
+            "retry_recommended": "false"
+          }
+        }
+      ],
+      "preconditions": [
+        "request.training_examples is not empty",
+        "request.base_model is a valid model identifier recognized by the backend",
+        "request.run_id is a unique, non-empty string"
+      ],
+      "postconditions": [
+        "Returns ModelVersion with status='success' if fine-tuning completed successfully",
+        "Returns FineTuneError with status='error' if fine-tuning failed for any reason",
+        "On success, ModelVersion.artifact_location points to a valid, accessible model artifact",
+        "On success for local backends, ModelVersion.ollama_model_name is set and the model is registered with Ollama",
+        "ModelVersion.training_example_ids matches the example_id values from the input request",
+        "ModelVersion.training_example_count equals len(request.training_examples)",
+        "ModelVersion.run_id matches request.run_id",
+        "No exception is raised — all errors are captured in FineTuneError"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs fine-tuning start, progress, completion or failure with fine_tune_run_id correlation field."
+        },
+        {
+          "kind": "writes_file",
+          "target": "model artifacts directory",
+          "description": "For local backends: writes trained model weights, GGUF file, and Modelfile to configured output directories."
+        },
+        {
+          "kind": "network_call",
+          "target": "OpenAI API",
+          "description": "For OpenAI backend: uploads training file, creates fine-tuning job, polls for status."
+        },
+        {
+          "kind": "network_call",
+          "target": "Ollama HTTP API",
+          "description": "For local backends: registers model via Ollama API or CLI."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "run_command",
+      "description": "Protocol method on CommandRunner. Executes a subprocess command and captures output. Used by local backends to invoke llama.cpp quantize and ollama CLI commands. Must not raise exceptions — all failures are captured in CommandResult via non-zero return_code.",
+      "inputs": [
+        {
+          "name": "args",
+          "type_ref": "StringList",
+          "required": true,
+          "default": "",
+          "description": "Command and arguments as a list of strings, e.g. ['llama-quantize', 'model.gguf', 'Q4_K_M'].",
+          "validators": []
+        },
+        {
+          "name": "cwd",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Working directory for the command. If empty, uses current directory.",
+          "validators": []
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "3600",
+          "description": "Maximum time to wait for the command to complete.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 86400",
+              "error_message": "timeout_seconds must be between 1 and 86400"
+            }
+          ]
+        }
+      ],
+      "output_type": "CommandResult",
+      "error_cases": [
+        {
+          "name": "command_not_found",
+          "condition": "Executable in args[0] does not exist or is not on PATH",
+          "error_type": "CommandResult",
+          "error_data": {
+            "return_code": "-1"
+          }
+        },
+        {
+          "name": "command_timeout",
+          "condition": "Command exceeds timeout_seconds",
+          "error_type": "CommandResult",
+          "error_data": {
+            "return_code": "-2"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "Insufficient permissions to execute command or write to cwd",
+          "error_type": "CommandResult",
+          "error_data": {
+            "return_code": "-3"
+          }
+        }
+      ],
+      "preconditions": [
+        "args is not empty",
+        "args[0] is a valid executable path or command name"
+      ],
+      "postconditions": [
+        "CommandResult.return_code is 0 if the command succeeded",
+        "CommandResult.stdout and stderr capture all process output",
+        "CommandResult.duration_seconds reflects actual wall-clock time",
+        "No exception is raised — timeout is captured as non-zero return_code"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs command execution start, completion, and duration."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "trigger_fine_tuning",
+      "description": "Main entry point on FineTuningOrchestrator. Called when a new batch of training examples is available. Validates the batch meets minimum size requirements, generates a run_id, constructs a FineTuneRequest, invokes the injected FineTuneBackend, and handles the result. On success: persists the ModelVersion via ModelVersionStore and returns it. On failure: logs the error, keeps current model version unchanged, and returns the FineTuneError. This is the coordinating function that wraps the backend call with orchestration logic.",
+      "inputs": [
+        {
+          "name": "training_examples",
+          "type_ref": "TrainingExampleList",
+          "required": true,
+          "default": "",
+          "description": "Batch of training examples to fine-tune on.",
+          "validators": []
+        },
+        {
+          "name": "base_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base model identifier to fine-tune.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "base_model must not be empty"
+            }
+          ]
+        },
+        {
+          "name": "hyperparameter_overrides",
+          "type_ref": "HyperparameterOverrides",
+          "required": false,
+          "default": "",
+          "description": "Optional hyperparameter overrides for this run.",
+          "validators": []
+        }
+      ],
+      "output_type": "FineTuneResult",
+      "error_cases": [
+        {
+          "name": "batch_too_small",
+          "condition": "len(training_examples) < config.min_training_examples",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "data_error",
+            "retry_recommended": "false",
+            "message": "Batch size below minimum threshold"
+          }
+        },
+        {
+          "name": "backend_error",
+          "condition": "Injected FineTuneBackend.fine_tune returns FineTuneError",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "varies",
+            "retry_recommended": "varies"
+          }
+        },
+        {
+          "name": "backend_unexpected_exception",
+          "condition": "FineTuneBackend.fine_tune raises an unexpected exception despite contract",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true",
+            "message": "Unexpected backend exception caught by orchestrator"
+          }
+        },
+        {
+          "name": "model_version_persist_failed",
+          "condition": "ModelVersionStore.save fails after successful fine-tuning",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true",
+            "message": "Fine-tuning succeeded but failed to persist ModelVersion"
+          }
+        },
+        {
+          "name": "max_consecutive_failures_exceeded",
+          "condition": "Consecutive failure count exceeds config.max_consecutive_failures",
+          "error_type": "FineTuneError",
+          "error_data": {
+            "category": "infrastructure",
+            "retry_recommended": "true",
+            "message": "Maximum consecutive failures exceeded — escalating log level"
+          }
+        }
+      ],
+      "preconditions": [
+        "FineTuningOrchestrator has been initialized with a valid FineTuneBackend and ModelVersionStore",
+        "training_examples is not empty"
+      ],
+      "postconditions": [
+        "On success: ModelVersion is persisted via ModelVersionStore before returning",
+        "On success: returned ModelVersion has a unique version_id and valid timestamps",
+        "On failure: no ModelVersion is persisted, current model version is unchanged",
+        "On failure with retry_recommended=true: failure is recorded for retry on next batch",
+        "All decisions are logged as structured JSON with fine_tune_run_id correlation",
+        "Consecutive failure count is updated"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs trigger event, batch validation, backend selection, run start, result (success or failure), and consecutive failure count. All entries include fine_tune_run_id."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "ModelVersionStore",
+          "description": "On success: persists the new ModelVersion artifact via the injected ModelVersionStore."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "consecutive_failure_count",
+          "description": "Increments on failure, resets to 0 on success."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "save_model_version",
+      "description": "Protocol method on ModelVersionStore. Persists a ModelVersion artifact to durable storage (JSON file). Used by the orchestrator after a successful fine-tuning run.",
+      "inputs": [
+        {
+          "name": "model_version",
+          "type_ref": "ModelVersion",
+          "required": true,
+          "default": "",
+          "description": "The ModelVersion to persist.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "write_failed",
+          "condition": "File I/O error when writing to model_version_store_path",
+          "error_type": "str",
+          "error_data": {
+            "message": "IOError writing model version to disk"
+          }
+        },
+        {
+          "name": "duplicate_version_id",
+          "condition": "A ModelVersion with the same version_id already exists",
+          "error_type": "str",
+          "error_data": {
+            "message": "Duplicate version_id"
+          }
+        }
+      ],
+      "preconditions": [
+        "model_version.status == 'success'",
+        "model_version.version_id is unique (not already stored)"
+      ],
+      "postconditions": [
+        "ModelVersion is durably persisted and retrievable by version_id",
+        "Previously stored ModelVersions are not modified"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "model_version_store_path",
+          "description": "Writes or appends the ModelVersion as JSON to the configured store path."
+        },
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs the save operation with version_id."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_model_version",
+      "description": "Protocol method on ModelVersionStore. Retrieves a specific ModelVersion by its version_id.",
+      "inputs": [
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The unique version_id to look up.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "version_id must not be empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "ModelVersion",
+      "error_cases": [
+        {
+          "name": "not_found",
+          "condition": "No ModelVersion with the given version_id exists in the store",
+          "error_type": "str",
+          "error_data": {
+            "message": "ModelVersion not found"
+          }
+        },
+        {
+          "name": "read_failed",
+          "condition": "File I/O error when reading from model_version_store_path",
+          "error_type": "str",
+          "error_data": {
+            "message": "IOError reading model version store"
+          }
+        }
+      ],
+      "preconditions": [
+        "version_id is a non-empty string"
+      ],
+      "postconditions": [
+        "Returns the ModelVersion matching the given version_id",
+        "Returned ModelVersion is identical to what was saved"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "model_version_store_path",
+          "description": "Reads from the configured model version store path."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_latest_model_version",
+      "description": "Protocol method on ModelVersionStore. Retrieves the most recently completed ModelVersion, or None if no versions exist.",
+      "inputs": [],
+      "output_type": "ModelVersion",
+      "error_cases": [
+        {
+          "name": "store_empty",
+          "condition": "No ModelVersions have been saved yet",
+          "error_type": "str",
+          "error_data": {
+            "message": "No model versions in store — returns None"
+          }
+        },
+        {
+          "name": "read_failed",
+          "condition": "File I/O error when reading from model_version_store_path",
+          "error_type": "str",
+          "error_data": {
+            "message": "IOError reading model version store"
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "Returns the ModelVersion with the latest completed_at timestamp, or None if no versions exist",
+        "Returned ModelVersion is identical to what was saved"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "model_version_store_path",
+          "description": "Reads from the configured model version store path."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "list_model_versions",
+      "description": "Protocol method on ModelVersionStore. Lists all persisted ModelVersions, ordered by completed_at descending (most recent first).",
+      "inputs": [
+        {
+          "name": "limit",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum number of versions to return.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "limit must be between 1 and 10000"
+            }
+          ]
+        }
+      ],
+      "output_type": "ModelVersionList",
+      "error_cases": [
+        {
+          "name": "read_failed",
+          "condition": "File I/O error when reading from model_version_store_path",
+          "error_type": "str",
+          "error_data": {
+            "message": "IOError reading model version store"
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "Returned list is ordered by completed_at descending",
+        "Returned list length is at most limit",
+        "Each ModelVersion in the list is identical to what was saved"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "model_version_store_path",
+          "description": "Reads from the configured model version store path."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "parse_orchestrator_config",
+      "description": "Parses and validates the OrchestratorConfig from a YAML configuration dictionary. Fails fast with a clear error message on any invalid configuration — never silently defaults. Validates the discriminated union backend config, all paths, and all numeric ranges.",
+      "inputs": [
+        {
+          "name": "raw_config",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Raw dictionary parsed from the fine_tuning section of the YAML config file.",
+          "validators": []
+        }
+      ],
+      "output_type": "OrchestratorConfig",
+      "error_cases": [
+        {
+          "name": "missing_required_field",
+          "condition": "A required field is missing from raw_config or nested config",
+          "error_type": "str",
+          "error_data": {
+            "message": "Missing required configuration field: {field_name}"
+          }
+        },
+        {
+          "name": "invalid_backend_type",
+          "condition": "backend_type is not one of 'unsloth', 'openai', 'huggingface'",
+          "error_type": "str",
+          "error_data": {
+            "message": "Unknown backend_type: {value}. Must be one of: unsloth, openai, huggingface"
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "A field value fails its validator (range, length, custom)",
+          "error_type": "str",
+          "error_data": {
+            "message": "Configuration validation error: {details}"
+          }
+        },
+        {
+          "name": "type_error",
+          "condition": "A field value has wrong type (e.g. string where int expected)",
+          "error_type": "str",
+          "error_data": {
+            "message": "Type error in configuration: {field_name} expected {expected_type}, got {actual_type}"
+          }
+        }
+      ],
+      "preconditions": [
+        "raw_config is a non-null dictionary"
+      ],
+      "postconditions": [
+        "Returned OrchestratorConfig passes all field validators",
+        "BackendConfig is resolved to the correct concrete type based on backend_type discriminator",
+        "All path fields are non-empty strings",
+        "All numeric fields are within their validated ranges"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "structured JSON log",
+          "description": "Logs successful config parse with backend_type and key settings (no secrets)."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "FineTuneBackend protocol implementations must never raise exceptions for fine-tuning failures — all errors are returned as FineTuneError within the FineTuneResult union",
+    "ModelVersion.training_example_ids always matches the example_ids from the FineTuneRequest that produced it, in the same order",
+    "ModelVersion.training_example_count always equals len(ModelVersion.training_example_ids)",
+    "ModelVersion.version_id is globally unique across all stored versions (UUID4)",
+    "ModelVersion.started_at < ModelVersion.completed_at for all successful fine-tuning runs",
+    "On fine-tuning failure, the current active model version is never modified or invalidated",
+    "Consecutive failure count is incremented on each failure and reset to 0 on success",
+    "All structured log entries within a fine-tuning run include the same fine_tune_run_id correlation field",
+    "Config parsing fails fast at startup with clear error messages — never silently defaults to fallback values",
+    "CommandRunner.run_command never raises exceptions — all failures are captured in CommandResult.return_code",
+    "For local backends (Unsloth, HuggingFace), a successful ModelVersion always has a non-empty ollama_model_name",
+    "For local backends, the full pipeline (train → quantize → GGUF → Ollama register) must complete for the result to be ModelVersion; partial completion results in FineTuneError",
+    "ModelVersionStore operations are safe for sequential access — no concurrent write guarantees required (fine-tuning is blocking)",
+    "BackendConfig discriminated union is resolved exactly by the backend_type literal field",
+    "No global state — all state flows through explicit constructor parameters or injected dependencies"
+  ],
+  "requires": [
+    "pydantic>=2.0",
+    "httpx",
+    "pyyaml"
+  ]
+}

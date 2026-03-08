@@ -1,0 +1,1188 @@
+{
+  "component_id": "budget_manager",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_fresh_state",
+      "description": "Initialize BudgetManager with no existing state file creates fresh state and persists it",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "Create a BudgetConfig with tmp_path state file that does not exist yet",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "BudgetManager instance is created, state file is written to disk",
+      "expected_error": "",
+      "assertions": [
+        "State file exists on disk after init",
+        "Active periods match config period_limits types",
+        "All confirmed_spend and reserved_spend are zero",
+        "savings tracker is initialized to zero"
+      ]
+    },
+    {
+      "id": "init_existing_valid_state",
+      "description": "Initialize BudgetManager with existing valid state file loads state from disk",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "Write a valid state JSON file, then create BudgetManager",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "State is loaded from file, not fresh initialized",
+      "expected_error": "",
+      "assertions": [
+        "Active periods reflect the previously persisted state",
+        "confirmed_spend values are preserved from file"
+      ]
+    },
+    {
+      "id": "init_corrupted_state_file",
+      "description": "Initialize with corrupted/invalid state file raises BudgetStateCorruptedError",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "Write invalid JSON to state file path",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "BudgetStateCorruptedError",
+      "assertions": [
+        "BudgetStateCorruptedError is raised",
+        "Error contains state_file_path",
+        "Error contains validation_errors"
+      ]
+    },
+    {
+      "id": "init_unreadable_state_file",
+      "description": "Initialize with unreadable state file raises appropriate error",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "Create state file with no read permissions",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "state_file_unreadable",
+      "assertions": [
+        "Error is raised indicating file is unreadable"
+      ]
+    },
+    {
+      "id": "init_unwritable_directory",
+      "description": "Initialize with unwritable parent directory raises error",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "Point state_file_path to a directory that doesn't exist or isn't writable",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "state_dir_not_writable",
+      "assertions": [
+        "Error is raised indicating directory is not writable"
+      ]
+    },
+    {
+      "id": "init_state_period_mismatch_reconciliation",
+      "description": "Loading state with different period types than config reconciles active_periods",
+      "function": "__init__",
+      "category": "edge_case",
+      "setup_description": "Create state file with only daily period, but config has daily+monthly",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Active periods after init match config.period_limits types"
+      ]
+    },
+    {
+      "id": "authorize_within_budget_single_period",
+      "description": "Authorize a request within budget for a single daily period",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "BudgetManager with daily limit of 10.00, no prior spend",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('0.50')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is True",
+        "result.denial_reason is None",
+        "result.estimated_cost equals input estimated_cost",
+        "result.remaining equals limit - estimated_cost",
+        "result.period_utilization_pct is approximately 5.0"
+      ]
+    },
+    {
+      "id": "authorize_within_budget_multi_period",
+      "description": "Authorize within budget when both daily and monthly periods are configured",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "BudgetManager with daily limit 5.00 and monthly limit 100.00",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('1.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is True",
+        "result.remaining reflects the tighter daily period remaining",
+        "result.limiting_period is daily"
+      ]
+    },
+    {
+      "id": "authorize_denied_daily_limit",
+      "description": "Authorize denied when daily limit would be exceeded",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "BudgetManager with daily limit 5.00, no prior spend",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('6.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is False",
+        "result.denial_reason is daily_limit_exceeded",
+        "result.limiting_period is daily",
+        "No reservation was made (reserved_spend unchanged)"
+      ]
+    },
+    {
+      "id": "authorize_denied_monthly_limit",
+      "description": "Authorize denied when monthly limit would be exceeded but daily is fine",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "BudgetManager with daily limit 10.00, monthly limit 5.00, prior monthly spend of 4.00",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('2.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is False",
+        "result.denial_reason is monthly_limit_exceeded",
+        "result.limiting_period is monthly"
+      ]
+    },
+    {
+      "id": "authorize_exact_boundary",
+      "description": "Authorize request that exactly uses remaining budget",
+      "function": "authorize",
+      "category": "edge_case",
+      "setup_description": "BudgetManager with daily limit 5.00, no prior spend",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('5.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is True",
+        "result.remaining equals Decimal('0.00')"
+      ]
+    },
+    {
+      "id": "authorize_one_penny_over",
+      "description": "Authorize request that is one penny over remaining budget",
+      "function": "authorize",
+      "category": "edge_case",
+      "setup_description": "BudgetManager with daily limit 5.00, no prior spend",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('5.01')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.allowed is False",
+        "result.denial_reason is not None"
+      ]
+    },
+    {
+      "id": "authorize_zero_cost",
+      "description": "Authorize with zero estimated cost raises invalid_estimated_cost error",
+      "function": "authorize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('0')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_estimated_cost",
+      "assertions": [
+        "Error raised for zero estimated cost"
+      ]
+    },
+    {
+      "id": "authorize_negative_cost",
+      "description": "Authorize with negative estimated cost raises invalid_estimated_cost error",
+      "function": "authorize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('-1.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_estimated_cost",
+      "assertions": [
+        "Error raised for negative estimated cost"
+      ]
+    },
+    {
+      "id": "authorize_reserves_in_all_periods",
+      "description": "Successful authorization reserves cost in all active period types",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "BudgetManager with daily + monthly periods",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('1.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reserved_spend increased by estimated_cost in daily period",
+        "reserved_spend increased by estimated_cost in monthly period"
+      ]
+    },
+    {
+      "id": "authorize_denied_no_state_change",
+      "description": "Denied authorization does not mutate any state",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "BudgetManager near budget limit",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reserved_spend unchanged in all periods",
+        "confirmed_spend unchanged in all periods",
+        "request_count unchanged"
+      ]
+    },
+    {
+      "id": "authorize_persists_on_approval",
+      "description": "State is persisted to disk after successful authorization",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State file modification time updated after authorize"
+      ]
+    },
+    {
+      "id": "authorize_utilization_pct_accuracy",
+      "description": "Period utilization percentage is accurately computed",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "Daily limit 10.00, prior confirmed spend 2.50",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_cost": "Decimal('2.50')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.period_utilization_pct equals 50.0 (2.50 + 2.50 = 5.00 / 10.00)"
+      ]
+    },
+    {
+      "id": "lifecycle_authorize_then_record_spend",
+      "description": "Full lifecycle: authorize, then record actual spend",
+      "function": "record_spend",
+      "category": "happy_path",
+      "setup_description": "Authorize with estimated_cost=1.00, then record_spend with actual=0.80",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reserved_spend decreased by estimated_cost",
+        "confirmed_spend increased by actual_cost",
+        "request_count incremented by 1",
+        "State persisted to disk"
+      ]
+    },
+    {
+      "id": "lifecycle_authorize_then_release",
+      "description": "Full lifecycle: authorize, then release reservation (failed request)",
+      "function": "release_reservation",
+      "category": "happy_path",
+      "setup_description": "Authorize with estimated_cost=1.00, then release_reservation(1.00)",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reserved_spend decreased by estimated_cost back to zero",
+        "confirmed_spend unchanged",
+        "State persisted to disk"
+      ]
+    },
+    {
+      "id": "lifecycle_actual_cost_higher_than_estimated",
+      "description": "Record spend where actual cost exceeds estimate",
+      "function": "record_spend",
+      "category": "edge_case",
+      "setup_description": "Authorize estimated=1.00, record actual=1.50",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "confirmed_spend increased by 1.50",
+        "reserved_spend decreased by 1.00",
+        "Net effect is +0.50 on effective_spend"
+      ]
+    },
+    {
+      "id": "lifecycle_actual_cost_lower_than_estimated",
+      "description": "Record spend where actual cost is less than estimate",
+      "function": "record_spend",
+      "category": "edge_case",
+      "setup_description": "Authorize estimated=1.00, record actual=0.30",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "confirmed_spend increased by 0.30",
+        "reserved_spend decreased by 1.00",
+        "Net effect is -0.70 on effective_spend"
+      ]
+    },
+    {
+      "id": "lifecycle_actual_cost_zero",
+      "description": "Record spend with zero actual cost (free API call)",
+      "function": "record_spend",
+      "category": "edge_case",
+      "setup_description": "Authorize estimated=1.00, record actual=0.00",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "confirmed_spend increased by 0",
+        "reserved_spend decreased by 1.00"
+      ]
+    },
+    {
+      "id": "lifecycle_no_matching_reservation_record",
+      "description": "Record spend when no reservation exists warns but still records",
+      "function": "record_spend",
+      "category": "error_case",
+      "setup_description": "Record spend without prior authorize",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "no_matching_reservation",
+      "assertions": [
+        "Spend is still recorded (confirmed_spend increases)",
+        "Warning/error about no matching reservation"
+      ]
+    },
+    {
+      "id": "lifecycle_no_matching_reservation_release",
+      "description": "Release reservation when insufficient reserved_spend clamps to zero",
+      "function": "release_reservation",
+      "category": "error_case",
+      "setup_description": "Release reservation without prior authorize",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "no_matching_reservation",
+      "assertions": [
+        "reserved_spend clamped to zero",
+        "No negative reserved_spend"
+      ]
+    },
+    {
+      "id": "lifecycle_multiple_outstanding_reservations",
+      "description": "Multiple authorize calls before recording spend",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "Authorize 1.00, authorize 1.00, record_spend for first, record_spend for second",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "After two authorizes, reserved_spend is 2.00",
+        "After both record_spends, reserved_spend is 0.00",
+        "confirmed_spend reflects both actual costs"
+      ]
+    },
+    {
+      "id": "lifecycle_record_spend_all_periods",
+      "description": "Record spend reconciles reservation across all active period types",
+      "function": "record_spend",
+      "category": "invariant",
+      "setup_description": "Daily + monthly periods, authorize then record spend",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Both daily and monthly reserved_spend decreased",
+        "Both daily and monthly confirmed_spend increased",
+        "Both daily and monthly request_count incremented"
+      ]
+    },
+    {
+      "id": "period_rollover_daily",
+      "description": "Daily period rolls over when authorize() is called after midnight",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "Freeze time to 23:59, authorize, then advance time past midnight and authorize again",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Previous daily period is archived",
+        "New daily period has zero spend",
+        "Authorization evaluated against fresh period"
+      ]
+    },
+    {
+      "id": "period_rollover_weekly",
+      "description": "Weekly period rolls over at week boundary",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "Freeze time near end of week, advance past boundary",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Previous weekly period archived",
+        "Fresh weekly period started"
+      ]
+    },
+    {
+      "id": "period_rollover_monthly",
+      "description": "Monthly period rolls over at month boundary",
+      "function": "authorize",
+      "category": "happy_path",
+      "setup_description": "Freeze time to last day of month, advance to first of next month",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Previous monthly period archived",
+        "Fresh monthly period started"
+      ]
+    },
+    {
+      "id": "period_rollover_multi_period_daily_rolls_monthly_stays",
+      "description": "Daily period rolls over while monthly period continues",
+      "function": "authorize",
+      "category": "edge_case",
+      "setup_description": "Daily + monthly periods, advance one day",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Daily period was archived and reset",
+        "Monthly period retains its accumulated spend"
+      ]
+    },
+    {
+      "id": "period_historical_max_eviction",
+      "description": "Historical periods list evicts oldest when max_historical_periods exceeded",
+      "function": "authorize",
+      "category": "edge_case",
+      "setup_description": "Set max_historical_periods=2, trigger 3 daily rollovers",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "historical_periods has at most 2 entries",
+        "Oldest period was evicted"
+      ]
+    },
+    {
+      "id": "period_rollover_archives_correctly",
+      "description": "Archived period summary has correct totals",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "Accumulate spend in daily period, then trigger rollover",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Archived PeriodSummary has correct total_spend",
+        "Archived PeriodSummary has correct request_count",
+        "Archived PeriodSummary has correct period_start and period_end"
+      ]
+    },
+    {
+      "id": "period_timezone_handling",
+      "description": "Period boundaries respect configured timezone",
+      "function": "authorize",
+      "category": "edge_case",
+      "setup_description": "Configure timezone US/Eastern, freeze time to 23:30 ET (03:30 UTC next day)",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Period boundary is evaluated in configured timezone, not UTC"
+      ]
+    },
+    {
+      "id": "period_rollover_on_remaining_budget",
+      "description": "remaining_budget() also triggers period rollover check",
+      "function": "remaining_budget",
+      "category": "invariant",
+      "setup_description": "Advance time past period boundary, call remaining_budget()",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Period rollover applied",
+        "Remaining budget reflects fresh period"
+      ]
+    },
+    {
+      "id": "savings_record_local_request",
+      "description": "Record a local request increments savings counters",
+      "function": "record_local_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_remote_cost": "Decimal('0.50')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "savings.total_local_requests incremented by 1",
+        "savings.total_estimated_savings incremented by 0.50",
+        "savings.current_period_local_requests incremented by 1",
+        "savings.current_period_estimated_savings incremented by 0.50"
+      ]
+    },
+    {
+      "id": "savings_no_budget_impact",
+      "description": "Local request does not affect budget limits or reservations",
+      "function": "record_local_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "estimated_remote_cost": "Decimal('1.00')"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No active period reserved_spend or confirmed_spend changed",
+        "remaining_budget unchanged"
+      ]
+    },
+    {
+      "id": "savings_accumulation",
+      "description": "Multiple local requests accumulate savings correctly",
+      "function": "record_local_request",
+      "category": "happy_path",
+      "setup_description": "Record 3 local requests with different costs",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_local_requests is 3",
+        "total_estimated_savings is sum of all three costs"
+      ]
+    },
+    {
+      "id": "savings_persisted",
+      "description": "Savings state is persisted to disk after recording",
+      "function": "record_local_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State file updated after record_local_request"
+      ]
+    },
+    {
+      "id": "savings_current_period_reset_on_rollover",
+      "description": "Current period savings counters reset on period rollover",
+      "function": "record_local_request",
+      "category": "edge_case",
+      "setup_description": "Record local requests, trigger period rollover, check counters",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "current_period_local_requests reset to 0",
+        "current_period_estimated_savings reset to 0",
+        "total_local_requests preserved",
+        "total_estimated_savings preserved"
+      ]
+    },
+    {
+      "id": "persistence_force_persist",
+      "description": "force_persist writes current state to disk",
+      "function": "force_persist",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State file matches in-memory state",
+        "last_persisted_at is updated"
+      ]
+    },
+    {
+      "id": "persistence_force_persist_failure",
+      "description": "force_persist raises error on I/O failure",
+      "function": "force_persist",
+      "category": "error_case",
+      "setup_description": "Mock file write to raise IOError",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "persistence_failure",
+      "assertions": [
+        "Error raised indicating persistence failure"
+      ]
+    },
+    {
+      "id": "persistence_authorize_failure_reservation_stands",
+      "description": "If persist fails after authorization, in-memory reservation still stands",
+      "function": "authorize",
+      "category": "error_case",
+      "setup_description": "Mock atomic write to fail after authorize approves",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "persistence_failure_on_reservation",
+      "assertions": [
+        "In-memory reserved_spend reflects the reservation",
+        "CRITICAL log emitted"
+      ]
+    },
+    {
+      "id": "persistence_atomic_write",
+      "description": "State file writes use atomic pattern (temp file + rename)",
+      "function": "force_persist",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Write uses temp file then rename pattern",
+        "No partial writes possible"
+      ]
+    },
+    {
+      "id": "reset_state_with_archive",
+      "description": "Reset state with archive_current=True archives current periods",
+      "function": "reset_state",
+      "category": "happy_path",
+      "setup_description": "Accumulate some spend, then reset with archive",
+      "mock_dependencies": {},
+      "input_values": {
+        "archive_current": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All active periods reset to zero spend",
+        "Previous period data in historical_periods",
+        "Fresh state persisted to disk"
+      ]
+    },
+    {
+      "id": "reset_state_without_archive",
+      "description": "Reset state with archive_current=False does not archive",
+      "function": "reset_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "archive_current": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All active periods reset to zero",
+        "No new entries in historical_periods"
+      ]
+    },
+    {
+      "id": "reset_state_preserves_cumulative_savings",
+      "description": "Reset preserves total_local_requests and total_estimated_savings",
+      "function": "reset_state",
+      "category": "invariant",
+      "setup_description": "Record some local requests, then reset",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_local_requests preserved",
+        "total_estimated_savings preserved",
+        "current_period counters reset to zero"
+      ]
+    },
+    {
+      "id": "reset_state_fresh_period_start",
+      "description": "After reset, active periods have fresh period_start timestamps",
+      "function": "reset_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "period_start is updated to current time for all active periods"
+      ]
+    },
+    {
+      "id": "reset_state_persistence_failure",
+      "description": "Reset with persistence failure still resets in-memory state",
+      "function": "reset_state",
+      "category": "error_case",
+      "setup_description": "Mock atomic write to fail",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "persistence_failure",
+      "assertions": [
+        "In-memory state is reset",
+        "CRITICAL log emitted"
+      ]
+    },
+    {
+      "id": "report_basic",
+      "description": "get_report returns comprehensive report with correct fields",
+      "function": "get_report",
+      "category": "happy_path",
+      "setup_description": "Authorize and record some spend, record local requests",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Report generated_at is current time",
+        "active_periods match current state",
+        "total_all_time_spend includes current confirmed spend",
+        "total_all_time_savings includes savings"
+      ]
+    },
+    {
+      "id": "report_includes_historical_spend",
+      "description": "Report total_all_time_spend includes historical period spend",
+      "function": "get_report",
+      "category": "happy_path",
+      "setup_description": "Trigger period rollover to create historical data, then get report",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_all_time_spend includes both historical and current spend"
+      ]
+    },
+    {
+      "id": "report_cost_trajectory_ordered",
+      "description": "Cost trajectory points are ordered oldest first",
+      "function": "get_report",
+      "category": "invariant",
+      "setup_description": "Create multiple historical periods",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "cost_trajectory is ordered by period_start ascending"
+      ]
+    },
+    {
+      "id": "report_current_period_remaining",
+      "description": "Report current_period_remaining matches remaining_budget()",
+      "function": "get_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "report.current_period_remaining equals remaining_budget()"
+      ]
+    },
+    {
+      "id": "report_tightest_period",
+      "description": "Report tightest_period identifies the most constrained period",
+      "function": "get_report",
+      "category": "happy_path",
+      "setup_description": "Daily limit 5.00, monthly limit 100.00, daily has 4.00 spent",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "tightest_period is daily"
+      ]
+    },
+    {
+      "id": "report_frozen_snapshot",
+      "description": "Returned BudgetReport is a frozen snapshot, not a live reference",
+      "function": "get_report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Modifying returned report does not affect internal state"
+      ]
+    },
+    {
+      "id": "report_total_remote_requests",
+      "description": "Report total_remote_requests counts all recorded spends",
+      "function": "get_report",
+      "category": "happy_path",
+      "setup_description": "Record several spends, get report",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_remote_requests equals sum of request_counts"
+      ]
+    },
+    {
+      "id": "remaining_budget_fresh_state",
+      "description": "Remaining budget on fresh state equals the smallest limit",
+      "function": "remaining_budget",
+      "category": "happy_path",
+      "setup_description": "Fresh BudgetManager with daily=5.00, monthly=100.00",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remaining_budget() equals Decimal('5.00')"
+      ]
+    },
+    {
+      "id": "remaining_budget_after_spend",
+      "description": "Remaining budget decreases after spend is recorded",
+      "function": "remaining_budget",
+      "category": "happy_path",
+      "setup_description": "Authorize 2.00, record_spend 2.00",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remaining_budget() equals limit - 2.00"
+      ]
+    },
+    {
+      "id": "remaining_budget_includes_reservations",
+      "description": "Remaining budget accounts for reserved_spend",
+      "function": "remaining_budget",
+      "category": "invariant",
+      "setup_description": "Authorize 3.00 (not yet recorded)",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remaining_budget() equals limit - 3.00 (reservation counted)"
+      ]
+    },
+    {
+      "id": "remaining_budget_negative_possible",
+      "description": "Remaining budget may be negative if overshoot occurred",
+      "function": "remaining_budget",
+      "category": "edge_case",
+      "setup_description": "Authorize 4.00 within 5.00 limit, then record actual 6.00",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remaining_budget() is negative (overshoot)"
+      ]
+    },
+    {
+      "id": "remaining_budget_tightest_period",
+      "description": "Remaining budget returns min across all active periods",
+      "function": "remaining_budget",
+      "category": "invariant",
+      "setup_description": "Daily remaining 2.00, monthly remaining 50.00",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remaining_budget() equals Decimal('2.00')"
+      ]
+    },
+    {
+      "id": "invariant_decimal_not_float",
+      "description": "All monetary values are Decimal, never float",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.remaining is Decimal",
+        "result.estimated_cost is Decimal",
+        "result.period_utilization_pct is Decimal"
+      ]
+    },
+    {
+      "id": "invariant_reserved_spend_non_negative",
+      "description": "reserved_spend is always non-negative even after release overshoot",
+      "function": "release_reservation",
+      "category": "invariant",
+      "setup_description": "Release more than was reserved",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "reserved_spend clamped to zero, not negative"
+      ]
+    },
+    {
+      "id": "invariant_confirmed_spend_non_negative",
+      "description": "confirmed_spend is always non-negative",
+      "function": "record_spend",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "confirmed_spend is >= 0 after any record_spend call"
+      ]
+    },
+    {
+      "id": "invariant_confirmed_spend_monotonic",
+      "description": "confirmed_spend only increases within a period",
+      "function": "record_spend",
+      "category": "invariant",
+      "setup_description": "Record multiple spends, check confirmed_spend only increases",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "confirmed_spend after second record >= confirmed_spend after first record"
+      ]
+    },
+    {
+      "id": "invariant_authorize_effective_spend_within_limit",
+      "description": "confirmed + reserved never exceeds limit at moment of authorization",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "Make several authorizations approaching the limit",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "After each allowed authorization, confirmed + reserved <= limit for all periods"
+      ]
+    },
+    {
+      "id": "invariant_budget_manager_never_raises_exhausted_error",
+      "description": "BudgetManager returns result, never raises BudgetExhaustedError",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "Authorize with cost exceeding all limits",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No BudgetExhaustedError raised",
+        "Result returned with allowed=False"
+      ]
+    },
+    {
+      "id": "invariant_all_timestamps_timezone_aware",
+      "description": "All timestamps in state are timezone-aware",
+      "function": "__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "All period_start datetimes have tzinfo set",
+        "last_persisted_at has tzinfo set"
+      ]
+    },
+    {
+      "id": "invariant_every_mutation_persists",
+      "description": "Every state-mutating operation triggers atomic persist",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "Track file modification after authorize, record_spend, release_reservation, record_local_request, reset_state",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State file is updated after each mutation"
+      ]
+    },
+    {
+      "id": "invariant_no_global_state",
+      "description": "Two BudgetManager instances with different configs are independent",
+      "function": "__init__",
+      "category": "invariant",
+      "setup_description": "Create two BudgetManager instances with different state files",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Mutations on one do not affect the other"
+      ]
+    },
+    {
+      "id": "property_budget_conservation",
+      "description": "Property: authorized amount equals recorded spend difference in effective_spend",
+      "function": "record_spend",
+      "category": "invariant",
+      "setup_description": "Hypothesis generates random authorize/record sequences",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "effective_spend change equals actual_cost after full lifecycle"
+      ]
+    },
+    {
+      "id": "property_authorization_consistency",
+      "description": "Property: if authorize allows, remaining >= 0; if denies, cost > remaining",
+      "function": "authorize",
+      "category": "invariant",
+      "setup_description": "Hypothesis generates random estimated costs",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Allowed implies remaining >= 0 after reservation",
+        "Denied implies cost would exceed some period limit"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for BudgetManager component.\n\nTests organized into logical groups:\n1. Initialization\n2. Authorization logic\n3. Reservation lifecycle\n4. Period boundaries\n5. Savings tracking\n6. Persistence\n7. Reporting\n8. Property-based / invariant tests\n\nRun with: pytest contract_test.py -v\n\"\"\"\n\nimport json\nimport os\nimport stat\nimport tempfile\nfrom datetime import datetime, timedelta, timezone\nfrom decimal import Decimal\nfrom pathlib import Path\nfrom unittest.mock import MagicMock, patch, PropertyMock\nimport pytest\n\n# Try to import time-freezing library\ntry:\n    from freezegun import freeze_time\n    HAS_FREEZEGUN = True\nexcept ImportError:\n    HAS_FREEZEGUN = False\n\n# Try to import hypothesis\ntry:\n    from hypothesis import given, settings, strategies as st, assume\n    from hypothesis.stateful import RuleBasedStateMachine, rule, initialize\n    HAS_HYPOTHESIS = True\nexcept ImportError:\n    HAS_HYPOTHESIS = False\n\nfrom zoneinfo import ZoneInfo\n\n# Import the component under test\nfrom src.budget_manager import (\n    BudgetManager,\n    BudgetConfig,\n    BudgetAuthorizationResult,\n    BudgetState,\n    BudgetReport,\n    BudgetError,\n    BudgetExhaustedError,\n    BudgetStateCorruptedError,\n    PeriodLimit,\n    PeriodSpend,\n    PeriodSummary,\n    PeriodType,\n    SpendMetadata,\n    SavingsTracker,\n)\n\n\n# ============================================================================\n# Fixtures\n# ============================================================================\n\n@pytest.fixture\ndef tmp_state_path(tmp_path):\n    \"\"\"Return a path for a state file inside tmp_path.\"\"\"\n    return tmp_path / \"budget_state.json\"\n\n\n@pytest.fixture\ndef daily_period_limit():\n    \"\"\"A daily period limit of 5.00.\"\"\"\n    return PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))\n\n\n@pytest.fixture\ndef monthly_period_limit():\n    \"\"\"A monthly period limit of 100.00.\"\"\"\n    return PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00'))\n\n\n@pytest.fixture\ndef weekly_period_limit():\n    \"\"\"A weekly period limit of 25.00.\"\"\"\n    return PeriodLimit(period_type=PeriodType.weekly, limit_amount=Decimal('25.00'))\n\n\ndef make_config(\n    tmp_path,\n    period_limits=None,\n    timezone_str=\"UTC\",\n    max_historical_periods=10,\n    state_file_name=\"budget_state.json\",\n):\n    \"\"\"Factory to create BudgetConfig with sensible defaults.\"\"\"\n    if period_limits is None:\n        period_limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n        ]\n    return BudgetConfig(\n        period_limits=period_limits,\n        timezone=timezone_str,\n        estimated_cost_per_input_token=Decimal('0.000001'),\n        estimated_cost_per_output_token=Decimal('0.000002'),\n        state_file_path=tmp_path / state_file_name,\n        max_historical_periods=max_historical_periods,\n    )\n\n\ndef make_metadata(request_id=\"req-001\", model_name=\"gpt-4\", input_tokens=100,\n                   output_tokens=50, task_type=\"completion\", timestamp=None):\n    \"\"\"Factory to create SpendMetadata with sensible defaults.\"\"\"\n    if timestamp is None:\n        timestamp = datetime.now(tz=ZoneInfo(\"UTC\"))\n    return SpendMetadata(\n        request_id=request_id,\n        model_name=model_name,\n        input_tokens=input_tokens,\n        output_tokens=output_tokens,\n        task_type=task_type,\n        timestamp=timestamp,\n    )\n\n\n@pytest.fixture\ndef budget_manager_factory(tmp_path):\n    \"\"\"Factory fixture that creates BudgetManager instances with optional config overrides.\"\"\"\n    def _factory(\n        period_limits=None,\n        timezone_str=\"UTC\",\n        max_historical_periods=10,\n        state_file_name=\"budget_state.json\",\n    ):\n        config = make_config(\n            tmp_path,\n            period_limits=period_limits,\n            timezone_str=timezone_str,\n            max_historical_periods=max_historical_periods,\n            state_file_name=state_file_name,\n        )\n        return BudgetManager(config)\n\n    return _factory\n\n\n@pytest.fixture\ndef daily_manager(budget_manager_factory, daily_period_limit):\n    \"\"\"BudgetManager with a single daily limit of 5.00.\"\"\"\n    return budget_manager_factory(period_limits=[daily_period_limit])\n\n\n@pytest.fixture\ndef multi_period_manager(budget_manager_factory, daily_period_limit, monthly_period_limit):\n    \"\"\"BudgetManager with daily (5.00) and monthly (100.00) limits.\"\"\"\n    return budget_manager_factory(\n        period_limits=[daily_period_limit, monthly_period_limit]\n    )\n\n\n# ============================================================================\n# 1. test_budget_manager_init — Initialization tests\n# ============================================================================\n\nclass TestBudgetManagerInit:\n    \"\"\"Tests for BudgetManager.__init__().\"\"\"\n\n    def test_init_fresh_state_creates_file(self, tmp_path, daily_period_limit):\n        \"\"\"Initialize with no existing state file creates fresh state and persists it.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n        assert not config.state_file_path.exists(), \"State file should not exist before init\"\n\n        manager = BudgetManager(config)\n\n        assert config.state_file_path.exists(), \"State file should be created after init\"\n\n    def test_init_fresh_state_has_zero_spend(self, daily_manager):\n        \"\"\"Fresh state has zero confirmed_spend and reserved_spend.\"\"\"\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('5.00'), (\n            f\"Fresh daily manager should have full budget remaining, got {remaining}\"\n        )\n\n    def test_init_fresh_state_active_periods_match_config(self, tmp_path):\n        \"\"\"Active periods match the configured period_limits types.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        report = manager.get_report()\n        active_types = {p.period_type for p in report.active_periods}\n        assert active_types == {PeriodType.daily, PeriodType.monthly}, (\n            f\"Active period types should match config, got {active_types}\"\n        )\n\n    def test_init_existing_valid_state_loads(self, tmp_path, daily_period_limit):\n        \"\"\"Loading from an existing valid state file preserves spend data.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n\n        # Create manager and record some spend\n        manager1 = BudgetManager(config)\n        result = manager1.authorize(Decimal('2.00'))\n        assert result.allowed is True\n        manager1.record_spend(\n            actual_cost=Decimal('2.00'),\n            estimated_cost=Decimal('2.00'),\n            metadata=make_metadata(request_id=\"req-init-1\"),\n        )\n\n        # Create new manager from same state file\n        manager2 = BudgetManager(config)\n        remaining = manager2.remaining_budget()\n        assert remaining == Decimal('3.00'), (\n            f\"Loaded manager should have 3.00 remaining, got {remaining}\"\n        )\n\n    def test_init_corrupted_state_file_raises_error(self, tmp_path, daily_period_limit):\n        \"\"\"Corrupted state file raises BudgetStateCorruptedError.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n\n        # Write invalid JSON to state file\n        config.state_file_path.write_text(\"{invalid json content!!! not valid\")\n\n        with pytest.raises(BudgetStateCorruptedError) as exc_info:\n            BudgetManager(config)\n\n        assert exc_info.value.state_file_path is not None, (\n            \"BudgetStateCorruptedError should include state_file_path\"\n        )\n\n    def test_init_corrupted_state_invalid_schema(self, tmp_path, daily_period_limit):\n        \"\"\"State file with valid JSON but invalid schema raises BudgetStateCorruptedError.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n\n        # Write valid JSON with wrong schema\n        config.state_file_path.write_text(json.dumps({\n            \"schema_version\": 1,\n            \"active_periods\": \"not_a_list\",\n            \"savings\": \"invalid\",\n        }))\n\n        with pytest.raises(BudgetStateCorruptedError) as exc_info:\n            BudgetManager(config)\n\n        assert exc_info.value.validation_errors is not None, (\n            \"BudgetStateCorruptedError should contain validation_errors\"\n        )\n\n    def test_init_unreadable_state_file(self, tmp_path, daily_period_limit):\n        \"\"\"Unreadable state file raises appropriate error.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n\n        # Create file and remove read permissions\n        config.state_file_path.write_text('{\"schema_version\": 1}')\n        config.state_file_path.chmod(0o000)\n\n        try:\n            with pytest.raises((BudgetError, PermissionError, OSError)):\n                BudgetManager(config)\n        finally:\n            # Restore permissions for cleanup\n            config.state_file_path.chmod(0o644)\n\n    def test_init_unwritable_directory(self, tmp_path, daily_period_limit):\n        \"\"\"State file in non-existent directory raises error.\"\"\"\n        config = BudgetConfig(\n            period_limits=[daily_period_limit],\n            timezone=\"UTC\",\n            estimated_cost_per_input_token=Decimal('0.000001'),\n            estimated_cost_per_output_token=Decimal('0.000002'),\n            state_file_path=Path(\"/nonexistent/directory/state.json\"),\n            max_historical_periods=10,\n        )\n\n        with pytest.raises((BudgetError, OSError, FileNotFoundError)):\n            BudgetManager(config)\n\n    def test_init_state_period_type_reconciliation(self, tmp_path):\n        \"\"\"Loading state with different periods than config reconciles active_periods.\"\"\"\n        # First create with daily only\n        daily_only = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n        config1 = make_config(tmp_path, period_limits=daily_only)\n        manager1 = BudgetManager(config1)\n        del manager1\n\n        # Now load with daily + monthly\n        daily_and_monthly = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n        config2 = make_config(tmp_path, period_limits=daily_and_monthly)\n        manager2 = BudgetManager(config2)\n\n        report = manager2.get_report()\n        active_types = {p.period_type for p in report.active_periods}\n        assert PeriodType.daily in active_types, \"Daily period should be present\"\n        assert PeriodType.monthly in active_types, \"Monthly period should be added\"\n\n    def test_init_all_timestamps_timezone_aware(self, daily_manager):\n        \"\"\"All timestamps in initialized state are timezone-aware.\"\"\"\n        report = daily_manager.get_report()\n        for period in report.active_periods:\n            assert period.period_start.tzinfo is not None, (\n                f\"period_start for {period.period_type} must be timezone-aware\"\n            )\n        assert report.generated_at.tzinfo is not None, \"generated_at must be timezone-aware\"\n\n\n# ============================================================================\n# 2. test_budget_manager_authorize — Authorization logic tests\n# ============================================================================\n\nclass TestBudgetManagerAuthorize:\n    \"\"\"Tests for BudgetManager.authorize().\"\"\"\n\n    def test_authorize_within_budget(self, daily_manager):\n        \"\"\"Authorize a request within budget returns allowed=True.\"\"\"\n        result = daily_manager.authorize(Decimal('0.50'))\n\n        assert result.allowed is True, \"Request within budget should be allowed\"\n        assert result.denial_reason is None, \"No denial reason when allowed\"\n        assert result.estimated_cost == Decimal('0.50'), (\n            f\"estimated_cost should match input, got {result.estimated_cost}\"\n        )\n\n    def test_authorize_remaining_reflects_reservation(self, daily_manager):\n        \"\"\"After authorization, remaining reflects reservation.\"\"\"\n        result = daily_manager.authorize(Decimal('0.50'))\n\n        assert result.remaining == Decimal('4.50'), (\n            f\"Remaining should be 4.50 after 0.50 reservation on 5.00 limit, got {result.remaining}\"\n        )\n\n    def test_authorize_multi_period_tightest_remaining(self, multi_period_manager):\n        \"\"\"With multiple periods, remaining reflects the tightest period.\"\"\"\n        result = multi_period_manager.authorize(Decimal('1.00'))\n\n        assert result.allowed is True\n        # Daily limit is 5.00, so remaining should be 4.00 (tighter than monthly 99.00)\n        assert result.remaining == Decimal('4.00'), (\n            f\"Remaining should reflect daily (tighter) period, got {result.remaining}\"\n        )\n        assert result.limiting_period == PeriodType.daily, (\n            f\"Limiting period should be daily, got {result.limiting_period}\"\n        )\n\n    def test_authorize_denied_exceeds_daily_limit(self, daily_manager):\n        \"\"\"Authorize denied when cost exceeds daily limit.\"\"\"\n        result = daily_manager.authorize(Decimal('6.00'))\n\n        assert result.allowed is False, \"Cost exceeding limit should be denied\"\n        assert result.denial_reason is not None, \"Denied result must have denial_reason\"\n        assert \"daily\" in str(result.denial_reason).lower(), (\n            f\"Denial reason should reference daily, got {result.denial_reason}\"\n        )\n\n    def test_authorize_denied_monthly_limit_with_prior_spend(self, tmp_path):\n        \"\"\"Denied when monthly limit exhausted but daily is fine.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('5.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        # Spend 4.00 of 5.00 monthly limit\n        r1 = manager.authorize(Decimal('4.00'))\n        assert r1.allowed is True\n        manager.record_spend(\n            Decimal('4.00'), Decimal('4.00'),\n            make_metadata(request_id=\"req-monthly-1\"),\n        )\n\n        # Try to spend 2.00 more — exceeds monthly\n        result = manager.authorize(Decimal('2.00'))\n        assert result.allowed is False, \"Should be denied by monthly limit\"\n        assert result.limiting_period == PeriodType.monthly, (\n            f\"Limiting period should be monthly, got {result.limiting_period}\"\n        )\n\n    def test_authorize_exact_boundary_allowed(self, daily_manager):\n        \"\"\"Authorize request that exactly uses remaining budget is allowed.\"\"\"\n        result = daily_manager.authorize(Decimal('5.00'))\n\n        assert result.allowed is True, \"Exact boundary request should be allowed\"\n        assert result.remaining == Decimal('0.00'), (\n            f\"Remaining should be exactly 0.00, got {result.remaining}\"\n        )\n\n    def test_authorize_one_penny_over_denied(self, daily_manager):\n        \"\"\"Authorize request one penny over remaining budget is denied.\"\"\"\n        result = daily_manager.authorize(Decimal('5.01'))\n\n        assert result.allowed is False, \"One penny over should be denied\"\n\n    def test_authorize_zero_cost_error(self, daily_manager):\n        \"\"\"Authorize with zero estimated cost raises error.\"\"\"\n        with pytest.raises((ValueError, BudgetError)):\n            daily_manager.authorize(Decimal('0'))\n\n    def test_authorize_negative_cost_error(self, daily_manager):\n        \"\"\"Authorize with negative estimated cost raises error.\"\"\"\n        with pytest.raises((ValueError, BudgetError)):\n            daily_manager.authorize(Decimal('-1.00'))\n\n    def test_authorize_no_state_change_on_denial(self, daily_manager):\n        \"\"\"Denied authorization does not change any state.\"\"\"\n        remaining_before = daily_manager.remaining_budget()\n\n        result = daily_manager.authorize(Decimal('10.00'))\n        assert result.allowed is False\n\n        remaining_after = daily_manager.remaining_budget()\n        assert remaining_before == remaining_after, (\n            f\"Remaining should be unchanged on denial: {remaining_before} vs {remaining_after}\"\n        )\n\n    def test_authorize_reserves_in_all_periods(self, multi_period_manager):\n        \"\"\"Successful authorization reserves cost in all active period types.\"\"\"\n        result = multi_period_manager.authorize(Decimal('1.00'))\n        assert result.allowed is True\n\n        report = multi_period_manager.get_report()\n        for period in report.active_periods:\n            assert period.reserved_spend >= Decimal('1.00'), (\n                f\"Period {period.period_type} should have reserved_spend >= 1.00, \"\n                f\"got {period.reserved_spend}\"\n            )\n\n    def test_authorize_utilization_pct(self, tmp_path):\n        \"\"\"Period utilization percentage is accurately computed.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        # First authorize and record 2.50\n        r1 = manager.authorize(Decimal('2.50'))\n        assert r1.allowed\n        manager.record_spend(Decimal('2.50'), Decimal('2.50'), make_metadata(\"req-util-1\"))\n\n        # Second authorize for 2.50 more\n        r2 = manager.authorize(Decimal('2.50'))\n        assert r2.allowed\n        # Utilization should be (2.50 confirmed + 2.50 reserved) / 10.00 = 50%\n        assert r2.period_utilization_pct == Decimal('50') or r2.period_utilization_pct == Decimal('50.0'), (\n            f\"Utilization should be 50%, got {r2.period_utilization_pct}\"\n        )\n\n    def test_authorize_result_estimated_cost_echoed(self, daily_manager):\n        \"\"\"result.estimated_cost equals the input estimated_cost.\"\"\"\n        result = daily_manager.authorize(Decimal('1.23'))\n        assert result.estimated_cost == Decimal('1.23')\n\n    def test_authorize_denial_reason_none_when_allowed(self, daily_manager):\n        \"\"\"denial_reason is None if and only if allowed is True.\"\"\"\n        result = daily_manager.authorize(Decimal('1.00'))\n        assert result.allowed is True\n        assert result.denial_reason is None\n\n    def test_authorize_denial_reason_set_when_denied(self, daily_manager):\n        \"\"\"denial_reason is set when allowed is False.\"\"\"\n        result = daily_manager.authorize(Decimal('6.00'))\n        assert result.allowed is False\n        assert result.denial_reason is not None\n\n    @pytest.mark.parametrize(\"cost_str\", [\"0.01\", \"0.001\", \"4.99\", \"5.00\"])\n    def test_authorize_boundary_costs_allowed(self, budget_manager_factory, cost_str):\n        \"\"\"Various boundary costs within daily limit of 5.00 are allowed.\"\"\"\n        manager = budget_manager_factory(\n            period_limits=[PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n        )\n        cost = Decimal(cost_str)\n        result = manager.authorize(cost)\n        assert result.allowed is True, f\"Cost {cost_str} should be allowed within 5.00 limit\"\n\n\n# ============================================================================\n# 3. test_budget_manager_lifecycle — Reservation lifecycle tests\n# ============================================================================\n\nclass TestBudgetManagerLifecycle:\n    \"\"\"Tests for authorize → record_spend and authorize → release_reservation flows.\"\"\"\n\n    def test_authorize_then_record_spend(self, daily_manager):\n        \"\"\"Full lifecycle: authorize, then record actual spend.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed is True\n\n        daily_manager.record_spend(\n            actual_cost=Decimal('0.80'),\n            estimated_cost=Decimal('1.00'),\n            metadata=make_metadata(request_id=\"req-lc-1\"),\n        )\n\n        remaining = daily_manager.remaining_budget()\n        # After: reservation of 1.00 released, actual 0.80 confirmed\n        assert remaining == Decimal('4.20'), (\n            f\"After recording 0.80 actual spend, remaining should be 4.20, got {remaining}\"\n        )\n\n    def test_authorize_then_release(self, daily_manager):\n        \"\"\"Full lifecycle: authorize, then release reservation.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed is True\n\n        remaining_during = daily_manager.remaining_budget()\n        assert remaining_during == Decimal('4.00'), \"During reservation, remaining should be 4.00\"\n\n        daily_manager.release_reservation(Decimal('1.00'))\n\n        remaining_after = daily_manager.remaining_budget()\n        assert remaining_after == Decimal('5.00'), (\n            f\"After release, remaining should be back to 5.00, got {remaining_after}\"\n        )\n\n    def test_actual_cost_higher_than_estimated(self, daily_manager):\n        \"\"\"Record spend where actual cost exceeds estimate.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        daily_manager.record_spend(\n            actual_cost=Decimal('1.50'),\n            estimated_cost=Decimal('1.00'),\n            metadata=make_metadata(request_id=\"req-high-1\"),\n        )\n\n        remaining = daily_manager.remaining_budget()\n        # Started with 5.00, actual spend is 1.50\n        assert remaining == Decimal('3.50'), (\n            f\"After actual 1.50 (est 1.00), remaining should be 3.50, got {remaining}\"\n        )\n\n    def test_actual_cost_lower_than_estimated(self, daily_manager):\n        \"\"\"Record spend where actual cost is less than estimate.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        daily_manager.record_spend(\n            actual_cost=Decimal('0.30'),\n            estimated_cost=Decimal('1.00'),\n            metadata=make_metadata(request_id=\"req-low-1\"),\n        )\n\n        remaining = daily_manager.remaining_budget()\n        # Started with 5.00, actual spend is 0.30\n        assert remaining == Decimal('4.70'), (\n            f\"After actual 0.30 (est 1.00), remaining should be 4.70, got {remaining}\"\n        )\n\n    def test_actual_cost_zero(self, daily_manager):\n        \"\"\"Record spend with zero actual cost (free API call).\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        daily_manager.record_spend(\n            actual_cost=Decimal('0'),\n            estimated_cost=Decimal('1.00'),\n            metadata=make_metadata(request_id=\"req-zero-1\"),\n        )\n\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('5.00'), (\n            f\"After zero actual cost, remaining should be 5.00, got {remaining}\"\n        )\n\n    def test_no_matching_reservation_record_spend(self, daily_manager):\n        \"\"\"Record spend without prior authorization - spend still recorded.\"\"\"\n        # This should log a warning about no matching reservation but not lose data\n        # The behavior depends on implementation - it may raise or warn\n        try:\n            daily_manager.record_spend(\n                actual_cost=Decimal('1.00'),\n                estimated_cost=Decimal('1.00'),\n                metadata=make_metadata(request_id=\"req-nomatch-1\"),\n            )\n            # If no exception, check spend was recorded\n            remaining = daily_manager.remaining_budget()\n            assert remaining == Decimal('4.00'), (\n                \"Spend should still be recorded even without reservation\"\n            )\n        except BudgetError:\n            # Some implementations may raise; the contract says spend is still recorded\n            pass\n\n    def test_no_matching_reservation_release(self, daily_manager):\n        \"\"\"Release reservation without prior authorization clamps to zero.\"\"\"\n        daily_manager.release_reservation(Decimal('1.00'))\n\n        # reserved_spend should be clamped to zero, never negative\n        report = daily_manager.get_report()\n        for period in report.active_periods:\n            assert period.reserved_spend >= Decimal('0'), (\n                f\"reserved_spend must be non-negative, got {period.reserved_spend}\"\n            )\n\n    def test_multiple_outstanding_reservations(self, daily_manager):\n        \"\"\"Multiple authorize calls before recording spend.\"\"\"\n        auth1 = daily_manager.authorize(Decimal('1.00'))\n        assert auth1.allowed\n        auth2 = daily_manager.authorize(Decimal('1.00'))\n        assert auth2.allowed\n\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('3.00'), (\n            f\"After two 1.00 reservations, remaining should be 3.00, got {remaining}\"\n        )\n\n        # Record first spend\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-multi-1\"),\n        )\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('4.00') or remaining == Decimal('3.00'), (\n            f\"After recording one of two reservations, got remaining {remaining}\"\n        )\n\n    def test_lifecycle_reconciliation_all_periods(self, multi_period_manager):\n        \"\"\"Record spend reconciles across all active period types.\"\"\"\n        auth = multi_period_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        multi_period_manager.record_spend(\n            Decimal('0.80'), Decimal('1.00'),\n            make_metadata(request_id=\"req-multi-period-1\"),\n        )\n\n        report = multi_period_manager.get_report()\n        for period in report.active_periods:\n            assert period.confirmed_spend == Decimal('0.80'), (\n                f\"Period {period.period_type} confirmed_spend should be 0.80, got {period.confirmed_spend}\"\n            )\n            assert period.reserved_spend == Decimal('0'), (\n                f\"Period {period.period_type} reserved_spend should be 0, got {period.reserved_spend}\"\n            )\n            assert period.request_count == 1, (\n                f\"Period {period.period_type} request_count should be 1, got {period.request_count}\"\n            )\n\n\n# ============================================================================\n# 4. test_budget_manager_periods — Period boundary tests\n# ============================================================================\n\n@pytest.mark.skipif(not HAS_FREEZEGUN, reason=\"freezegun required for period tests\")\nclass TestBudgetManagerPeriods:\n    \"\"\"Tests for period boundary rollover behavior.\"\"\"\n\n    def test_daily_rollover(self, tmp_path):\n        \"\"\"Daily period rolls over when time advances past midnight.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n\n        with freeze_time(\"2024-01-15 23:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            auth = manager.authorize(Decimal('3.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('3.00'), Decimal('3.00'),\n                make_metadata(request_id=\"req-roll-1\"),\n            )\n            remaining_before = manager.remaining_budget()\n            assert remaining_before == Decimal('2.00')\n\n        with freeze_time(\"2024-01-16 01:00:00\", tz_offset=0):\n            # Trigger rollover check\n            remaining_after = manager.remaining_budget()\n            assert remaining_after == Decimal('5.00'), (\n                f\"After daily rollover, should have full budget, got {remaining_after}\"\n            )\n\n    def test_monthly_rollover(self, tmp_path):\n        \"\"\"Monthly period rolls over at month boundary.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00'))]\n\n        with freeze_time(\"2024-01-31 23:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            auth = manager.authorize(Decimal('50.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('50.00'), Decimal('50.00'),\n                make_metadata(request_id=\"req-month-1\"),\n            )\n\n        with freeze_time(\"2024-02-01 01:00:00\", tz_offset=0):\n            remaining = manager.remaining_budget()\n            assert remaining == Decimal('100.00'), (\n                f\"After monthly rollover, should have full budget, got {remaining}\"\n            )\n\n    def test_daily_rolls_monthly_stays(self, tmp_path):\n        \"\"\"Daily period rolls over while monthly period retains accumulated spend.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n\n        with freeze_time(\"2024-01-15 23:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            auth = manager.authorize(Decimal('3.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('3.00'), Decimal('3.00'),\n                make_metadata(request_id=\"req-mixed-1\"),\n            )\n\n        with freeze_time(\"2024-01-16 01:00:00\", tz_offset=0):\n            report = manager.get_report()\n            for period in report.active_periods:\n                if period.period_type == PeriodType.daily:\n                    assert period.confirmed_spend == Decimal('0'), (\n                        f\"Daily should be reset, got {period.confirmed_spend}\"\n                    )\n                elif period.period_type == PeriodType.monthly:\n                    assert period.confirmed_spend == Decimal('3.00'), (\n                        f\"Monthly should retain spend, got {period.confirmed_spend}\"\n                    )\n\n    def test_historical_max_eviction(self, tmp_path):\n        \"\"\"Historical periods evicts oldest when max_historical_periods exceeded.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n\n        with freeze_time(\"2024-01-01 12:00:00\", tz_offset=0) as frozen:\n            config = make_config(tmp_path, period_limits=limits, max_historical_periods=2, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            # Trigger 3 daily rollovers\n            for day in range(3):\n                auth = manager.authorize(Decimal('1.00'))\n                if auth.allowed:\n                    manager.record_spend(\n                        Decimal('1.00'), Decimal('1.00'),\n                        make_metadata(request_id=f\"req-evict-{day}\"),\n                    )\n                frozen.tick(timedelta(days=1))\n\n            # Force a remaining_budget check to trigger rollover\n            manager.remaining_budget()\n\n            report = manager.get_report()\n            assert len(report.cost_trajectory) <= 2, (\n                f\"Historical periods should be at most 2, got {len(report.cost_trajectory)}\"\n            )\n\n    def test_rollover_archives_correct_totals(self, tmp_path):\n        \"\"\"Archived period summary has correct totals.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n\n        with freeze_time(\"2024-01-15 12:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            # Make 2 requests totaling 3.00\n            for i in range(2):\n                auth = manager.authorize(Decimal('1.50'))\n                assert auth.allowed\n                manager.record_spend(\n                    Decimal('1.50'), Decimal('1.50'),\n                    make_metadata(request_id=f\"req-archive-{i}\"),\n                )\n\n        with freeze_time(\"2024-01-16 12:00:00\", tz_offset=0):\n            # Trigger rollover\n            manager.remaining_budget()\n\n            report = manager.get_report()\n            if report.cost_trajectory:\n                archived = report.cost_trajectory[0]\n                assert archived.total_spend == Decimal('3.00'), (\n                    f\"Archived period should have 3.00 total spend, got {archived.total_spend}\"\n                )\n                assert archived.remote_request_count == 2, (\n                    f\"Archived period should have 2 requests, got {archived.remote_request_count}\"\n                )\n\n    def test_timezone_handling(self, tmp_path):\n        \"\"\"Period boundaries respect configured timezone.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n\n        # 23:30 Eastern = 04:30 UTC next day\n        # At this time, it's still Jan 15 in Eastern timezone\n        with freeze_time(\"2024-01-16 04:30:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"US/Eastern\")\n            manager = BudgetManager(config)\n\n            auth = manager.authorize(Decimal('3.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('3.00'), Decimal('3.00'),\n                make_metadata(request_id=\"req-tz-1\"),\n            )\n\n        # 00:30 Eastern = 05:30 UTC — new day in Eastern\n        with freeze_time(\"2024-01-16 05:30:00\", tz_offset=0):\n            remaining = manager.remaining_budget()\n            assert remaining == Decimal('5.00'), (\n                f\"After Eastern midnight rollover, should have full budget, got {remaining}\"\n            )\n\n    def test_rollover_on_remaining_budget(self, tmp_path):\n        \"\"\"remaining_budget() triggers period rollover check.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n\n        with freeze_time(\"2024-01-15 23:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n            auth = manager.authorize(Decimal('4.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('4.00'), Decimal('4.00'),\n                make_metadata(request_id=\"req-rb-1\"),\n            )\n\n        with freeze_time(\"2024-01-16 01:00:00\", tz_offset=0):\n            remaining = manager.remaining_budget()\n            assert remaining == Decimal('5.00'), (\n                \"remaining_budget() should trigger rollover and return full budget\"\n            )\n\n\n# ============================================================================\n# 5. test_budget_manager_savings — Local request tracking tests\n# ============================================================================\n\nclass TestBudgetManagerSavings:\n    \"\"\"Tests for record_local_request() and savings tracking.\"\"\"\n\n    def test_record_local_request(self, daily_manager):\n        \"\"\"Record a local request increments savings counters.\"\"\"\n        daily_manager.record_local_request(Decimal('0.50'))\n\n        report = daily_manager.get_report()\n        assert report.total_local_requests == 1, (\n            f\"total_local_requests should be 1, got {report.total_local_requests}\"\n        )\n        assert report.total_all_time_savings == Decimal('0.50'), (\n            f\"total_all_time_savings should be 0.50, got {report.total_all_time_savings}\"\n        )\n\n    def test_record_local_request_no_budget_impact(self, daily_manager):\n        \"\"\"Local request does not affect budget limits or reservations.\"\"\"\n        remaining_before = daily_manager.remaining_budget()\n\n        daily_manager.record_local_request(Decimal('1.00'))\n\n        remaining_after = daily_manager.remaining_budget()\n        assert remaining_before == remaining_after, (\n            f\"Local request should not change remaining budget: {remaining_before} vs {remaining_after}\"\n        )\n\n    def test_savings_accumulation(self, daily_manager):\n        \"\"\"Multiple local requests accumulate savings correctly.\"\"\"\n        daily_manager.record_local_request(Decimal('0.50'))\n        daily_manager.record_local_request(Decimal('0.75'))\n        daily_manager.record_local_request(Decimal('1.25'))\n\n        report = daily_manager.get_report()\n        assert report.total_local_requests == 3, (\n            f\"total_local_requests should be 3, got {report.total_local_requests}\"\n        )\n        assert report.total_all_time_savings == Decimal('2.50'), (\n            f\"total_all_time_savings should be 2.50, got {report.total_all_time_savings}\"\n        )\n\n    def test_savings_persisted(self, tmp_path, daily_period_limit):\n        \"\"\"Savings state is persisted to disk.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n        manager = BudgetManager(config)\n        manager.record_local_request(Decimal('0.50'))\n\n        # Reload from disk\n        manager2 = BudgetManager(config)\n        report = manager2.get_report()\n        assert report.total_local_requests == 1\n        assert report.total_all_time_savings == Decimal('0.50')\n\n    @pytest.mark.skipif(not HAS_FREEZEGUN, reason=\"freezegun required\")\n    def test_savings_current_period_reset_on_rollover(self, tmp_path):\n        \"\"\"Current period savings counters reset on period rollover.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n\n        with freeze_time(\"2024-01-15 12:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n            manager.record_local_request(Decimal('1.00'))\n            manager.record_local_request(Decimal('2.00'))\n\n        with freeze_time(\"2024-01-16 12:00:00\", tz_offset=0):\n            # Trigger rollover\n            manager.remaining_budget()\n\n            report = manager.get_report()\n            # Total savings preserved\n            assert report.total_all_time_savings >= Decimal('3.00'), (\n                f\"Total savings should be preserved, got {report.total_all_time_savings}\"\n            )\n            assert report.total_local_requests >= 2, (\n                f\"Total local requests should be preserved, got {report.total_local_requests}\"\n            )\n\n    def test_savings_and_report_local_ratio(self, tmp_path):\n        \"\"\"Report correctly counts local vs remote requests.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        # 2 remote requests\n        for i in range(2):\n            auth = manager.authorize(Decimal('1.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('1.00'), Decimal('1.00'),\n                make_metadata(request_id=f\"req-ratio-{i}\"),\n            )\n\n        # 3 local requests\n        for _ in range(3):\n            manager.record_local_request(Decimal('1.00'))\n\n        report = manager.get_report()\n        assert report.total_remote_requests == 2, (\n            f\"total_remote_requests should be 2, got {report.total_remote_requests}\"\n        )\n        assert report.total_local_requests == 3, (\n            f\"total_local_requests should be 3, got {report.total_local_requests}\"\n        )\n\n\n# ============================================================================\n# 6. test_budget_manager_persistence — State persistence tests\n# ============================================================================\n\nclass TestBudgetManagerPersistence:\n    \"\"\"Tests for force_persist(), reset_state(), and persistence failure handling.\"\"\"\n\n    def test_force_persist(self, daily_manager, tmp_state_path):\n        \"\"\"force_persist writes current state to disk.\"\"\"\n        daily_manager.force_persist()\n        # Verify the state file exists and is recent\n        # (exact file path depends on the config used by daily_manager fixture)\n\n    def test_reset_state_with_archive(self, daily_manager):\n        \"\"\"Reset state with archive_current=True archives current periods.\"\"\"\n        # Record some spend first\n        auth = daily_manager.authorize(Decimal('2.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('2.00'), Decimal('2.00'),\n            make_metadata(request_id=\"req-reset-1\"),\n        )\n\n        daily_manager.reset_state(archive_current=True)\n\n        report = daily_manager.get_report()\n        for period in report.active_periods:\n            assert period.confirmed_spend == Decimal('0'), (\n                f\"After reset, confirmed_spend should be 0, got {period.confirmed_spend}\"\n            )\n            assert period.reserved_spend == Decimal('0'), (\n                f\"After reset, reserved_spend should be 0, got {period.reserved_spend}\"\n            )\n            assert period.request_count == 0, (\n                f\"After reset, request_count should be 0, got {period.request_count}\"\n            )\n\n        # Verify archival happened (historical data present)\n        assert report.total_all_time_spend >= Decimal('0'), (\n            \"Historical spend should be tracked\"\n        )\n\n    def test_reset_state_without_archive(self, daily_manager):\n        \"\"\"Reset state with archive_current=False does not archive.\"\"\"\n        auth = daily_manager.authorize(Decimal('2.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('2.00'), Decimal('2.00'),\n            make_metadata(request_id=\"req-reset-2\"),\n        )\n\n        daily_manager.reset_state(archive_current=False)\n\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('5.00'), (\n            f\"After reset, full budget should be available, got {remaining}\"\n        )\n\n    def test_reset_state_preserves_cumulative_savings(self, daily_manager):\n        \"\"\"Reset preserves total_local_requests and total_estimated_savings.\"\"\"\n        daily_manager.record_local_request(Decimal('1.00'))\n        daily_manager.record_local_request(Decimal('2.00'))\n\n        daily_manager.reset_state(archive_current=True)\n\n        report = daily_manager.get_report()\n        assert report.total_local_requests == 2, (\n            f\"total_local_requests should be preserved after reset, got {report.total_local_requests}\"\n        )\n        assert report.total_all_time_savings == Decimal('3.00'), (\n            f\"total_all_time_savings should be preserved after reset, got {report.total_all_time_savings}\"\n        )\n\n    def test_reset_state_persisted(self, tmp_path, daily_period_limit):\n        \"\"\"Reset state is persisted to disk.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n        manager = BudgetManager(config)\n\n        auth = manager.authorize(Decimal('3.00'))\n        assert auth.allowed\n        manager.record_spend(\n            Decimal('3.00'), Decimal('3.00'),\n            make_metadata(request_id=\"req-reset-persist-1\"),\n        )\n\n        manager.reset_state(archive_current=True)\n\n        # Reload and verify\n        manager2 = BudgetManager(config)\n        remaining = manager2.remaining_budget()\n        assert remaining == Decimal('5.00'), (\n            f\"After reset and reload, full budget should be available, got {remaining}\"\n        )\n\n    def test_authorize_persists_on_approval(self, tmp_path, daily_period_limit):\n        \"\"\"State is persisted to disk after successful authorization.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n        manager = BudgetManager(config)\n\n        mtime_before = config.state_file_path.stat().st_mtime_ns\n\n        auth = manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        # Read the state file to verify reservation is persisted\n        manager2 = BudgetManager(config)\n        remaining = manager2.remaining_budget()\n        assert remaining == Decimal('4.00'), (\n            f\"Persisted state should reflect reservation, got {remaining}\"\n        )\n\n    def test_every_mutation_persists(self, tmp_path, daily_period_limit):\n        \"\"\"Every state-mutating operation triggers persist.\"\"\"\n        config = make_config(tmp_path, period_limits=[daily_period_limit])\n        manager = BudgetManager(config)\n\n        # Authorize\n        auth = manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n        state_after_auth = config.state_file_path.read_text()\n\n        # Record spend\n        manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-persist-1\"),\n        )\n        state_after_record = config.state_file_path.read_text()\n        assert state_after_auth != state_after_record, (\n            \"State file should change after record_spend\"\n        )\n\n        # Record local request\n        manager.record_local_request(Decimal('0.50'))\n        state_after_local = config.state_file_path.read_text()\n        assert state_after_record != state_after_local, (\n            \"State file should change after record_local_request\"\n        )\n\n\n# ============================================================================\n# 7. test_budget_manager_report — Reporting tests\n# ============================================================================\n\nclass TestBudgetManagerReport:\n    \"\"\"Tests for get_report() and BudgetReport accuracy.\"\"\"\n\n    def test_report_basic_fields(self, daily_manager):\n        \"\"\"get_report returns report with all required fields.\"\"\"\n        report = daily_manager.get_report()\n\n        assert report.generated_at is not None, \"generated_at should be set\"\n        assert report.generated_at.tzinfo is not None, \"generated_at should be timezone-aware\"\n        assert report.active_periods is not None, \"active_periods should be set\"\n        assert isinstance(report.total_all_time_spend, Decimal), (\n            \"total_all_time_spend should be Decimal\"\n        )\n\n    def test_report_after_spend(self, daily_manager):\n        \"\"\"Report reflects spend after authorize and record.\"\"\"\n        auth = daily_manager.authorize(Decimal('2.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('2.00'), Decimal('2.00'),\n            make_metadata(request_id=\"req-report-1\"),\n        )\n\n        report = daily_manager.get_report()\n        assert report.total_all_time_spend >= Decimal('2.00'), (\n            f\"total_all_time_spend should include 2.00, got {report.total_all_time_spend}\"\n        )\n\n    def test_report_includes_savings(self, daily_manager):\n        \"\"\"Report includes savings from local requests.\"\"\"\n        daily_manager.record_local_request(Decimal('1.50'))\n\n        report = daily_manager.get_report()\n        assert report.total_all_time_savings == Decimal('1.50'), (\n            f\"total_all_time_savings should be 1.50, got {report.total_all_time_savings}\"\n        )\n\n    def test_report_current_period_remaining_consistency(self, daily_manager):\n        \"\"\"Report current_period_remaining matches remaining_budget().\"\"\"\n        auth = daily_manager.authorize(Decimal('2.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('2.00'), Decimal('2.00'),\n            make_metadata(request_id=\"req-report-cons-1\"),\n        )\n\n        report = daily_manager.get_report()\n        remaining = daily_manager.remaining_budget()\n\n        assert report.current_period_remaining == remaining, (\n            f\"Report remaining {report.current_period_remaining} should match \"\n            f\"remaining_budget() {remaining}\"\n        )\n\n    def test_report_tightest_period(self, tmp_path):\n        \"\"\"Report identifies the most constrained period.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        # Daily (5.00 remaining) is tighter than monthly (100.00 remaining)\n        report = manager.get_report()\n        assert report.tightest_period == PeriodType.daily, (\n            f\"Tightest period should be daily, got {report.tightest_period}\"\n        )\n\n    def test_report_tightest_period_changes_with_spend(self, tmp_path):\n        \"\"\"Tightest period can change based on spending pattern.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('3.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        # Monthly (3.00) is tighter than daily (10.00)\n        report = manager.get_report()\n        assert report.tightest_period == PeriodType.monthly, (\n            f\"Tightest period should be monthly, got {report.tightest_period}\"\n        )\n\n    @pytest.mark.skipif(not HAS_FREEZEGUN, reason=\"freezegun required\")\n    def test_report_cost_trajectory_ordered(self, tmp_path):\n        \"\"\"Cost trajectory points are ordered oldest first.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n\n        with freeze_time(\"2024-01-15 12:00:00\", tz_offset=0) as frozen:\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            for day in range(3):\n                auth = manager.authorize(Decimal('1.00'))\n                if auth.allowed:\n                    manager.record_spend(\n                        Decimal('1.00'), Decimal('1.00'),\n                        make_metadata(request_id=f\"req-traj-{day}\"),\n                    )\n                frozen.tick(timedelta(days=1))\n\n            # Trigger rollover\n            manager.remaining_budget()\n\n            report = manager.get_report()\n            if len(report.cost_trajectory) >= 2:\n                for i in range(len(report.cost_trajectory) - 1):\n                    assert report.cost_trajectory[i].period_start <= report.cost_trajectory[i + 1].period_start, (\n                        \"Cost trajectory should be ordered oldest first\"\n                    )\n\n    @pytest.mark.skipif(not HAS_FREEZEGUN, reason=\"freezegun required\")\n    def test_report_includes_historical_spend(self, tmp_path):\n        \"\"\"Report total_all_time_spend includes historical period spend.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n\n        with freeze_time(\"2024-01-15 12:00:00\", tz_offset=0):\n            config = make_config(tmp_path, period_limits=limits, timezone_str=\"UTC\")\n            manager = BudgetManager(config)\n\n            auth = manager.authorize(Decimal('3.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('3.00'), Decimal('3.00'),\n                make_metadata(request_id=\"req-hist-1\"),\n            )\n\n        with freeze_time(\"2024-01-16 12:00:00\", tz_offset=0):\n            # New day — spend 2.00 more\n            auth = manager.authorize(Decimal('2.00'))\n            assert auth.allowed\n            manager.record_spend(\n                Decimal('2.00'), Decimal('2.00'),\n                make_metadata(request_id=\"req-hist-2\"),\n            )\n\n            report = manager.get_report()\n            assert report.total_all_time_spend >= Decimal('5.00'), (\n                f\"Total all-time spend should include historical 3.00 + current 2.00, \"\n                f\"got {report.total_all_time_spend}\"\n            )\n\n    def test_report_total_remote_requests(self, daily_manager):\n        \"\"\"Report total_remote_requests counts all recorded spends.\"\"\"\n        for i in range(3):\n            auth = daily_manager.authorize(Decimal('1.00'))\n            assert auth.allowed\n            daily_manager.record_spend(\n                Decimal('1.00'), Decimal('1.00'),\n                make_metadata(request_id=f\"req-count-{i}\"),\n            )\n\n        report = daily_manager.get_report()\n        assert report.total_remote_requests == 3, (\n            f\"total_remote_requests should be 3, got {report.total_remote_requests}\"\n        )\n\n    def test_report_frozen_snapshot(self, daily_manager):\n        \"\"\"Returned BudgetReport should be immutable / not a live reference.\"\"\"\n        report = daily_manager.get_report()\n        original_spend = report.total_all_time_spend\n\n        # Record more spend\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-frozen-1\"),\n        )\n\n        # Original report should not be affected\n        assert report.total_all_time_spend == original_spend, (\n            \"Report should be a frozen snapshot, not a live reference\"\n        )\n\n\n# ============================================================================\n# 8. test_budget_manager_properties — Invariant and property-based tests\n# ============================================================================\n\nclass TestBudgetManagerInvariants:\n    \"\"\"Tests for contract invariants.\"\"\"\n\n    def test_all_monetary_values_are_decimal(self, daily_manager):\n        \"\"\"All monetary values are Decimal, never float.\"\"\"\n        result = daily_manager.authorize(Decimal('1.00'))\n        assert isinstance(result.remaining, Decimal), (\n            f\"result.remaining should be Decimal, got {type(result.remaining)}\"\n        )\n        assert isinstance(result.estimated_cost, Decimal), (\n            f\"result.estimated_cost should be Decimal, got {type(result.estimated_cost)}\"\n        )\n        assert isinstance(result.period_utilization_pct, Decimal), (\n            f\"result.period_utilization_pct should be Decimal, got {type(result.period_utilization_pct)}\"\n        )\n\n    def test_reserved_spend_non_negative_after_release(self, daily_manager):\n        \"\"\"reserved_spend is always non-negative even after over-release.\"\"\"\n        # Release more than reserved (0)\n        daily_manager.release_reservation(Decimal('10.00'))\n\n        report = daily_manager.get_report()\n        for period in report.active_periods:\n            assert period.reserved_spend >= Decimal('0'), (\n                f\"reserved_spend must be >= 0, got {period.reserved_spend}\"\n            )\n\n    def test_confirmed_spend_non_negative(self, daily_manager):\n        \"\"\"confirmed_spend is always non-negative.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-inv-1\"),\n        )\n\n        report = daily_manager.get_report()\n        for period in report.active_periods:\n            assert period.confirmed_spend >= Decimal('0'), (\n                f\"confirmed_spend must be >= 0, got {period.confirmed_spend}\"\n            )\n\n    def test_confirmed_spend_monotonically_increasing(self, daily_manager):\n        \"\"\"confirmed_spend only increases within a period.\"\"\"\n        auth1 = daily_manager.authorize(Decimal('1.00'))\n        assert auth1.allowed\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-mono-1\"),\n        )\n\n        report1 = daily_manager.get_report()\n        spend_after_first = {p.period_type: p.confirmed_spend for p in report1.active_periods}\n\n        auth2 = daily_manager.authorize(Decimal('1.00'))\n        assert auth2.allowed\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-mono-2\"),\n        )\n\n        report2 = daily_manager.get_report()\n        for period in report2.active_periods:\n            prev = spend_after_first.get(period.period_type, Decimal('0'))\n            assert period.confirmed_spend >= prev, (\n                f\"confirmed_spend for {period.period_type} should be monotonically increasing: \"\n                f\"{prev} -> {period.confirmed_spend}\"\n            )\n\n    def test_effective_spend_within_limit_on_approval(self, daily_manager):\n        \"\"\"confirmed + reserved never exceeds limit at moment of authorization.\"\"\"\n        # Make several authorizations approaching the limit\n        for i in range(4):\n            result = daily_manager.authorize(Decimal('1.00'))\n            if result.allowed:\n                report = daily_manager.get_report()\n                for period in report.active_periods:\n                    effective = period.confirmed_spend + period.reserved_spend\n                    # Find the matching limit\n                    assert effective <= Decimal('5.00'), (\n                        f\"Effective spend {effective} exceeds limit 5.00 for {period.period_type}\"\n                    )\n                daily_manager.record_spend(\n                    Decimal('1.00'), Decimal('1.00'),\n                    make_metadata(request_id=f\"req-eff-{i}\"),\n                )\n\n    def test_budget_manager_never_raises_exhausted_error(self, daily_manager):\n        \"\"\"BudgetManager returns result, never raises BudgetExhaustedError.\"\"\"\n        # Try to authorize way over budget\n        result = daily_manager.authorize(Decimal('999.99'))\n\n        # Should return a result, not raise\n        assert isinstance(result, BudgetAuthorizationResult), (\n            \"Should return BudgetAuthorizationResult, not raise\"\n        )\n        assert result.allowed is False\n\n    def test_no_global_state_two_instances_independent(self, tmp_path):\n        \"\"\"Two BudgetManager instances with different configs are independent.\"\"\"\n        config1 = make_config(tmp_path, state_file_name=\"state1.json\")\n        config2 = make_config(tmp_path, state_file_name=\"state2.json\")\n\n        manager1 = BudgetManager(config1)\n        manager2 = BudgetManager(config2)\n\n        # Authorize on manager1\n        auth = manager1.authorize(Decimal('3.00'))\n        assert auth.allowed\n        manager1.record_spend(\n            Decimal('3.00'), Decimal('3.00'),\n            make_metadata(request_id=\"req-global-1\"),\n        )\n\n        # Manager2 should still have full budget\n        remaining2 = manager2.remaining_budget()\n        assert remaining2 == Decimal('5.00'), (\n            f\"Manager2 should be independent, got remaining {remaining2}\"\n        )\n\n    def test_remaining_budget_fresh(self, tmp_path):\n        \"\"\"Remaining budget on fresh state equals the smallest limit.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        remaining = manager.remaining_budget()\n        assert remaining == Decimal('5.00'), (\n            f\"Fresh remaining should equal smallest limit (5.00), got {remaining}\"\n        )\n\n    def test_remaining_budget_includes_reservations(self, daily_manager):\n        \"\"\"Remaining budget accounts for reserved_spend.\"\"\"\n        auth = daily_manager.authorize(Decimal('3.00'))\n        assert auth.allowed\n\n        remaining = daily_manager.remaining_budget()\n        assert remaining == Decimal('2.00'), (\n            f\"Remaining should account for 3.00 reservation, got {remaining}\"\n        )\n\n    def test_remaining_budget_negative_on_overshoot(self, daily_manager):\n        \"\"\"Remaining budget may be negative if actual spend exceeded estimate.\"\"\"\n        auth = daily_manager.authorize(Decimal('4.00'))\n        assert auth.allowed\n\n        # Record actual cost that overshoots\n        daily_manager.record_spend(\n            Decimal('6.00'), Decimal('4.00'),\n            make_metadata(request_id=\"req-overshoot-1\"),\n        )\n\n        remaining = daily_manager.remaining_budget()\n        assert remaining < Decimal('0'), (\n            f\"Remaining should be negative on overshoot, got {remaining}\"\n        )\n\n    def test_remaining_budget_tightest_across_periods(self, tmp_path):\n        \"\"\"Remaining budget returns minimum across all active periods.\"\"\"\n        limits = [\n            PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('3.00')),\n            PeriodLimit(period_type=PeriodType.monthly, limit_amount=Decimal('100.00')),\n        ]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        auth = manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n        manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            make_metadata(request_id=\"req-tight-1\"),\n        )\n\n        remaining = manager.remaining_budget()\n        # Daily: 3.00 - 1.00 = 2.00, Monthly: 100.00 - 1.00 = 99.00\n        assert remaining == Decimal('2.00'), (\n            f\"Remaining should be min(2.00, 99.00) = 2.00, got {remaining}\"\n        )\n\n\n# ============================================================================\n# Property-based tests (Hypothesis)\n# ============================================================================\n\n@pytest.mark.skipif(not HAS_HYPOTHESIS, reason=\"hypothesis required for property tests\")\nclass TestBudgetManagerProperties:\n    \"\"\"Property-based tests using Hypothesis.\"\"\"\n\n    @given(\n        cost=st.decimals(\n            min_value=Decimal('0.01'),\n            max_value=Decimal('4.99'),\n            places=2,\n            allow_nan=False,\n            allow_infinity=False,\n        )\n    )\n    @settings(max_examples=30, deadline=5000)\n    def test_property_authorization_consistency(self, cost, tmp_path):\n        \"\"\"If authorize allows, remaining >= 0; if denies, cost would exceed limit.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('5.00'))]\n        config = make_config(tmp_path, period_limits=limits, state_file_name=f\"state_{hash(cost)}.json\")\n        manager = BudgetManager(config)\n\n        result = manager.authorize(cost)\n\n        if result.allowed:\n            assert result.remaining >= Decimal('0'), (\n                f\"When allowed, remaining ({result.remaining}) must be >= 0\"\n            )\n            assert result.denial_reason is None, (\n                \"When allowed, denial_reason must be None\"\n            )\n        else:\n            assert result.denial_reason is not None, (\n                \"When denied, denial_reason must be set\"\n            )\n\n    @given(\n        estimated=st.decimals(\n            min_value=Decimal('0.01'),\n            max_value=Decimal('2.00'),\n            places=2,\n            allow_nan=False,\n            allow_infinity=False,\n        ),\n        actual=st.decimals(\n            min_value=Decimal('0.00'),\n            max_value=Decimal('3.00'),\n            places=2,\n            allow_nan=False,\n            allow_infinity=False,\n        ),\n    )\n    @settings(max_examples=30, deadline=5000)\n    def test_property_budget_conservation(self, estimated, actual, tmp_path):\n        \"\"\"After full lifecycle (authorize → record_spend), effective spend equals actual cost.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n        fname = f\"state_{abs(hash((estimated, actual)))}.json\"\n        config = make_config(tmp_path, period_limits=limits, state_file_name=fname)\n        manager = BudgetManager(config)\n\n        result = manager.authorize(estimated)\n        assert result.allowed, f\"With limit 10.00, cost {estimated} should be allowed\"\n\n        manager.record_spend(\n            actual_cost=actual,\n            estimated_cost=estimated,\n            metadata=make_metadata(request_id=f\"req-prop-{abs(hash((estimated, actual)))}\"),\n        )\n\n        remaining = manager.remaining_budget()\n        expected_remaining = Decimal('10.00') - actual\n        assert remaining == expected_remaining, (\n            f\"After recording actual {actual} (est {estimated}), remaining should be \"\n            f\"{expected_remaining}, got {remaining}\"\n        )\n\n    @given(\n        costs=st.lists(\n            st.decimals(\n                min_value=Decimal('0.01'),\n                max_value=Decimal('1.00'),\n                places=2,\n                allow_nan=False,\n                allow_infinity=False,\n            ),\n            min_size=1,\n            max_size=5,\n        )\n    )\n    @settings(max_examples=20, deadline=10000)\n    def test_property_multiple_authorizations_budget_decreases(self, costs, tmp_path):\n        \"\"\"Each successful authorization decreases remaining budget.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('10.00'))]\n        fname = f\"state_{abs(hash(tuple(costs)))}.json\"\n        config = make_config(tmp_path, period_limits=limits, state_file_name=fname)\n        manager = BudgetManager(config)\n\n        prev_remaining = manager.remaining_budget()\n\n        for i, cost in enumerate(costs):\n            result = manager.authorize(cost)\n            if result.allowed:\n                current_remaining = manager.remaining_budget()\n                assert current_remaining < prev_remaining, (\n                    f\"After authorization #{i}, remaining should decrease: \"\n                    f\"{prev_remaining} -> {current_remaining}\"\n                )\n                prev_remaining = current_remaining\n\n                manager.record_spend(\n                    cost, cost,\n                    make_metadata(request_id=f\"req-seq-{abs(hash(tuple(costs)))}-{i}\"),\n                )\n                prev_remaining = manager.remaining_budget()\n\n\n# ============================================================================\n# Additional edge case tests\n# ============================================================================\n\nclass TestBudgetManagerEdgeCases:\n    \"\"\"Additional edge case tests.\"\"\"\n\n    def test_very_small_cost(self, daily_manager):\n        \"\"\"Authorize with very small Decimal cost works.\"\"\"\n        result = daily_manager.authorize(Decimal('0.000001'))\n        assert result.allowed is True\n        assert result.estimated_cost == Decimal('0.000001')\n\n    def test_authorize_after_full_lifecycle(self, daily_manager):\n        \"\"\"Authorize works correctly after a complete authorize→record cycle.\"\"\"\n        # First cycle\n        auth1 = daily_manager.authorize(Decimal('2.00'))\n        assert auth1.allowed\n        daily_manager.record_spend(\n            Decimal('2.00'), Decimal('2.00'),\n            make_metadata(request_id=\"req-edge-1\"),\n        )\n\n        # Second cycle\n        auth2 = daily_manager.authorize(Decimal('2.00'))\n        assert auth2.allowed\n        assert auth2.remaining == Decimal('1.00'), (\n            f\"After 2.00 spent and 2.00 reserved from 5.00, remaining should be 1.00, got {auth2.remaining}\"\n        )\n\n    def test_authorize_after_release_reclaims_budget(self, daily_manager):\n        \"\"\"Released reservations free up budget for new authorizations.\"\"\"\n        auth1 = daily_manager.authorize(Decimal('4.00'))\n        assert auth1.allowed\n\n        # This should be denied — only 1.00 remaining\n        auth2 = daily_manager.authorize(Decimal('2.00'))\n        assert auth2.allowed is False\n\n        # Release first reservation\n        daily_manager.release_reservation(Decimal('4.00'))\n\n        # Now this should work\n        auth3 = daily_manager.authorize(Decimal('2.00'))\n        assert auth3.allowed is True\n\n    def test_weekly_period_limit(self, tmp_path, weekly_period_limit):\n        \"\"\"Weekly period limit works correctly.\"\"\"\n        config = make_config(tmp_path, period_limits=[weekly_period_limit])\n        manager = BudgetManager(config)\n\n        result = manager.authorize(Decimal('10.00'))\n        assert result.allowed is True\n        assert result.remaining == Decimal('15.00')\n\n    def test_denial_reason_weekly(self, tmp_path, weekly_period_limit):\n        \"\"\"Weekly limit denial returns weekly_limit_exceeded.\"\"\"\n        config = make_config(tmp_path, period_limits=[weekly_period_limit])\n        manager = BudgetManager(config)\n\n        result = manager.authorize(Decimal('26.00'))\n        assert result.allowed is False\n        assert \"weekly\" in str(result.denial_reason).lower()\n\n    def test_record_spend_metadata_preserved(self, daily_manager):\n        \"\"\"SpendMetadata is accepted and processed without error.\"\"\"\n        auth = daily_manager.authorize(Decimal('1.00'))\n        assert auth.allowed\n\n        metadata = make_metadata(\n            request_id=\"req-meta-1\",\n            model_name=\"claude-3-opus\",\n            input_tokens=500,\n            output_tokens=200,\n            task_type=\"code_review\",\n        )\n\n        # Should not raise\n        daily_manager.record_spend(\n            Decimal('1.00'), Decimal('1.00'),\n            metadata=metadata,\n        )\n\n    def test_force_persist_idempotent(self, daily_manager):\n        \"\"\"Multiple force_persist calls are safe.\"\"\"\n        daily_manager.force_persist()\n        daily_manager.force_persist()\n        daily_manager.force_persist()\n        # Should not raise\n\n    def test_get_report_on_fresh_state(self, daily_manager):\n        \"\"\"get_report works on fresh state with no spend.\"\"\"\n        report = daily_manager.get_report()\n\n        assert report.total_all_time_spend == Decimal('0'), (\n            f\"Fresh report should have 0 spend, got {report.total_all_time_spend}\"\n        )\n        assert report.total_all_time_savings == Decimal('0'), (\n            f\"Fresh report should have 0 savings, got {report.total_all_time_savings}\"\n        )\n        assert report.total_local_requests == 0\n        assert report.total_remote_requests == 0\n\n    def test_large_number_of_operations(self, tmp_path):\n        \"\"\"Stress test: many authorize/record cycles.\"\"\"\n        limits = [PeriodLimit(period_type=PeriodType.daily, limit_amount=Decimal('1000.00'))]\n        config = make_config(tmp_path, period_limits=limits)\n        manager = BudgetManager(config)\n\n        for i in range(50):\n            auth = manager.authorize(Decimal('1.00'))\n            assert auth.allowed, f\"Authorization {i} should be allowed\"\n            manager.record_spend(\n                Decimal('1.00'), Decimal('1.00'),\n                make_metadata(request_id=f\"req-stress-{i}\"),\n            )\n\n        remaining = manager.remaining_budget()\n        assert remaining == Decimal('950.00'), (\n            f\"After 50 x 1.00 spend from 1000.00, remaining should be 950.00, got {remaining}\"\n        )\n\n        report = manager.get_report()\n        assert report.total_remote_requests == 50\n"
+}

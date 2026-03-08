@@ -1,0 +1,397 @@
+{
+  "problem": "Running specialized AI tasks via commercial APIs (Claude, GPT, etc.) is expensive at scale and in perpetuity. Teams with recurring, well-defined AI tasks — classification, extraction, summarization — pay the same per-request cost on day 1,000 as on day 1, even though the task is stable and predictable. Local/fine-tuned models alone lack the quality ceiling of frontier models, so teams stay locked in. What's needed is a system that starts with the best frontier model, progressively teaches a local model to replicate its outputs for specific tasks, then adaptively withdraws the expensive dependency — while maintaining quality guarantees and enforcing hard budget limits. The caller should never know or care which model answered; they submit a request and get a response through a single unified interface.",
+  "appetite": "big",
+  "solution_breadboard": {
+    "places": [
+      {
+        "name": "CLI / Library Entry",
+        "description": "The caller's surface: either 'apprentice' CLI command or 'from apprentice import Apprentice' library import. Loads config, boots the system."
+      },
+      {
+        "name": "Config Loader",
+        "description": "Parses and strictly validates apprentice.yaml at startup. Fails fast with clear errors on invalid config. Produces typed Pydantic models for all downstream components."
+      },
+      {
+        "name": "Task Registry",
+        "description": "Holds the set of configured task types, each with name, description, input/output schema, prompt templates, evaluator type, match fields, and confidence thresholds."
+      },
+      {
+        "name": "Unified Interface",
+        "description": "The single async function/class that accepts a task name + input dict and returns a typed result. The caller has no visibility into which model produced the answer."
+      },
+      {
+        "name": "Router",
+        "description": "Decides per-request whether to send to remote, local, or both. Consults the Confidence Engine for current phase and the Sampling Scheduler for whether this request is a coaching sample."
+      },
+      {
+        "name": "Remote API Client",
+        "description": "Abstraction over Anthropic/OpenAI/Google APIs. Handles auth (from env vars), retries with exponential backoff, error recovery. Tracks per-request cost for budget accounting. Supports primary + optional additional providers for training diversity."
+      },
+      {
+        "name": "Local Model Server",
+        "description": "Abstraction over Ollama/vLLM/llama.cpp. Handles model loading, version swapping on promotion, health checks. Returns a clear 'unavailable' status in Phase 1 when no model exists yet."
+      },
+      {
+        "name": "Confidence Engine",
+        "description": "Per-task quality tracker. Maintains a rolling window of comparison-pair samples (configurable size, default 100 pairs). Computes correlation as per-field match rate averaged across match_fields (structured_match) or cosine similarity (semantic_similarity). Detects drift (gradual) and shift (sudden). Derives current phase from correlation score and training example count. Enforces time-based staleness safety net (max_window_age)."
+      },
+      {
+        "name": "Sampling Scheduler",
+        "description": "Given the current correlation from the Confidence Engine, outputs whether THIS request should be a coaching sample (sent to both models). Sampling rate is a continuous function of correlation — configurable as exponential decay, linear, or step. Has a hard minimum floor (e.g., 2%). Forces 100% sampling when confidence drops below coaching_trigger. Reverts to full remote below emergency_threshold."
+      },
+      {
+        "name": "Training Data Store",
+        "description": "Collects and persists input + remote response pairs as training examples. Tracks count per task type. Holds out a configurable percentage as a validation/test set. Signals when batch size threshold is reached."
+      },
+      {
+        "name": "Training Pipeline",
+        "description": "Orchestrates fine-tuning when sufficient examples accumulate. Supports plugin backends: Unsloth/Axolotl (local LoRA), OpenAI fine-tuning API, Hugging Face. For Ollama deployment: manages train → quantize → GGUF conversion → Ollama model registration. Validates new model against held-out test set before promotion. Keeps current model version on failure."
+      },
+      {
+        "name": "Budget Manager",
+        "description": "Enforces hard spending limits: per-task, daily, weekly, monthly caps. Tracks actual remote API spend and estimated local savings. When budget is exhausted: in Phase 1 raises BudgetExhaustedError; in Phase 2/3 forces local-only mode with logged warning. Never exceeds limits."
+      },
+      {
+        "name": "Reporting & Observability",
+        "description": "Exposes current phase per task, confidence scores and trends, sampling frequency history, correlation over time, cost breakdown (remote vs local compute), alerts on quality degradation or budget warnings. Outputs as JSON, CLI summary, or optional webhook."
+      },
+      {
+        "name": "Audit Log",
+        "description": "Structured JSON log of every decision: which model served each request, routing reason, confidence at time of decision, cost incurred, training events, model promotions, phase transitions. Machine-readable audit trail."
+      }
+    ],
+    "affordances": [
+      {
+        "name": "load_config",
+        "description": "Parse and validate apprentice.yaml, produce typed config objects"
+      },
+      {
+        "name": "submit_request",
+        "description": "Caller sends task_name + input_dict through unified interface"
+      },
+      {
+        "name": "route_request",
+        "description": "Router decides: remote-only, local-only, or both (coaching sample)"
+      },
+      {
+        "name": "call_remote",
+        "description": "Send prompt to primary remote API, receive response, track cost"
+      },
+      {
+        "name": "call_remote_additional",
+        "description": "Optionally send to additional providers for training data diversity"
+      },
+      {
+        "name": "call_local",
+        "description": "Send prompt to local model server, receive response"
+      },
+      {
+        "name": "check_local_health",
+        "description": "Verify local model server is running and a model is loaded"
+      },
+      {
+        "name": "evaluate_pair",
+        "description": "Compare local vs remote response using task-specific evaluator, produce per-field scores"
+      },
+      {
+        "name": "update_confidence",
+        "description": "Push new comparison sample into rolling window, recompute correlation and phase"
+      },
+      {
+        "name": "compute_sampling_rate",
+        "description": "Derive current coaching sample frequency from correlation trend"
+      },
+      {
+        "name": "check_staleness",
+        "description": "Verify oldest sample in window hasn't exceeded max_window_age; force coaching if stale"
+      },
+      {
+        "name": "store_training_example",
+        "description": "Persist input + remote response pair to training data store"
+      },
+      {
+        "name": "trigger_fine_tune",
+        "description": "Launch fine-tuning job when batch size threshold met"
+      },
+      {
+        "name": "validate_new_model",
+        "description": "Run held-out test set against new model, check quality threshold"
+      },
+      {
+        "name": "promote_model",
+        "description": "Swap local model server to new fine-tuned version"
+      },
+      {
+        "name": "convert_to_gguf",
+        "description": "Run train → quantize → GGUF → Ollama registration pipeline"
+      },
+      {
+        "name": "check_budget",
+        "description": "Verify spend hasn't exceeded any cap before making remote call"
+      },
+      {
+        "name": "record_spend",
+        "description": "Log cost of remote API call against budget tracker"
+      },
+      {
+        "name": "report_status",
+        "description": "Output current phase, confidence, cost, sampling frequency per task"
+      },
+      {
+        "name": "log_decision",
+        "description": "Write structured audit entry for every routing and training decision"
+      },
+      {
+        "name": "raise_budget_exhausted",
+        "description": "Return BudgetExhaustedError when no budget remains and no local model exists"
+      },
+      {
+        "name": "force_local_only",
+        "description": "Switch to local-only mode when budget exhausted but local model available"
+      },
+      {
+        "name": "escalate_coaching",
+        "description": "Increase sampling to 100% and optionally trigger retraining when anti-correlation detected"
+      }
+    ],
+    "connections": [
+      {
+        "from_place": "CLI / Library Entry",
+        "to_place": "Config Loader",
+        "affordance": "load_config",
+        "description": "Boot sequence starts by parsing config"
+      },
+      {
+        "from_place": "Config Loader",
+        "to_place": "Task Registry",
+        "affordance": "load_config",
+        "description": "Validated config populates task registry"
+      },
+      {
+        "from_place": "CLI / Library Entry",
+        "to_place": "Unified Interface",
+        "affordance": "submit_request",
+        "description": "Caller submits task_name + input through unified interface"
+      },
+      {
+        "from_place": "Unified Interface",
+        "to_place": "Router",
+        "affordance": "route_request",
+        "description": "Interface delegates to router for model selection"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Confidence Engine",
+        "affordance": "update_confidence",
+        "description": "Router queries confidence engine for current phase and correlation"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Sampling Scheduler",
+        "affordance": "compute_sampling_rate",
+        "description": "Router queries scheduler to determine if this request is a coaching sample"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Budget Manager",
+        "affordance": "check_budget",
+        "description": "Router checks budget before routing to remote"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Remote API Client",
+        "affordance": "call_remote",
+        "description": "Phase 1: all requests; Phase 2: all requests; Phase 3: coaching samples only"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Local Model Server",
+        "affordance": "call_local",
+        "description": "Phase 2: all requests (for comparison); Phase 3: all requests"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Local Model Server",
+        "affordance": "check_local_health",
+        "description": "Router verifies local model is available before routing to it"
+      },
+      {
+        "from_place": "Remote API Client",
+        "to_place": "Budget Manager",
+        "affordance": "record_spend",
+        "description": "Every remote call records its cost"
+      },
+      {
+        "from_place": "Remote API Client",
+        "to_place": "Training Data Store",
+        "affordance": "store_training_example",
+        "description": "Every remote response becomes a training example"
+      },
+      {
+        "from_place": "Remote API Client",
+        "to_place": "Remote API Client",
+        "affordance": "call_remote_additional",
+        "description": "Optionally fan out to additional providers for training diversity"
+      },
+      {
+        "from_place": "Confidence Engine",
+        "to_place": "Confidence Engine",
+        "affordance": "evaluate_pair",
+        "description": "When both local and remote respond, engine scores the comparison"
+      },
+      {
+        "from_place": "Confidence Engine",
+        "to_place": "Sampling Scheduler",
+        "affordance": "compute_sampling_rate",
+        "description": "Updated correlation feeds into sampling rate computation"
+      },
+      {
+        "from_place": "Confidence Engine",
+        "to_place": "Confidence Engine",
+        "affordance": "check_staleness",
+        "description": "Periodic check that rolling window hasn't gone stale"
+      },
+      {
+        "from_place": "Confidence Engine",
+        "to_place": "Sampling Scheduler",
+        "affordance": "escalate_coaching",
+        "description": "Anti-correlation triggers coaching escalation"
+      },
+      {
+        "from_place": "Training Data Store",
+        "to_place": "Training Pipeline",
+        "affordance": "trigger_fine_tune",
+        "description": "Batch size threshold reached, trigger fine-tuning"
+      },
+      {
+        "from_place": "Training Pipeline",
+        "to_place": "Training Pipeline",
+        "affordance": "convert_to_gguf",
+        "description": "For Ollama backend: train → quantize → GGUF → register"
+      },
+      {
+        "from_place": "Training Pipeline",
+        "to_place": "Training Pipeline",
+        "affordance": "validate_new_model",
+        "description": "New model validated against held-out test set"
+      },
+      {
+        "from_place": "Training Pipeline",
+        "to_place": "Local Model Server",
+        "affordance": "promote_model",
+        "description": "Validated model swapped into serving"
+      },
+      {
+        "from_place": "Budget Manager",
+        "to_place": "Unified Interface",
+        "affordance": "raise_budget_exhausted",
+        "description": "No budget + no local model = clear error to caller"
+      },
+      {
+        "from_place": "Budget Manager",
+        "to_place": "Router",
+        "affordance": "force_local_only",
+        "description": "Budget exhausted but local model exists = local-only mode"
+      },
+      {
+        "from_place": "Router",
+        "to_place": "Audit Log",
+        "affordance": "log_decision",
+        "description": "Every routing decision is logged with context"
+      },
+      {
+        "from_place": "Training Pipeline",
+        "to_place": "Audit Log",
+        "affordance": "log_decision",
+        "description": "Training events and model promotions are logged"
+      },
+      {
+        "from_place": "Confidence Engine",
+        "to_place": "Audit Log",
+        "affordance": "log_decision",
+        "description": "Phase transitions and confidence changes are logged"
+      },
+      {
+        "from_place": "Reporting & Observability",
+        "to_place": "Confidence Engine",
+        "affordance": "report_status",
+        "description": "Reporting reads from confidence engine for current state"
+      },
+      {
+        "from_place": "Reporting & Observability",
+        "to_place": "Budget Manager",
+        "affordance": "report_status",
+        "description": "Reporting reads from budget manager for cost data"
+      },
+      {
+        "from_place": "Reporting & Observability",
+        "to_place": "Audit Log",
+        "affordance": "report_status",
+        "description": "Reporting reads audit log for history and trends"
+      }
+    ]
+  },
+  "solution_region_map": null,
+  "rabbit_holes": [
+    {
+      "description": "GGUF conversion pipeline complexity: The train → quantize → GGUF → Ollama registration pipeline involves multiple tools (Unsloth, llama.cpp quantize, Ollama create) with version-sensitive compatibility. Format mismatches or tool version skew could consume the entire budget of time.",
+      "status": "patched",
+      "mitigation": "Constrain Milestone 1 to a single tested backend combination (e.g., Unsloth LoRA → llama.cpp GGUF Q4_K_M → Ollama). Pin tool versions. Build the pipeline as a shell-out with clear error messages rather than deep Python integration. Mark other combinations as 'experimental' behind a config flag. Write integration tests against known-good artifacts."
+    },
+    {
+      "description": "Correlation metric is too simple for nuanced tasks: Per-field match rate works for exact-match fields like 'category' but breaks down for free-text, numeric ranges, or partially correct outputs. Teams may lose trust if the confidence score doesn't reflect perceived quality.",
+      "status": "patched",
+      "mitigation": "Ship with three evaluator types (exact_match, structured_match, semantic_similarity) and a 'custom' evaluator hook that accepts a Python callable path in config. Keep the built-in evaluators dead simple and well-documented. Custom evaluators are the escape hatch — they receive (local_output, remote_output, task_config) and return a float 0-1. This way we don't over-engineer the built-in evaluators."
+    },
+    {
+      "description": "Semantic similarity requires an embedding model: The semantic_similarity evaluator needs sentence-transformers and a model like all-MiniLM-L6-v2. This adds a heavyweight ML dependency to a system that otherwise has minimal deps. Loading the model has startup cost and memory impact.",
+      "status": "patched",
+      "mitigation": "Make sentence-transformers an optional dependency — only imported when a task uses semantic_similarity evaluator. Fail fast at config validation time if the evaluator is configured but the dependency isn't installed. Document this clearly. The base system runs with zero ML dependencies if only structured_match/exact_match evaluators are used."
+    },
+    {
+      "description": "Phase 1 budget exhaustion is a dead end: If the budget runs out before enough training examples are collected (phase1_to_phase2 threshold not met), the system has no local model to fall back to. It must return errors for every request until budget resets. This could be days.",
+      "status": "patched",
+      "mitigation": "This is the intended behavior per the interview (raise BudgetExhaustedError). But we should make it highly visible: prominent warning in reporting when budget burn rate projects exhaustion before phase1_to_phase2 threshold, so operators can adjust budgets or thresholds before hitting the wall. Add a 'projected_phase1_completion' metric to reporting."
+    },
+    {
+      "description": "Rolling window staleness in low-traffic deployments: At 2% sampling floor, reaching 100 comparison pairs requires ~5000 requests. Low-traffic tasks might take weeks/months to fill the window, during which the confidence score is based on stale data and the system can't detect drift.",
+      "status": "patched",
+      "mitigation": "Implement the time-based staleness safety net from the interview: if the oldest sample exceeds max_window_age (configurable, default 24h), force a coaching sample regardless of sampling schedule. Also, allow the window to operate with fewer than window_size samples (compute confidence from whatever's available) with a 'low_sample_warning' flag in reporting."
+    },
+    {
+      "description": "Fine-tuning takes hours, blocks Phase 2 graduation: LoRA fine-tuning on even a modest dataset can take 30-60+ minutes on consumer GPUs. During this time, the system is stuck in Phase 1. If fine-tuning fails, the system stays in Phase 1 indefinitely.",
+      "status": "patched",
+      "mitigation": "Fine-tuning runs asynchronously (background process). The system continues serving from remote during training. Training state is persisted so it survives restarts. On failure: log error, keep current state, retry on next batch accumulation. Add training_status to reporting (idle / in_progress / failed / succeeded)."
+    },
+    {
+      "description": "Prompt template design determines training quality: The same prompt template is used for both remote and local models, but they may have very different instruction-following capabilities. A prompt optimized for Claude may produce poor results when replayed against a fine-tuned Llama 8B.",
+      "status": "patched",
+      "mitigation": "Allow separate prompt_template and local_prompt_template in task config. Default to using the same template. Document that prompt engineering for the local model is a key tuning lever. The training pipeline stores the prompt used with each example so the local model is fine-tuned on prompts it will actually see."
+    },
+    {
+      "description": "Scope creep into a full MLOps platform: The spec touches training, serving, evaluation, versioning, budgeting, and reporting. Each of these is a product in its own right. Without firm boundaries the project balloons.",
+      "status": "patched",
+      "mitigation": "The phased delivery approach (Milestone 1: cold-start pipeline, Milestone 2: adaptive behavior, Milestone 3: governance) constrains scope per cycle. Each milestone has a clear 'done' definition. Features not in the current milestone go to the backlog, not into the code. The no-gos list is the boundary."
+    },
+    {
+      "description": "Model validation before promotion can't guarantee production quality: The held-out test set is drawn from historical remote responses. If the task's input distribution shifts (new ticket categories, new entity types), the test set becomes unrepresentative and a model could pass validation but fail in production.",
+      "status": "patched",
+      "mitigation": "The ongoing Phase 3 sampling is the real safety net — it continuously monitors production quality. The held-out test set is a pre-promotion gate, not the only quality check. Document that the test set should be periodically refreshed (future enhancement). The emergency_threshold → revert-to-remote behavior is the hard safety net."
+    }
+  ],
+  "no_gos": [
+    "No ensembling or merging of local and remote outputs — always one-or-the-other, never blended",
+    "No concurrent/parallel request handling — one request at a time, casual pace",
+    "No runtime config hot-reloading — restart required for config changes",
+    "No general-purpose model training framework — only the specific distillation lifecycle",
+    "No chatbot or conversational AI support — structured, defined task operations only",
+    "No model marketplace — one local model per task type, period",
+    "No real-time latency optimization — seconds per response is acceptable",
+    "No request queuing when budget is exhausted in Phase 1 — raise BudgetExhaustedError honestly",
+    "No round-robin serving across multiple remote providers — primary provider serves all live requests",
+    "No GPU or API key requirement for tests — all external boundaries mocked",
+    "No dependency on Pact or any parent framework — fully standalone"
+  ],
+  "fit_check": null,
+  "status": "shaped"
+}

@@ -1,0 +1,52 @@
+[
+  {
+    "ambiguity": "",
+    "decision": "Composition root pattern for dependency wiring",
+    "rationale": "The Apprentice class serves as the composition root, constructing all components and injecting dependencies in its constructor. This avoids global state, makes all dependencies explicit, and enables full testability by allowing tests to inject mocks at any boundary. No service locator or DI framework needed \u2014 just constructor injection."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Evaluators are a separate leaf component from the Confidence Engine",
+    "rationale": "Evaluators are stateless, pure functions that compare two responses. The Confidence Engine is stateful (rolling windows, phase tracking). Separating them allows evaluators to be reused by both the Confidence Engine (runtime quality tracking) and the Model Validator (pre-promotion validation) without circular dependencies."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Training Data Store is separate from Fine-Tuning Orchestrator",
+    "rationale": "Data collection happens on every remote API call (high frequency), while fine-tuning is triggered infrequently (when batch size threshold is met). Separating them allows the data store to be simple append-only persistence while the orchestrator handles complex multi-step pipelines (train \u2192 quantize \u2192 GGUF \u2192 register). Different failure modes and testing strategies."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Router is a dedicated component, not embedded in the Unified Interface",
+    "rationale": "The routing decision is the most complex logic in the system \u2014 it consults phase, confidence, sampling, and budget state. Isolating it as its own component makes it independently testable with mock dependencies. The Unified Interface stays thin (delegate to router, format response), and the Router stays focused (make the decision, execute it)."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Semantic similarity evaluator loaded lazily with optional dependency",
+    "rationale": "sentence-transformers is a heavy dependency (torch, transformers, etc.) that shouldn't be required for users who only use structured_match or exact_match evaluators. The SemanticSimilarityEvaluator attempts to import sentence-transformers on first use and raises a clear error if not installed. This aligns with the 'minimal dependencies in core, extras for backends' approach. Install via pip install apprentice[semantic]."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Budget state and rolling window state persisted as JSON files",
+    "rationale": "The system needs to survive restarts without losing budget tracking or confidence history. JSON files are the simplest persistence mechanism that requires no additional dependencies (no SQLite, no Redis). Single-threaded access means no concurrency concerns. Files are small (budget state is a few KB, rolling window is ~100 entries per task). Aligns with 'prefer stdlib' principle."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Phase 2 returns remote response to caller, Phase 3 returns local response",
+    "rationale": "In Phase 2 the local model is still learning \u2014 the remote response is more reliable and should be returned to the caller. The local model's response is collected only for evaluation/comparison. In Phase 3 the local model is trusted \u2014 its response is returned, and remote responses (when sampled) are used purely for quality monitoring. This ensures the caller always gets the best available response for the current confidence level."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Fine-tuning orchestrator uses a plugin/protocol pattern for backends",
+    "rationale": "Different fine-tuning backends (Unsloth, OpenAI API, HuggingFace) have vastly different interfaces, dependencies, and deployment models. A FineTuneBackend protocol defines the contract (train, get_status, get_artifact_path), and each backend is a separate implementation class. Only the configured backend is imported/instantiated. This keeps heavy ML dependencies out of core and allows adding new backends without modifying existing code."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Audit log uses Python stdlib logging with JSON formatter rather than a custom file writer",
+    "rationale": "Stdlib logging provides rotation, multiple handlers (file + stderr), configurability, and is well-understood. A JSON formatter on a dedicated logger ('apprentice.audit') writes structured entries to a file. This integrates with existing log infrastructure if the user has one, while defaulting to simple file output. The audit log component wraps this with typed methods (log_routing_decision, log_phase_transition, etc.) for type safety."
+  },
+  {
+    "ambiguity": "",
+    "decision": "Decomposition groups config_loader, task_registry, and data_models under a parent config_and_registry component",
+    "rationale": "These three are foundational \u2014 nearly every other component depends on at least one of them. Grouping them makes the dependency graph cleaner (components depend on 'config_and_registry' rather than three separate foundational pieces). They are still separate leaf components for implementation purposes, but logically they form the system's type foundation and configuration layer."
+  }
+]

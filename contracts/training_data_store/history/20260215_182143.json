@@ -1,0 +1,728 @@
+{
+  "component_id": "training_data_store",
+  "name": "Training Data Store",
+  "description": "Collects and persists training examples (input + remote response pairs) per task type. Stores as JSON-lines files in a configurable directory. Tracks example count per task. Automatically holds out a configurable percentage (default 10%) as a validation/test set (deterministic split based on SHA-256 hash of input for reproducibility). Signals when batch size threshold (fine_tune_batch_size) is reached for a task, triggering fine-tuning. Supports appending new examples without rewriting existing data. Provides iterators for training set and validation set separately. Designed as a typing.Protocol with a concrete filesystem-backed implementation. Storage layout: one JSONL file per task type at {base_dir}/{task_type}.jsonl, plus {base_dir}/_counts.json for fast count lookups reconciled on startup.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TrainingExample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "input",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The original input text sent to the remote model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "Input must be a non-empty string."
+            }
+          ]
+        },
+        {
+          "name": "output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response text received from the remote model.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "Output must be a non-empty string."
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier that this example belongs to. Used to partition storage into per-task JSONL files. Must be a valid filesystem-safe string.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must contain only alphanumeric characters, hyphens, and underscores."
+            },
+            {
+              "kind": "length",
+              "expression": "1 <= len(value) <= 128",
+              "error_message": "task_type must be between 1 and 128 characters."
+            }
+          ]
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 datetime string indicating when this example was captured. Serialized as string for JSONL compatibility; parsed as datetime internally.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+              "error_message": "Timestamp must be in ISO 8601 format (e.g., 2024-01-15T10:30:00Z)."
+            }
+          ]
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional metadata dictionary for additional context (e.g., model name, latency, token count). All values must be JSON-serializable.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single training example record representing an input/output pair captured from a remote API response, persisted as one line in a JSONL file."
+    },
+    {
+      "name": "TrainingDataStoreConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "base_dir",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the directory where JSONL files and _counts.json are stored. Will be auto-created (including parents) if it does not exist. Must be a valid path string.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "base_dir must be a non-empty path string."
+            }
+          ]
+        },
+        {
+          "name": "holdout_percentage",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.10",
+          "description": "Fraction of examples to hold out for the validation/test set. Split is computed at read time via SHA-256 hash of the input field, so changing this value does not require data migration.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "holdout_percentage must be between 0.0 and 1.0 inclusive."
+            }
+          ]
+        },
+        {
+          "name": "fine_tune_batch_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Number of training-set examples (not total, not validation) required before signaling batch_ready=True from add_example(). Must be a positive integer.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0",
+              "error_message": "fine_tune_batch_size must be a positive integer."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the filesystem-backed TrainingDataStore implementation. Validated strictly at construction time — fails fast on invalid config per project standards."
+    },
+    {
+      "name": "AddExampleResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type of the example that was just added.",
+          "validators": []
+        },
+        {
+          "name": "example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of examples stored for this task type (training + validation) after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "example_count must be at least 1 after a successful add."
+            }
+          ]
+        },
+        {
+          "name": "training_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of examples in the training split for this task type after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_count must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "validation_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of examples in the validation split for this task type after the addition.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "validation_count must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "batch_ready",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True when the training-set count has reached or exceeded fine_tune_batch_size. Signals that a fine-tuning job should be initiated. Will be True on every add once threshold is crossed (not just the first crossing), so callers must track whether they have already acted on this signal.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Return value from add_example(), providing updated counts and a batch-ready signal. The batch_ready flag is the explicit signaling mechanism for fine-tuning orchestration — no hidden callbacks or side-channel communication."
+    },
+    {
+      "name": "ExampleCount",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type these counts apply to.",
+          "validators": []
+        },
+        {
+          "name": "total",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of examples stored for this task type.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "total must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "training",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of examples in the training split.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training count must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "validation",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of examples in the validation split.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "validation count must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Summary of example counts for a specific task type, broken down by split."
+    },
+    {
+      "name": "TrainingExampleList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TrainingExample",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of TrainingExample objects, returned by iterator-consuming callers or used in batch operations."
+    },
+    {
+      "name": "TaskTypeList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "str",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of task type identifier strings."
+    },
+    {
+      "name": "SplitKind",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "training",
+        "validation"
+      ],
+      "inner_types": [],
+      "description": "Enumeration of dataset split types used for internal split computation."
+    }
+  ],
+  "functions": [
+    {
+      "name": "add_example",
+      "description": "Appends a single training example to the JSONL file for its task type. The example is serialized as one JSON line and appended to {base_dir}/{task_type}.jsonl. Updates the _counts.json metadata file atomically. Returns an AddExampleResult indicating updated counts and whether the fine-tune batch size threshold has been reached for the training split. The example is appended without rewriting existing data. The deterministic split assignment (training vs. validation) is computed via SHA-256 hash of the input field.",
+      "inputs": [
+        {
+          "name": "example",
+          "type_ref": "TrainingExample",
+          "required": true,
+          "default": "",
+          "description": "The training example to persist. Must pass all field validations (non-empty input/output, valid task_type format, ISO 8601 timestamp).",
+          "validators": []
+        }
+      ],
+      "output_type": "AddExampleResult",
+      "error_cases": [
+        {
+          "name": "validation_error",
+          "condition": "The TrainingExample fails Pydantic field validation (empty input, empty output, invalid task_type format, invalid timestamp format).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Pydantic validation error message describing which field(s) failed."
+          }
+        },
+        {
+          "name": "io_error_write",
+          "condition": "The filesystem write to the JSONL file fails (disk full, permission denied, path too long, etc.).",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The JSONL file path that could not be written.",
+            "detail": "OS-level error description."
+          }
+        },
+        {
+          "name": "io_error_counts",
+          "condition": "The _counts.json metadata file cannot be read or written during count update.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "Path to _counts.json.",
+            "detail": "OS-level error description."
+          }
+        },
+        {
+          "name": "serialization_error",
+          "condition": "The example metadata dict contains values that are not JSON-serializable.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Description of the non-serializable value."
+          }
+        }
+      ],
+      "preconditions": [
+        "TrainingDataStoreConfig has been validated and the store has been initialized.",
+        "example.input is a non-empty string.",
+        "example.output is a non-empty string.",
+        "example.task_type matches the pattern ^[a-zA-Z0-9_\\-]+$ and is 1-128 characters.",
+        "example.timestamp is a valid ISO 8601 datetime string."
+      ],
+      "postconditions": [
+        "The example has been appended as exactly one new JSON line at the end of {base_dir}/{task_type}.jsonl.",
+        "The JSONL file for the task type exists on disk.",
+        "The _counts.json file has been updated to reflect the new total count for the task type.",
+        "The returned AddExampleResult.example_count equals the previous total count + 1.",
+        "The returned AddExampleResult.training_count + AddExampleResult.validation_count == AddExampleResult.example_count.",
+        "AddExampleResult.batch_ready is True if and only if training_count >= fine_tune_batch_size.",
+        "No existing lines in the JSONL file have been modified or rewritten.",
+        "base_dir directory has been auto-created if it did not exist."
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "{base_dir}/{task_type}.jsonl",
+          "description": "Appends one JSON line to the JSONL file for the given task type."
+        },
+        {
+          "kind": "writes_file",
+          "target": "{base_dir}/_counts.json",
+          "description": "Updates the count metadata file with the new total for the task type."
+        },
+        {
+          "kind": "logging",
+          "target": "structured_log",
+          "description": "Logs the addition event with task_type, example_count, and batch_ready status as structured JSON."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "iter_training_examples",
+      "description": "Returns an iterator over all training-split examples for the given task type. Reads from {base_dir}/{task_type}.jsonl and yields only examples whose SHA-256 hash-based split assignment is 'training' (i.e., hash modulo 10000 >= holdout_percentage * 10000). Corrupt JSONL lines are skipped with a logged warning. The split is computed at read time, so changing holdout_percentage in config will change which examples appear in training vs. validation without data migration.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier to iterate training examples for. Must match the format ^[a-zA-Z0-9_\\-]+$.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must contain only alphanumeric characters, hyphens, and underscores."
+            }
+          ]
+        }
+      ],
+      "output_type": "TrainingExampleList",
+      "error_cases": [
+        {
+          "name": "invalid_task_type",
+          "condition": "The task_type string does not match the required format.",
+          "error_type": "ValueError",
+          "error_data": {
+            "task_type": "The invalid task_type value.",
+            "detail": "task_type must match ^[a-zA-Z0-9_\\-]+$."
+          }
+        },
+        {
+          "name": "io_error_read",
+          "condition": "The JSONL file exists but cannot be read (permission denied, I/O error).",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The JSONL file path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "TrainingDataStoreConfig has been validated and the store has been initialized.",
+        "task_type matches the pattern ^[a-zA-Z0-9_\\-]+$."
+      ],
+      "postconditions": [
+        "All returned examples have split assignment 'training' based on SHA-256 hash of example.input.",
+        "The split computation is deterministic: same input always yields same split assignment.",
+        "Corrupt JSONL lines have been skipped and logged as warnings, not raised as errors.",
+        "No data has been written or modified on disk.",
+        "If the JSONL file does not exist for the task_type, an empty iterator is returned."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/{task_type}.jsonl",
+          "description": "Reads the JSONL file line by line, deserializing each line as a TrainingExample."
+        },
+        {
+          "kind": "logging",
+          "target": "structured_log",
+          "description": "Logs a warning for each corrupt JSONL line encountered, including line number and error detail."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "iter_validation_examples",
+      "description": "Returns an iterator over all validation-split examples for the given task type. Reads from {base_dir}/{task_type}.jsonl and yields only examples whose SHA-256 hash-based split assignment is 'validation' (i.e., hash modulo 10000 < holdout_percentage * 10000). Corrupt JSONL lines are skipped with a logged warning. The split is computed at read time.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier to iterate validation examples for. Must match the format ^[a-zA-Z0-9_\\-]+$.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must contain only alphanumeric characters, hyphens, and underscores."
+            }
+          ]
+        }
+      ],
+      "output_type": "TrainingExampleList",
+      "error_cases": [
+        {
+          "name": "invalid_task_type",
+          "condition": "The task_type string does not match the required format.",
+          "error_type": "ValueError",
+          "error_data": {
+            "task_type": "The invalid task_type value.",
+            "detail": "task_type must match ^[a-zA-Z0-9_\\-]+$."
+          }
+        },
+        {
+          "name": "io_error_read",
+          "condition": "The JSONL file exists but cannot be read (permission denied, I/O error).",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The JSONL file path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "TrainingDataStoreConfig has been validated and the store has been initialized.",
+        "task_type matches the pattern ^[a-zA-Z0-9_\\-]+$."
+      ],
+      "postconditions": [
+        "All returned examples have split assignment 'validation' based on SHA-256 hash of example.input.",
+        "The split computation is deterministic: same input always yields same split assignment.",
+        "Corrupt JSONL lines have been skipped and logged as warnings, not raised as errors.",
+        "No data has been written or modified on disk.",
+        "If the JSONL file does not exist for the task_type, an empty iterator is returned.",
+        "The set of validation examples and training examples for the same task_type are disjoint and their union is the full set of valid examples."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/{task_type}.jsonl",
+          "description": "Reads the JSONL file line by line, deserializing each line as a TrainingExample."
+        },
+        {
+          "kind": "logging",
+          "target": "structured_log",
+          "description": "Logs a warning for each corrupt JSONL line encountered, including line number and error detail."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_example_count",
+      "description": "Returns the total, training, and validation example counts for a specific task type. Uses the cached _counts.json for the total count and computes the training/validation split counts. If the task type has no stored examples, returns an ExampleCount with all counts at zero.",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier to get counts for. Must match the format ^[a-zA-Z0-9_\\-]+$.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-zA-Z0-9_\\-]+$",
+              "error_message": "task_type must contain only alphanumeric characters, hyphens, and underscores."
+            }
+          ]
+        }
+      ],
+      "output_type": "ExampleCount",
+      "error_cases": [
+        {
+          "name": "invalid_task_type",
+          "condition": "The task_type string does not match the required format.",
+          "error_type": "ValueError",
+          "error_data": {
+            "task_type": "The invalid task_type value.",
+            "detail": "task_type must match ^[a-zA-Z0-9_\\-]+$."
+          }
+        },
+        {
+          "name": "io_error_counts",
+          "condition": "The _counts.json metadata file cannot be read.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "Path to _counts.json.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "TrainingDataStoreConfig has been validated and the store has been initialized.",
+        "task_type matches the pattern ^[a-zA-Z0-9_\\-]+$."
+      ],
+      "postconditions": [
+        "ExampleCount.total == ExampleCount.training + ExampleCount.validation.",
+        "ExampleCount.task_type == the input task_type.",
+        "If the task_type has never been seen, all counts are 0.",
+        "Counts are consistent with the current _counts.json and the deterministic split logic."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/_counts.json",
+          "description": "Reads the cached count metadata for fast total count lookup."
+        },
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/{task_type}.jsonl",
+          "description": "May read the JSONL file to compute accurate training/validation split counts if not cached."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_task_types",
+      "description": "Returns a list of all task type identifiers that have at least one stored example. Derived from the keys in _counts.json or by scanning {base_dir} for *.jsonl files (excluding _counts.json). The returned list is sorted alphabetically for deterministic ordering.",
+      "inputs": [],
+      "output_type": "TaskTypeList",
+      "error_cases": [
+        {
+          "name": "io_error_read",
+          "condition": "The base_dir cannot be listed or _counts.json cannot be read.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The base_dir or _counts.json path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "TrainingDataStoreConfig has been validated and the store has been initialized."
+      ],
+      "postconditions": [
+        "Every returned task_type string matches ^[a-zA-Z0-9_\\-]+$.",
+        "Every returned task_type has at least one example stored in its JSONL file.",
+        "The returned list is sorted in ascending alphabetical order.",
+        "The returned list contains no duplicates."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/_counts.json",
+          "description": "Reads the count metadata to enumerate known task types."
+        },
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/",
+          "description": "May scan the base directory for .jsonl files as a fallback or reconciliation step."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "initialize",
+      "description": "Initializes the Training Data Store with the given configuration. Creates the base_dir directory (including parents) if it does not exist. Loads or reconciles _counts.json against actual JSONL files on disk. Must be called before any other method. Fails fast on invalid configuration per project standards.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "TrainingDataStoreConfig",
+          "required": true,
+          "default": "",
+          "description": "The validated configuration for the store. Pydantic validation runs at model construction time.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "config_validation_error",
+          "condition": "The TrainingDataStoreConfig fails Pydantic validation (invalid base_dir, holdout_percentage out of range, fine_tune_batch_size <= 0).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Pydantic validation error message."
+          }
+        },
+        {
+          "name": "io_error_mkdir",
+          "condition": "The base_dir cannot be created (permission denied, invalid path, etc.).",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The base_dir path.",
+            "detail": "OS-level error description."
+          }
+        },
+        {
+          "name": "io_error_reconcile",
+          "condition": "A JSONL file exists but cannot be read during count reconciliation.",
+          "error_type": "IOError",
+          "error_data": {
+            "path": "The unreadable JSONL file path.",
+            "detail": "OS-level error description."
+          }
+        }
+      ],
+      "preconditions": [
+        "config passes all Pydantic validation (valid base_dir, holdout_percentage in [0.0, 1.0], fine_tune_batch_size > 0)."
+      ],
+      "postconditions": [
+        "base_dir exists on the filesystem.",
+        "_counts.json exists at {base_dir}/_counts.json (created empty if not present).",
+        "_counts.json has been reconciled: any task_type with a JSONL file but missing from _counts.json has been re-counted and added.",
+        "The store is ready to accept add_example() calls and serve iterators.",
+        "If _counts.json was corrupt, it has been rebuilt from JSONL files and a warning has been logged."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "{base_dir}/",
+          "description": "Creates the base directory and any missing parent directories."
+        },
+        {
+          "kind": "writes_file",
+          "target": "{base_dir}/_counts.json",
+          "description": "Creates or updates the count metadata file during reconciliation."
+        },
+        {
+          "kind": "reads_file",
+          "target": "{base_dir}/",
+          "description": "Scans the base directory for existing JSONL files during reconciliation."
+        },
+        {
+          "kind": "logging",
+          "target": "structured_log",
+          "description": "Logs initialization status, reconciliation actions, and any warnings about corrupt files."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "For any task_type, the set of training examples and validation examples are disjoint and their union equals all valid examples in the JSONL file.",
+    "The split assignment for an example is deterministic and depends solely on SHA-256(example.input.encode('utf-8')): last 4 bytes as unsigned int, modulo 10000, compared against holdout_percentage * 10000. Values < threshold are validation; values >= threshold are training.",
+    "ExampleCount.total == ExampleCount.training + ExampleCount.validation for every task_type at all times.",
+    "_counts.json total for a task_type always equals the number of valid (non-corrupt) JSONL lines in {base_dir}/{task_type}.jsonl after reconciliation.",
+    "JSONL files are append-only: existing lines are never modified, reordered, or deleted by store operations.",
+    "Each line in a JSONL file is a complete, independent JSON object representing one TrainingExample.",
+    "No global mutable state: all state is scoped to the store instance and its filesystem backing.",
+    "All configuration is validated at initialization time; runtime operations never silently default on missing or invalid config.",
+    "AddExampleResult.batch_ready is True if and only if training_count >= config.fine_tune_batch_size.",
+    "The same input string always maps to the same split (training or validation) for a given holdout_percentage, regardless of when the example was added or what other examples exist.",
+    "Task types returned by get_task_types() are always sorted alphabetically and contain no duplicates.",
+    "Corrupt JSONL lines are never yielded by iterators; they are skipped with structured log warnings including line number and parse error detail."
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0",
+    "pyyaml"
+  ]
+}

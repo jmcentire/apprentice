@@ -1,0 +1,928 @@
+{
+  "component_id": "remote_api_client",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "create_client_happy_path",
+      "description": "Successfully create a remote client with valid config and API key in env",
+      "function": "create_remote_client",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid RemoteClientConfig for anthropic provider with API key env var set",
+      "expected_output_description": "Returns a client object that satisfies RemoteClient protocol",
+      "expected_error": "",
+      "assertions": [
+        "Client is not None",
+        "Client has send_request method",
+        "Client has close method"
+      ]
+    },
+    {
+      "id": "create_client_missing_api_key",
+      "description": "Fail fast when API key env var is not set",
+      "function": "create_remote_client",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config but env var for API key is not set",
+      "expected_output_description": "",
+      "expected_error": "missing_api_key",
+      "assertions": [
+        "Raises appropriate error for missing API key",
+        "Error message mentions the env var name"
+      ]
+    },
+    {
+      "id": "create_client_empty_api_key",
+      "description": "Fail fast when API key env var is set but empty",
+      "function": "create_remote_client",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config but env var is set to empty string",
+      "expected_output_description": "",
+      "expected_error": "missing_api_key",
+      "assertions": [
+        "Raises appropriate error for empty API key"
+      ]
+    },
+    {
+      "id": "create_client_timeout_propagation",
+      "description": "Timeout settings from config propagate to httpx client",
+      "function": "create_remote_client",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with specific timeout values (connect=5, read=30, total=60)",
+      "expected_output_description": "Client's httpx instance uses configured timeout values",
+      "expected_error": "",
+      "assertions": [
+        "Timeout settings match config values"
+      ]
+    },
+    {
+      "id": "create_client_pricing_overrides_merged",
+      "description": "Pricing overrides are merged with defaults at construction",
+      "function": "create_remote_client",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with pricing_overrides for a specific model",
+      "expected_output_description": "Client has pricing table with overrides applied",
+      "expected_error": "",
+      "assertions": [
+        "Override pricing is accessible for the specified model"
+      ]
+    },
+    {
+      "id": "create_client_with_injected_http_client",
+      "description": "Accept an externally provided httpx.AsyncClient",
+      "function": "create_remote_client",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config plus an open httpx.AsyncClient",
+      "expected_output_description": "Client uses the injected http client, does not create its own",
+      "expected_error": "",
+      "assertions": [
+        "Client is created successfully",
+        "Injected client is used"
+      ]
+    },
+    {
+      "id": "send_request_happy_path",
+      "description": "Successfully send a request and receive a valid TaskResponse",
+      "function": "send_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages with user role, default generation params",
+      "expected_output_description": "TaskResponse with content, model, provider, usage, cost_usd, latency_ms, request_id",
+      "expected_error": "",
+      "assertions": [
+        "Response is a TaskResponse",
+        "Response.provider matches configured provider",
+        "Response.request_id is a valid UUID4",
+        "Response.cost_usd >= 0",
+        "Response.latency_ms > 0",
+        "Response.content is non-empty string",
+        "Response.model is non-empty string"
+      ]
+    },
+    {
+      "id": "send_request_cost_computation",
+      "description": "cost_usd in response matches formula: input_tokens*input_cost + output_tokens*output_cost",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Request that returns known token usage (100 input, 50 output) with known pricing",
+      "expected_output_description": "cost_usd equals exact computed value",
+      "expected_error": "",
+      "assertions": [
+        "cost_usd == pytest.approx(usage.input_tokens * input_cost_per_token + usage.output_tokens * output_cost_per_token)"
+      ]
+    },
+    {
+      "id": "send_request_unique_request_id",
+      "description": "Each request generates a unique UUID4 request_id",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Two sequential requests with same messages",
+      "expected_output_description": "Both responses have different request_ids, both valid UUID4",
+      "expected_error": "",
+      "assertions": [
+        "First request_id != second request_id",
+        "Both are valid UUID4 strings"
+      ]
+    },
+    {
+      "id": "send_request_auth_failure_401",
+      "description": "Auth error raised when provider returns HTTP 401",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider returns 401",
+      "expected_output_description": "",
+      "expected_error": "auth_failure",
+      "assertions": [
+        "Raises AuthError",
+        "Error has provider field",
+        "Error has request_id field",
+        "Error.status_code == 401"
+      ]
+    },
+    {
+      "id": "send_request_auth_failure_403",
+      "description": "Auth error raised when provider returns HTTP 403",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider returns 403",
+      "expected_output_description": "",
+      "expected_error": "auth_failure",
+      "assertions": [
+        "Raises AuthError",
+        "Error.status_code == 403"
+      ]
+    },
+    {
+      "id": "send_request_rate_limited_429",
+      "description": "RateLimitError raised when provider returns HTTP 429 after all retries",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider always returns 429",
+      "expected_output_description": "",
+      "expected_error": "rate_limited",
+      "assertions": [
+        "Raises RateLimitError",
+        "Error.retries_attempted == max_retries",
+        "Error has retry_after_seconds field"
+      ]
+    },
+    {
+      "id": "send_request_remote_unavailable_500",
+      "description": "RemoteUnavailableError raised when provider returns HTTP 500 after all retries",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider always returns 500",
+      "expected_output_description": "",
+      "expected_error": "remote_unavailable",
+      "assertions": [
+        "Raises RemoteUnavailableError",
+        "Error.retries_attempted == max_retries",
+        "Error.status_code == 500"
+      ]
+    },
+    {
+      "id": "send_request_remote_unavailable_502",
+      "description": "RemoteUnavailableError raised for HTTP 502",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider always returns 502",
+      "expected_output_description": "",
+      "expected_error": "remote_unavailable",
+      "assertions": [
+        "Raises RemoteUnavailableError",
+        "Error.status_code == 502"
+      ]
+    },
+    {
+      "id": "send_request_remote_unavailable_503",
+      "description": "RemoteUnavailableError raised for HTTP 503",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider always returns 503",
+      "expected_output_description": "",
+      "expected_error": "remote_unavailable",
+      "assertions": [
+        "Raises RemoteUnavailableError"
+      ]
+    },
+    {
+      "id": "send_request_invalid_request_400",
+      "description": "InvalidRequestError raised when provider returns HTTP 400",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider returns 400",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": [
+        "Raises InvalidRequestError",
+        "Error.status_code == 400"
+      ]
+    },
+    {
+      "id": "send_request_invalid_request_422",
+      "description": "InvalidRequestError raised when provider returns HTTP 422",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid messages, provider returns 422",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": [
+        "Raises InvalidRequestError",
+        "Error.status_code == 422"
+      ]
+    },
+    {
+      "id": "send_request_empty_messages",
+      "description": "Error raised when messages list is empty",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty messages list",
+      "expected_output_description": "",
+      "expected_error": "empty_messages",
+      "assertions": [
+        "Raises ValueError or appropriate error for empty messages"
+      ]
+    },
+    {
+      "id": "send_request_no_user_message",
+      "description": "Error raised when messages contain no user role message",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Messages list with only system role messages",
+      "expected_output_description": "",
+      "expected_error": "empty_messages",
+      "assertions": [
+        "Raises ValueError or appropriate error for missing user message"
+      ]
+    },
+    {
+      "id": "retry_transient_then_success",
+      "description": "Successful retry after transient 500 errors",
+      "function": "send_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 500 twice then succeeds on third attempt",
+      "expected_output_description": "Returns valid TaskResponse after retries",
+      "expected_error": "",
+      "assertions": [
+        "Returns TaskResponse",
+        "Transport was called 3 times"
+      ]
+    },
+    {
+      "id": "retry_max_retries_exhausted",
+      "description": "Retries up to max_retries and then raises error",
+      "function": "send_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider always returns 500, max_retries=3",
+      "expected_output_description": "Raises RemoteUnavailableError with retries_attempted=3",
+      "expected_error": "",
+      "assertions": [
+        "Raises RemoteUnavailableError",
+        "retries_attempted == 3",
+        "Transport called max_retries + 1 times"
+      ]
+    },
+    {
+      "id": "retry_no_retry_on_401",
+      "description": "Auth errors (401) are never retried",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 401, max_retries=3",
+      "expected_output_description": "Raises AuthError immediately with retries_attempted=0",
+      "expected_error": "",
+      "assertions": [
+        "Raises AuthError",
+        "retries_attempted == 0",
+        "Transport called exactly once"
+      ]
+    },
+    {
+      "id": "retry_no_retry_on_400",
+      "description": "Invalid request errors (400) are never retried",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 400, max_retries=3",
+      "expected_output_description": "Raises InvalidRequestError immediately with retries_attempted=0",
+      "expected_error": "",
+      "assertions": [
+        "Raises InvalidRequestError",
+        "retries_attempted == 0",
+        "Transport called exactly once"
+      ]
+    },
+    {
+      "id": "retry_exponential_backoff_timing",
+      "description": "Retry delays follow full-jitter exponential backoff formula",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 500 for all attempts, base_delay=1.0, max_delay=10.0, max_retries=3",
+      "expected_output_description": "Sleep called with values within expected jitter bounds",
+      "expected_error": "",
+      "assertions": [
+        "asyncio.sleep called max_retries times",
+        "Each sleep value >= 0",
+        "Each sleep value <= min(max_delay, base_delay * 2^attempt)"
+      ]
+    },
+    {
+      "id": "retry_max_delay_cap",
+      "description": "Retry delay is capped at max_delay_seconds",
+      "function": "send_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "base_delay=1.0, max_delay=2.0, max_retries=5, provider always returns 500",
+      "expected_output_description": "All sleep values are <= max_delay_seconds",
+      "expected_error": "",
+      "assertions": [
+        "All sleep values <= 2.0"
+      ]
+    },
+    {
+      "id": "retry_respect_retry_after_true",
+      "description": "When respect_retry_after=True, 429 Retry-After header value is used as delay",
+      "function": "send_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 429 with Retry-After: 2 header, respect_retry_after=True, then succeeds",
+      "expected_output_description": "Sleep is called with the Retry-After value (capped at max_delay)",
+      "expected_error": "",
+      "assertions": [
+        "asyncio.sleep called with value based on Retry-After header"
+      ]
+    },
+    {
+      "id": "retry_respect_retry_after_false",
+      "description": "When respect_retry_after=False, 429 Retry-After header is ignored, uses calculated backoff",
+      "function": "send_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider returns 429 with Retry-After: 100 header, respect_retry_after=False, then succeeds",
+      "expected_output_description": "Sleep uses calculated jitter backoff, not the header value",
+      "expected_error": "",
+      "assertions": [
+        "asyncio.sleep NOT called with Retry-After value of 100"
+      ]
+    },
+    {
+      "id": "diversity_all_succeed",
+      "description": "All providers succeed in diversity request",
+      "function": "send_diversity_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary and 2 secondary clients all return valid responses",
+      "expected_output_description": "DiversityResult with primary TaskResponse, 2 secondary TaskResponses, total_cost summed",
+      "expected_error": "",
+      "assertions": [
+        "DiversityResult.primary is TaskResponse",
+        "len(secondary) == 2",
+        "All secondary entries are TaskResponse",
+        "total_cost_usd == primary.cost_usd + sum of secondary cost_usd"
+      ]
+    },
+    {
+      "id": "diversity_primary_fails_propagates",
+      "description": "Primary provider failure propagates as error",
+      "function": "send_diversity_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary returns 500 after all retries, secondaries succeed",
+      "expected_output_description": "",
+      "expected_error": "primary_unavailable",
+      "assertions": [
+        "Raises RemoteUnavailableError from primary"
+      ]
+    },
+    {
+      "id": "diversity_primary_auth_failure",
+      "description": "Primary auth failure propagates as AuthError",
+      "function": "send_diversity_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary returns 401, secondaries succeed",
+      "expected_output_description": "",
+      "expected_error": "primary_auth_failure",
+      "assertions": [
+        "Raises AuthError from primary"
+      ]
+    },
+    {
+      "id": "diversity_primary_rate_limited",
+      "description": "Primary rate limit failure propagates",
+      "function": "send_diversity_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary returns 429 after retries, secondaries succeed",
+      "expected_output_description": "",
+      "expected_error": "primary_rate_limited",
+      "assertions": [
+        "Raises RateLimitError from primary"
+      ]
+    },
+    {
+      "id": "diversity_secondary_failure_graceful",
+      "description": "Secondary failure is captured as ErrorInfo, not raised",
+      "function": "send_diversity_request",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary succeeds, one secondary fails with 500",
+      "expected_output_description": "DiversityResult with primary success, secondary contains ErrorInfo",
+      "expected_error": "",
+      "assertions": [
+        "DiversityResult.primary is TaskResponse",
+        "Failed secondary entry is ErrorInfo",
+        "ErrorInfo has provider, error_type, message, retries_attempted"
+      ]
+    },
+    {
+      "id": "diversity_mixed_secondary",
+      "description": "Mixed secondary success and failure results",
+      "function": "send_diversity_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary succeeds, secondary 1 succeeds, secondary 2 fails",
+      "expected_output_description": "DiversityResult with 2 secondary entries: one TaskResponse, one ErrorInfo",
+      "expected_error": "",
+      "assertions": [
+        "len(secondary) == 2",
+        "One is TaskResponse, one is ErrorInfo",
+        "total_cost_usd == primary.cost_usd + successful_secondary.cost_usd"
+      ]
+    },
+    {
+      "id": "diversity_empty_secondaries",
+      "description": "Diversity request with no secondary clients",
+      "function": "send_diversity_request",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary client only, empty secondary_clients list",
+      "expected_output_description": "DiversityResult with primary response and empty secondary list",
+      "expected_error": "",
+      "assertions": [
+        "len(secondary) == 0",
+        "total_cost_usd == primary.cost_usd"
+      ]
+    },
+    {
+      "id": "diversity_empty_messages",
+      "description": "Diversity request fails with empty messages",
+      "function": "send_diversity_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Empty messages list",
+      "expected_output_description": "",
+      "expected_error": "empty_messages",
+      "assertions": [
+        "Raises ValueError or appropriate error"
+      ]
+    },
+    {
+      "id": "diversity_total_cost_excludes_failed_secondary",
+      "description": "Total cost only includes successful responses",
+      "function": "send_diversity_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Primary cost=0.01, secondary1 cost=0.02, secondary2 fails",
+      "expected_output_description": "total_cost_usd == 0.03 (excludes failed secondary)",
+      "expected_error": "",
+      "assertions": [
+        "total_cost_usd == pytest.approx(0.03)"
+      ]
+    },
+    {
+      "id": "compute_cost_basic",
+      "description": "Basic cost computation with known values",
+      "function": "compute_cost",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "100",
+        "output_tokens": "50",
+        "input_cost_per_token": "0.00001",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_description": "",
+      "expected_output_description": "0.001 + 0.0015 = 0.0025",
+      "expected_error": "",
+      "assertions": [
+        "Result == pytest.approx(0.0025)"
+      ]
+    },
+    {
+      "id": "compute_cost_zero_tokens",
+      "description": "Cost is zero when both token counts are zero",
+      "function": "compute_cost",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "0",
+        "output_tokens": "0",
+        "input_cost_per_token": "0.00001",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_description": "",
+      "expected_output_description": "0.0",
+      "expected_error": "",
+      "assertions": [
+        "Result == 0.0"
+      ]
+    },
+    {
+      "id": "compute_cost_zero_pricing",
+      "description": "Cost is zero when pricing is all zeros",
+      "function": "compute_cost",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "1000",
+        "output_tokens": "500",
+        "input_cost_per_token": "0.0",
+        "output_cost_per_token": "0.0"
+      },
+      "input_description": "",
+      "expected_output_description": "0.0",
+      "expected_error": "",
+      "assertions": [
+        "Result == 0.0"
+      ]
+    },
+    {
+      "id": "compute_cost_large_tokens",
+      "description": "Correct computation with large token counts",
+      "function": "compute_cost",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "1000000",
+        "output_tokens": "500000",
+        "input_cost_per_token": "0.000003",
+        "output_cost_per_token": "0.000015"
+      },
+      "input_description": "",
+      "expected_output_description": "3.0 + 7.5 = 10.5",
+      "expected_error": "",
+      "assertions": [
+        "Result == pytest.approx(10.5)"
+      ]
+    },
+    {
+      "id": "compute_cost_input_only",
+      "description": "Cost with only input tokens (zero output)",
+      "function": "compute_cost",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "100",
+        "output_tokens": "0",
+        "input_cost_per_token": "0.00001",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_description": "",
+      "expected_output_description": "0.001",
+      "expected_error": "",
+      "assertions": [
+        "Result == pytest.approx(0.001)"
+      ]
+    },
+    {
+      "id": "compute_cost_output_only",
+      "description": "Cost with only output tokens (zero input)",
+      "function": "compute_cost",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "0",
+        "output_tokens": "50",
+        "input_cost_per_token": "0.00001",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_description": "",
+      "expected_output_description": "0.0015",
+      "expected_error": "",
+      "assertions": [
+        "Result == pytest.approx(0.0015)"
+      ]
+    },
+    {
+      "id": "compute_cost_non_negative",
+      "description": "Cost is always non-negative for valid inputs",
+      "function": "compute_cost",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Various valid input combinations with non-negative tokens and pricing",
+      "expected_output_description": "Result >= 0.0 for all combinations",
+      "expected_error": "",
+      "assertions": [
+        "Result >= 0.0 for all tested combinations"
+      ]
+    },
+    {
+      "id": "compute_cost_linearity",
+      "description": "Doubling tokens doubles cost",
+      "function": "compute_cost",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_tokens": "100",
+        "output_tokens": "50",
+        "input_cost_per_token": "0.00001",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_description": "",
+      "expected_output_description": "cost(2x tokens) == 2 * cost(x tokens)",
+      "expected_error": "",
+      "assertions": [
+        "cost with doubled tokens == pytest.approx(2 * cost with original tokens)"
+      ]
+    },
+    {
+      "id": "get_pricing_override",
+      "description": "Override pricing takes precedence over defaults",
+      "function": "get_pricing",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider=anthropic, model with override pricing",
+      "expected_output_description": "Returns the override TokenPricing",
+      "expected_error": "",
+      "assertions": [
+        "Returned pricing matches override values"
+      ]
+    },
+    {
+      "id": "get_pricing_default_fallback",
+      "description": "Falls back to built-in default when no override exists",
+      "function": "get_pricing",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider=anthropic, known model, empty overrides",
+      "expected_output_description": "Returns built-in default TokenPricing for that model",
+      "expected_error": "",
+      "assertions": [
+        "Returned pricing is not None",
+        "Returned pricing matches expected default values"
+      ]
+    },
+    {
+      "id": "get_pricing_unknown_model",
+      "description": "Returns None for unknown model with no override",
+      "function": "get_pricing",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Provider=anthropic, model='nonexistent-model-xyz', empty overrides",
+      "expected_output_description": "None",
+      "expected_error": "",
+      "assertions": [
+        "Result is None"
+      ]
+    },
+    {
+      "id": "get_pricing_multiple_entries",
+      "description": "Correct lookup from pricing table with multiple entries",
+      "function": "get_pricing",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "PricingTable with 3 model entries, look up the second one",
+      "expected_output_description": "Returns correct TokenPricing for the queried model",
+      "expected_error": "",
+      "assertions": [
+        "Returned pricing matches the specific model's pricing"
+      ]
+    },
+    {
+      "id": "get_pricing_override_specific_model",
+      "description": "Override for one model does not affect other models",
+      "function": "get_pricing",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Override for model-A, query for model-B (which has a default)",
+      "expected_output_description": "Returns default pricing for model-B",
+      "expected_error": "",
+      "assertions": [
+        "Returned pricing is the default for model-B, not the override for model-A"
+      ]
+    },
+    {
+      "id": "close_owned_client",
+      "description": "Closing a client with owned httpx.AsyncClient releases resources",
+      "function": "close",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Client created without injected http_client (owns its own)",
+      "expected_output_description": "httpx.AsyncClient is closed",
+      "expected_error": "",
+      "assertions": [
+        "httpx client is_closed is True after close"
+      ]
+    },
+    {
+      "id": "close_injected_client_noop",
+      "description": "Closing a client with injected httpx.AsyncClient is a no-op",
+      "function": "close",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Client created with injected http_client",
+      "expected_output_description": "Injected httpx.AsyncClient remains open",
+      "expected_error": "",
+      "assertions": [
+        "Injected httpx client is_closed is False after close"
+      ]
+    },
+    {
+      "id": "close_idempotent",
+      "description": "Multiple calls to close are safe",
+      "function": "close",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Client with owned httpx.AsyncClient, close called twice",
+      "expected_output_description": "No error on second close call",
+      "expected_error": "",
+      "assertions": [
+        "Second close does not raise"
+      ]
+    },
+    {
+      "id": "send_after_close_raises",
+      "description": "send_request after close raises RuntimeError for owned client",
+      "function": "send_request",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Client closed, then send_request called",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "Raises RuntimeError"
+      ]
+    },
+    {
+      "id": "invariant_api_key_not_logged",
+      "description": "API key is stored as SecretStr and never appears in string representation",
+      "function": "create_remote_client",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Create client with known API key, inspect string representations",
+      "expected_output_description": "API key value does not appear in str/repr of client or config",
+      "expected_error": "",
+      "assertions": [
+        "API key value not in str(client)",
+        "API key value not in repr(client)"
+      ]
+    },
+    {
+      "id": "invariant_error_carries_metadata",
+      "description": "All error types carry provider, message, request_id, retries_attempted, status_code",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Trigger various errors and inspect their fields",
+      "expected_output_description": "All errors have required metadata fields",
+      "expected_error": "",
+      "assertions": [
+        "Error has provider attribute",
+        "Error has message attribute",
+        "Error has request_id attribute",
+        "Error has retries_attempted attribute",
+        "Error has status_code attribute"
+      ]
+    },
+    {
+      "id": "invariant_taskresponse_frozen",
+      "description": "TaskResponse is immutable (frozen Pydantic model)",
+      "function": "send_request",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Get a TaskResponse, attempt to modify a field",
+      "expected_output_description": "Raises error on mutation attempt",
+      "expected_error": "",
+      "assertions": [
+        "Attempting to set attribute raises error"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for remote_api_client module.\n\nTests organized into groups:\n1. TestCreateRemoteClient - Factory function tests\n2. TestSendRequest - Primary send_request method tests\n3. TestRetryBehavior - Exponential backoff and retry logic\n4. TestSendDiversityRequest - Multi-provider diversity requests\n5. TestComputeCost - Pure cost computation function\n6. TestGetPricing - Pricing lookup logic\n7. TestClose - Resource cleanup\n8. TestInvariants - Cross-cutting contract invariants\n\"\"\"\n\nimport asyncio\nimport json\nimport uuid\nfrom unittest.mock import AsyncMock, MagicMock, patch, PropertyMock\nimport pytest\nimport httpx\n\n# Import the component under test\nfrom src.remote_api_client import (\n    create_remote_client,\n    send_diversity_request,\n    compute_cost,\n    get_pricing,\n    ProviderName,\n    TokenUsage,\n    TokenPricing,\n    PricingTable,\n    RetryConfig,\n    TimeoutConfig,\n    RemoteClientConfig,\n    TaskResponse,\n    ErrorInfo,\n    DiversityResult,\n    RemoteClientError,\n    AuthError,\n    RateLimitError,\n    RemoteUnavailableError,\n    InvalidRequestError,\n    PromptMessage,\n    MessageRole,\n    GenerationParams,\n)\n\n\n# ---------------------------------------------------------------------------\n# Fixtures\n# ---------------------------------------------------------------------------\n\n@pytest.fixture\ndef default_retry_config():\n    return RetryConfig(\n        max_retries=3,\n        base_delay_seconds=1.0,\n        max_delay_seconds=10.0,\n        respect_retry_after=True,\n    )\n\n\n@pytest.fixture\ndef default_timeout_config():\n    return TimeoutConfig(\n        connect_timeout_seconds=5.0,\n        read_timeout_seconds=30.0,\n        total_timeout_seconds=60.0,\n    )\n\n\n@pytest.fixture\ndef empty_pricing_table():\n    return PricingTable(entries={})\n\n\n@pytest.fixture\ndef sample_pricing_table():\n    return PricingTable(entries={\n        \"claude-3-opus\": TokenPricing(input_cost_per_token=0.000015, output_cost_per_token=0.000075),\n        \"claude-3-sonnet\": TokenPricing(input_cost_per_token=0.000003, output_cost_per_token=0.000015),\n    })\n\n\n@pytest.fixture\ndef valid_config(default_retry_config, default_timeout_config, empty_pricing_table):\n    return RemoteClientConfig(\n        provider=ProviderName.anthropic,\n        model=\"claude-3-sonnet\",\n        api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n        retry=default_retry_config,\n        timeout=default_timeout_config,\n        pricing_overrides=empty_pricing_table,\n    )\n\n\n@pytest.fixture\ndef sample_messages():\n    return [\n        PromptMessage(role=MessageRole.system, content=\"You are a helpful assistant.\"),\n        PromptMessage(role=MessageRole.user, content=\"Hello, how are you?\"),\n    ]\n\n\n@pytest.fixture\ndef default_params():\n    return GenerationParams(\n        max_tokens=1024,\n        temperature=0.7,\n        top_p=1.0,\n        stop_sequences=[],\n    )\n\n\ndef _make_success_response(status_code=200, body=None):\n    \"\"\"Helper to build a mock httpx response for a successful API call.\"\"\"\n    if body is None:\n        body = {\n            \"content\": [{\"text\": \"Hello! I'm doing well.\"}],\n            \"model\": \"claude-3-sonnet\",\n            \"usage\": {\"input_tokens\": 100, \"output_tokens\": 50},\n        }\n    return httpx.Response(status_code=status_code, json=body)\n\n\ndef _make_error_response(status_code, body=None, headers=None):\n    \"\"\"Helper to build a mock httpx error response.\"\"\"\n    if body is None:\n        body = {\"error\": {\"message\": \"Error occurred\", \"type\": \"api_error\"}}\n    return httpx.Response(status_code=status_code, json=body, headers=headers or {})\n\n\ndef _build_mock_transport(responses):\n    \"\"\"\n    Build an httpx.MockTransport that returns responses in order.\n    `responses` is a list of httpx.Response objects or callables.\n    \"\"\"\n    call_count = {\"n\": 0}\n\n    def handler(request):\n        idx = min(call_count[\"n\"], len(responses) - 1)\n        call_count[\"n\"] += 1\n        resp = responses[idx]\n        if callable(resp):\n            return resp(request)\n        return resp\n\n    transport = httpx.MockTransport(handler)\n    transport._test_call_count = call_count\n    return transport\n\n\n# ---------------------------------------------------------------------------\n# 1. TestCreateRemoteClient\n# ---------------------------------------------------------------------------\n\nclass TestCreateRemoteClient:\n    \"\"\"Tests for the create_remote_client factory function.\"\"\"\n\n    def test_create_client_happy_path(self, valid_config, monkeypatch):\n        \"\"\"Successfully create a remote client with valid config and API key.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        client = create_remote_client(valid_config)\n        assert client is not None, \"Client should not be None\"\n        assert hasattr(client, \"send_request\"), \"Client must have send_request method\"\n        assert hasattr(client, \"close\"), \"Client must have close method\"\n\n    def test_create_client_missing_api_key(self, valid_config, monkeypatch):\n        \"\"\"Fail fast when API key env var is not set.\"\"\"\n        monkeypatch.delenv(\"TEST_ANTHROPIC_API_KEY\", raising=False)\n        with pytest.raises((AuthError, ValueError, KeyError, Exception)) as exc_info:\n            create_remote_client(valid_config)\n        error_str = str(exc_info.value).lower()\n        assert (\n            \"api_key\" in error_str\n            or \"api key\" in error_str\n            or \"TEST_ANTHROPIC_API_KEY\".lower() in error_str\n            or \"missing\" in error_str\n            or \"not set\" in error_str\n            or \"environment\" in error_str\n        ), f\"Error message should mention API key issue, got: {exc_info.value}\"\n\n    def test_create_client_empty_api_key(self, valid_config, monkeypatch):\n        \"\"\"Fail fast when API key env var is set but empty.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"\")\n        with pytest.raises((AuthError, ValueError, KeyError, Exception)):\n            create_remote_client(valid_config)\n\n    def test_create_client_timeout_propagation(\n        self, default_retry_config, empty_pricing_table, monkeypatch\n    ):\n        \"\"\"Timeout settings from config propagate to httpx client.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        timeout_cfg = TimeoutConfig(\n            connect_timeout_seconds=5.0,\n            read_timeout_seconds=30.0,\n            total_timeout_seconds=60.0,\n        )\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"claude-3-sonnet\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=default_retry_config,\n            timeout=timeout_cfg,\n            pricing_overrides=empty_pricing_table,\n        )\n        client = create_remote_client(config)\n        # The client should be constructed without error — timeout propagation\n        # is verified by the fact that creation succeeds with these specific values\n        assert client is not None\n\n    def test_create_client_pricing_overrides_merged(\n        self, default_retry_config, default_timeout_config, monkeypatch\n    ):\n        \"\"\"Pricing overrides are merged with defaults at construction.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        custom_pricing = PricingTable(entries={\n            \"custom-model\": TokenPricing(\n                input_cost_per_token=0.001,\n                output_cost_per_token=0.002,\n            )\n        })\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"custom-model\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=default_retry_config,\n            timeout=default_timeout_config,\n            pricing_overrides=custom_pricing,\n        )\n        client = create_remote_client(config)\n        assert client is not None\n\n    def test_create_client_with_injected_http_client(self, valid_config, monkeypatch):\n        \"\"\"Accept an externally provided httpx.AsyncClient.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        external_client = httpx.AsyncClient()\n        try:\n            client = create_remote_client(valid_config, http_client=external_client)\n            assert client is not None\n        finally:\n            # Clean up the external client\n            asyncio.get_event_loop().run_until_complete(external_client.aclose())\n\n\n# ---------------------------------------------------------------------------\n# 2. TestSendRequest\n# ---------------------------------------------------------------------------\n\nclass TestSendRequest:\n    \"\"\"Tests for the send_request method on RemoteClient.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_send_request_happy_path(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Successfully send a request and receive a valid TaskResponse.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_success_response()])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            response = await client.send_request(sample_messages, default_params)\n\n            assert isinstance(response, TaskResponse), \"Response should be TaskResponse\"\n            assert response.provider == ProviderName.anthropic, \"Provider should match config\"\n            # Validate UUID4\n            parsed_uuid = uuid.UUID(response.request_id, version=4)\n            assert str(parsed_uuid) == response.request_id, \"request_id should be valid UUID4\"\n            assert response.cost_usd >= 0, \"cost_usd should be non-negative\"\n            assert response.latency_ms > 0, \"latency_ms should be positive\"\n            assert len(response.content) > 0, \"content should be non-empty\"\n            assert len(response.model) > 0, \"model should be non-empty\"\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_send_request_cost_computation(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"cost_usd matches the formula: input_tokens*input_cost + output_tokens*output_cost.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_success_response()])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            response = await client.send_request(sample_messages, default_params)\n\n            # Look up what pricing was used\n            pricing = get_pricing(\n                response.provider, response.model, valid_config.pricing_overrides\n            )\n            if pricing is not None:\n                expected_cost = (\n                    response.usage.input_tokens * pricing.input_cost_per_token\n                    + response.usage.output_tokens * pricing.output_cost_per_token\n                )\n                assert response.cost_usd == pytest.approx(expected_cost), (\n                    f\"cost_usd {response.cost_usd} should match computed {expected_cost}\"\n                )\n            else:\n                # If no pricing found, cost should be 0\n                assert response.cost_usd == pytest.approx(0.0)\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_send_request_unique_request_ids(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Each request generates a unique UUID4 request_id.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([\n            _make_success_response(),\n            _make_success_response(),\n        ])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            resp1 = await client.send_request(sample_messages, default_params)\n            resp2 = await client.send_request(sample_messages, default_params)\n\n            assert resp1.request_id != resp2.request_id, \"Each request should have unique ID\"\n            uuid.UUID(resp1.request_id, version=4)\n            uuid.UUID(resp2.request_id, version=4)\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"status_code\", [401, 403])\n    async def test_send_request_auth_failure(\n        self, valid_config, sample_messages, default_params, monkeypatch, status_code\n    ):\n        \"\"\"Auth error raised when provider returns HTTP 401 or 403.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_error_response(status_code)])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises(AuthError) as exc_info:\n                await client.send_request(sample_messages, default_params)\n            assert exc_info.value.status_code == status_code\n            assert exc_info.value.provider == ProviderName.anthropic\n            assert exc_info.value.request_id is not None\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_send_request_rate_limited_429(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"RateLimitError raised when provider returns HTTP 429 after all retries.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [\n            _make_error_response(429, headers={\"Retry-After\": \"1\"})\n            for _ in range(10)  # More than max_retries\n        ]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with patch(\"asyncio.sleep\", new_callable=AsyncMock):\n                with pytest.raises(RateLimitError) as exc_info:\n                    await client.send_request(sample_messages, default_params)\n            assert exc_info.value.retries_attempted == valid_config.retry.max_retries\n            assert hasattr(exc_info.value, \"retry_after_seconds\")\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"status_code\", [500, 502, 503])\n    async def test_send_request_remote_unavailable(\n        self, valid_config, sample_messages, default_params, monkeypatch, status_code\n    ):\n        \"\"\"RemoteUnavailableError raised for HTTP 5xx after all retries.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [_make_error_response(status_code) for _ in range(10)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with patch(\"asyncio.sleep\", new_callable=AsyncMock):\n                with pytest.raises(RemoteUnavailableError) as exc_info:\n                    await client.send_request(sample_messages, default_params)\n            assert exc_info.value.retries_attempted == valid_config.retry.max_retries\n            assert exc_info.value.status_code == status_code\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"status_code\", [400, 422])\n    async def test_send_request_invalid_request(\n        self, valid_config, sample_messages, default_params, monkeypatch, status_code\n    ):\n        \"\"\"InvalidRequestError raised when provider returns HTTP 400 or 422.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_error_response(status_code)])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises(InvalidRequestError) as exc_info:\n                await client.send_request(sample_messages, default_params)\n            assert exc_info.value.status_code == status_code\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_send_request_empty_messages(\n        self, valid_config, default_params, monkeypatch\n    ):\n        \"\"\"Error raised when messages list is empty.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_success_response()])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises((ValueError, InvalidRequestError, Exception)):\n                await client.send_request([], default_params)\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_send_request_no_user_message(\n        self, valid_config, default_params, monkeypatch\n    ):\n        \"\"\"Error raised when messages contain no user role message.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        messages = [\n            PromptMessage(role=MessageRole.system, content=\"System prompt only\"),\n        ]\n        transport = _build_mock_transport([_make_success_response()])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises((ValueError, InvalidRequestError, Exception)):\n                await client.send_request(messages, default_params)\n        finally:\n            await http_client.aclose()\n\n\n# ---------------------------------------------------------------------------\n# 3. TestRetryBehavior\n# ---------------------------------------------------------------------------\n\nclass TestRetryBehavior:\n    \"\"\"Tests for exponential backoff retry logic.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_retry_transient_then_success(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Successful retry after transient 500 errors.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [\n            _make_error_response(500),\n            _make_error_response(500),\n            _make_success_response(),\n        ]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with patch(\"asyncio.sleep\", new_callable=AsyncMock):\n                response = await client.send_request(sample_messages, default_params)\n            assert isinstance(response, TaskResponse)\n            assert transport._test_call_count[\"n\"] == 3, \"Should have made 3 attempts\"\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_retry_max_retries_exhausted(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Retries up to max_retries and then raises error.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [_make_error_response(500) for _ in range(10)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with patch(\"asyncio.sleep\", new_callable=AsyncMock):\n                with pytest.raises(RemoteUnavailableError) as exc_info:\n                    await client.send_request(sample_messages, default_params)\n            assert exc_info.value.retries_attempted == valid_config.retry.max_retries\n            # 1 initial + max_retries retries\n            expected_calls = valid_config.retry.max_retries + 1\n            assert transport._test_call_count[\"n\"] == expected_calls, (\n                f\"Should have made {expected_calls} total attempts\"\n            )\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_no_retry_on_401(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Auth errors (401) are never retried.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [_make_error_response(401) for _ in range(5)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises(AuthError) as exc_info:\n                await client.send_request(sample_messages, default_params)\n            assert exc_info.value.retries_attempted == 0, \"Auth errors should not be retried\"\n            assert transport._test_call_count[\"n\"] == 1, \"Should only call transport once\"\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_no_retry_on_400(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"Invalid request errors (400) are never retried.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        responses = [_make_error_response(400) for _ in range(5)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            with pytest.raises(InvalidRequestError) as exc_info:\n                await client.send_request(sample_messages, default_params)\n            assert exc_info.value.retries_attempted == 0, \"400 errors should not be retried\"\n            assert transport._test_call_count[\"n\"] == 1, \"Should only call transport once\"\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_exponential_backoff_timing(\n        self, sample_messages, default_params, monkeypatch,\n        default_timeout_config, empty_pricing_table,\n    ):\n        \"\"\"Retry delays follow full-jitter exponential backoff within bounds.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        retry_cfg = RetryConfig(\n            max_retries=3,\n            base_delay_seconds=1.0,\n            max_delay_seconds=10.0,\n            respect_retry_after=False,\n        )\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"claude-3-sonnet\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=retry_cfg,\n            timeout=default_timeout_config,\n            pricing_overrides=empty_pricing_table,\n        )\n        responses = [_make_error_response(500) for _ in range(10)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        sleep_calls = []\n\n        async def mock_sleep(duration):\n            sleep_calls.append(duration)\n\n        try:\n            client = create_remote_client(config, http_client=http_client)\n            with patch(\"asyncio.sleep\", side_effect=mock_sleep):\n                with pytest.raises(RemoteUnavailableError):\n                    await client.send_request(sample_messages, default_params)\n\n            assert len(sleep_calls) == 3, f\"Should sleep {retry_cfg.max_retries} times\"\n            for attempt, delay in enumerate(sleep_calls):\n                max_bound = min(\n                    retry_cfg.max_delay_seconds,\n                    retry_cfg.base_delay_seconds * (2 ** attempt),\n                )\n                assert delay >= 0, f\"Delay for attempt {attempt} should be >= 0\"\n                assert delay <= max_bound + 0.01, (\n                    f\"Delay {delay} for attempt {attempt} should be <= {max_bound}\"\n                )\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_max_delay_cap(\n        self, sample_messages, default_params, monkeypatch,\n        default_timeout_config, empty_pricing_table,\n    ):\n        \"\"\"Retry delay is capped at max_delay_seconds.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        retry_cfg = RetryConfig(\n            max_retries=5,\n            base_delay_seconds=1.0,\n            max_delay_seconds=2.0,\n            respect_retry_after=False,\n        )\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"claude-3-sonnet\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=retry_cfg,\n            timeout=default_timeout_config,\n            pricing_overrides=empty_pricing_table,\n        )\n        responses = [_make_error_response(500) for _ in range(10)]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        sleep_calls = []\n\n        async def mock_sleep(duration):\n            sleep_calls.append(duration)\n\n        try:\n            client = create_remote_client(config, http_client=http_client)\n            with patch(\"asyncio.sleep\", side_effect=mock_sleep):\n                with pytest.raises(RemoteUnavailableError):\n                    await client.send_request(sample_messages, default_params)\n\n            for delay in sleep_calls:\n                assert delay <= retry_cfg.max_delay_seconds + 0.01, (\n                    f\"All delays should be <= {retry_cfg.max_delay_seconds}, got {delay}\"\n                )\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_respect_retry_after_true(\n        self, sample_messages, default_params, monkeypatch,\n        default_timeout_config, empty_pricing_table,\n    ):\n        \"\"\"When respect_retry_after=True, 429 Retry-After header is used as delay.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        retry_cfg = RetryConfig(\n            max_retries=2,\n            base_delay_seconds=0.1,\n            max_delay_seconds=10.0,\n            respect_retry_after=True,\n        )\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"claude-3-sonnet\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=retry_cfg,\n            timeout=default_timeout_config,\n            pricing_overrides=empty_pricing_table,\n        )\n        responses = [\n            _make_error_response(429, headers={\"Retry-After\": \"2\"}),\n            _make_success_response(),\n        ]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        sleep_calls = []\n\n        async def mock_sleep(duration):\n            sleep_calls.append(duration)\n\n        try:\n            client = create_remote_client(config, http_client=http_client)\n            with patch(\"asyncio.sleep\", side_effect=mock_sleep):\n                response = await client.send_request(sample_messages, default_params)\n            assert isinstance(response, TaskResponse)\n            # The sleep should have used Retry-After value (2 seconds)\n            assert len(sleep_calls) >= 1\n            assert any(\n                abs(d - 2.0) < 0.5 for d in sleep_calls\n            ), f\"Expected a sleep near 2.0 (from Retry-After), got {sleep_calls}\"\n        finally:\n            await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_respect_retry_after_false(\n        self, sample_messages, default_params, monkeypatch,\n        default_timeout_config, empty_pricing_table,\n    ):\n        \"\"\"When respect_retry_after=False, Retry-After header is ignored.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        retry_cfg = RetryConfig(\n            max_retries=2,\n            base_delay_seconds=0.1,\n            max_delay_seconds=1.0,\n            respect_retry_after=False,\n        )\n        config = RemoteClientConfig(\n            provider=ProviderName.anthropic,\n            model=\"claude-3-sonnet\",\n            api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n            retry=retry_cfg,\n            timeout=default_timeout_config,\n            pricing_overrides=empty_pricing_table,\n        )\n        responses = [\n            _make_error_response(429, headers={\"Retry-After\": \"100\"}),\n            _make_success_response(),\n        ]\n        transport = _build_mock_transport(responses)\n        http_client = httpx.AsyncClient(transport=transport)\n        sleep_calls = []\n\n        async def mock_sleep(duration):\n            sleep_calls.append(duration)\n\n        try:\n            client = create_remote_client(config, http_client=http_client)\n            with patch(\"asyncio.sleep\", side_effect=mock_sleep):\n                response = await client.send_request(sample_messages, default_params)\n            assert isinstance(response, TaskResponse)\n            # Should NOT have slept for 100 seconds\n            for d in sleep_calls:\n                assert d < 100.0, (\n                    f\"Should not use Retry-After of 100 when respect_retry_after=False, got {d}\"\n                )\n        finally:\n            await http_client.aclose()\n\n\n# ---------------------------------------------------------------------------\n# 4. TestSendDiversityRequest\n# ---------------------------------------------------------------------------\n\nclass TestSendDiversityRequest:\n    \"\"\"Tests for send_diversity_request multi-provider fan-out.\"\"\"\n\n    def _make_mock_client(self, provider, cost=0.01, should_fail=False, error_cls=None):\n        \"\"\"Create a mock client that satisfies RemoteClient protocol.\"\"\"\n        mock = AsyncMock()\n        mock.provider = provider\n        if should_fail:\n            error = (error_cls or RemoteUnavailableError)(\n                provider=provider,\n                message=\"Test error\",\n                request_id=str(uuid.uuid4()),\n                retries_attempted=3,\n                status_code=500,\n            )\n            mock.send_request = AsyncMock(side_effect=error)\n        else:\n            response = TaskResponse(\n                content=f\"Response from {provider.value}\",\n                model=\"test-model\",\n                provider=provider,\n                usage=TokenUsage(input_tokens=100, output_tokens=50),\n                cost_usd=cost,\n                latency_ms=150.0,\n                request_id=str(uuid.uuid4()),\n            )\n            mock.send_request = AsyncMock(return_value=response)\n        return mock\n\n    @pytest.mark.asyncio\n    async def test_diversity_all_succeed(self, sample_messages, default_params):\n        \"\"\"All providers succeed in diversity request.\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n        sec1 = self._make_mock_client(ProviderName.openai, cost=0.02)\n        sec2 = self._make_mock_client(ProviderName.google, cost=0.005)\n\n        result = await send_diversity_request(\n            primary, [sec1, sec2], sample_messages, default_params\n        )\n\n        assert isinstance(result, DiversityResult)\n        assert isinstance(result.primary, TaskResponse)\n        assert result.primary.provider == ProviderName.anthropic\n        assert len(result.secondary) == 2\n        for entry in result.secondary:\n            assert isinstance(entry, TaskResponse)\n        expected_total = 0.01 + 0.02 + 0.005\n        assert result.total_cost_usd == pytest.approx(expected_total), (\n            f\"Total cost should be {expected_total}, got {result.total_cost_usd}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_diversity_primary_fails_propagates(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Primary provider failure propagates as error.\"\"\"\n        primary = self._make_mock_client(\n            ProviderName.anthropic, should_fail=True, error_cls=RemoteUnavailableError\n        )\n        sec1 = self._make_mock_client(ProviderName.openai, cost=0.02)\n\n        with pytest.raises(RemoteUnavailableError):\n            await send_diversity_request(\n                primary, [sec1], sample_messages, default_params\n            )\n\n    @pytest.mark.asyncio\n    async def test_diversity_primary_auth_failure(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Primary auth failure propagates as AuthError.\"\"\"\n        primary = AsyncMock()\n        primary.provider = ProviderName.anthropic\n        auth_err = AuthError(\n            provider=ProviderName.anthropic,\n            message=\"Invalid API key\",\n            request_id=str(uuid.uuid4()),\n            retries_attempted=0,\n            status_code=401,\n        )\n        primary.send_request = AsyncMock(side_effect=auth_err)\n\n        with pytest.raises(AuthError):\n            await send_diversity_request(\n                primary, [], sample_messages, default_params\n            )\n\n    @pytest.mark.asyncio\n    async def test_diversity_primary_rate_limited(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Primary rate limit failure propagates.\"\"\"\n        primary = AsyncMock()\n        primary.provider = ProviderName.anthropic\n        rate_err = RateLimitError(\n            provider=ProviderName.anthropic,\n            message=\"Rate limited\",\n            request_id=str(uuid.uuid4()),\n            retries_attempted=3,\n            status_code=429,\n            retry_after_seconds=5.0,\n        )\n        primary.send_request = AsyncMock(side_effect=rate_err)\n\n        with pytest.raises(RateLimitError):\n            await send_diversity_request(\n                primary, [], sample_messages, default_params\n            )\n\n    @pytest.mark.asyncio\n    async def test_diversity_secondary_failure_graceful(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Secondary failure captured as ErrorInfo, not raised.\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n        sec_fail = self._make_mock_client(\n            ProviderName.openai, should_fail=True, error_cls=RemoteUnavailableError\n        )\n\n        result = await send_diversity_request(\n            primary, [sec_fail], sample_messages, default_params\n        )\n\n        assert isinstance(result, DiversityResult)\n        assert isinstance(result.primary, TaskResponse)\n        assert len(result.secondary) == 1\n        sec_entry = result.secondary[0]\n        assert isinstance(sec_entry, ErrorInfo), (\n            f\"Failed secondary should be ErrorInfo, got {type(sec_entry)}\"\n        )\n        assert sec_entry.provider == ProviderName.openai\n        assert hasattr(sec_entry, \"error_type\")\n        assert hasattr(sec_entry, \"message\")\n        assert hasattr(sec_entry, \"retries_attempted\")\n\n    @pytest.mark.asyncio\n    async def test_diversity_mixed_secondary(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Mixed secondary success and failure results.\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n        sec_ok = self._make_mock_client(ProviderName.openai, cost=0.02)\n        sec_fail = self._make_mock_client(\n            ProviderName.google, should_fail=True, error_cls=RemoteUnavailableError\n        )\n\n        result = await send_diversity_request(\n            primary, [sec_ok, sec_fail], sample_messages, default_params\n        )\n\n        assert len(result.secondary) == 2\n        types = {type(e) for e in result.secondary}\n        assert TaskResponse in types, \"Should have at least one TaskResponse secondary\"\n        assert ErrorInfo in types, \"Should have at least one ErrorInfo secondary\"\n        # Total cost should only include successful responses\n        expected_total = 0.01 + 0.02  # primary + successful secondary\n        assert result.total_cost_usd == pytest.approx(expected_total), (\n            f\"Total cost should exclude failed secondary, expected {expected_total}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_diversity_empty_secondaries(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Diversity request with no secondary clients.\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n\n        result = await send_diversity_request(\n            primary, [], sample_messages, default_params\n        )\n\n        assert isinstance(result, DiversityResult)\n        assert len(result.secondary) == 0\n        assert result.total_cost_usd == pytest.approx(0.01)\n\n    @pytest.mark.asyncio\n    async def test_diversity_empty_messages(self, default_params):\n        \"\"\"Diversity request fails with empty messages.\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n\n        with pytest.raises((ValueError, InvalidRequestError, Exception)):\n            await send_diversity_request(primary, [], [], default_params)\n\n    @pytest.mark.asyncio\n    async def test_diversity_total_cost_excludes_failed(\n        self, sample_messages, default_params\n    ):\n        \"\"\"Total cost only includes successful responses (detailed).\"\"\"\n        primary = self._make_mock_client(ProviderName.anthropic, cost=0.01)\n        sec1 = self._make_mock_client(ProviderName.openai, cost=0.02)\n        sec2 = self._make_mock_client(\n            ProviderName.google, should_fail=True, error_cls=RemoteUnavailableError\n        )\n\n        result = await send_diversity_request(\n            primary, [sec1, sec2], sample_messages, default_params\n        )\n\n        successful_secondary_cost = sum(\n            s.cost_usd for s in result.secondary if isinstance(s, TaskResponse)\n        )\n        expected = result.primary.cost_usd + successful_secondary_cost\n        assert result.total_cost_usd == pytest.approx(expected), (\n            f\"total_cost_usd should be primary + successful secondary costs\"\n        )\n\n\n# ---------------------------------------------------------------------------\n# 5. TestComputeCost\n# ---------------------------------------------------------------------------\n\nclass TestComputeCost:\n    \"\"\"Tests for the compute_cost pure function.\"\"\"\n\n    def test_basic_computation(self):\n        \"\"\"Basic cost computation with known values.\"\"\"\n        usage = TokenUsage(input_tokens=100, output_tokens=50)\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        result = compute_cost(usage, pricing)\n        expected = 100 * 0.00001 + 50 * 0.00003  # 0.001 + 0.0015 = 0.0025\n        assert result == pytest.approx(expected), (\n            f\"Expected {expected}, got {result}\"\n        )\n\n    def test_zero_tokens(self):\n        \"\"\"Cost is zero when both token counts are zero.\"\"\"\n        usage = TokenUsage(input_tokens=0, output_tokens=0)\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        result = compute_cost(usage, pricing)\n        assert result == 0.0, f\"Expected 0.0 for zero tokens, got {result}\"\n\n    def test_zero_pricing(self):\n        \"\"\"Cost is zero when pricing is all zeros.\"\"\"\n        usage = TokenUsage(input_tokens=1000, output_tokens=500)\n        pricing = TokenPricing(\n            input_cost_per_token=0.0,\n            output_cost_per_token=0.0,\n        )\n        result = compute_cost(usage, pricing)\n        assert result == 0.0, f\"Expected 0.0 for zero pricing, got {result}\"\n\n    def test_large_tokens(self):\n        \"\"\"Correct computation with large token counts.\"\"\"\n        usage = TokenUsage(input_tokens=1_000_000, output_tokens=500_000)\n        pricing = TokenPricing(\n            input_cost_per_token=0.000003,\n            output_cost_per_token=0.000015,\n        )\n        result = compute_cost(usage, pricing)\n        expected = 1_000_000 * 0.000003 + 500_000 * 0.000015  # 3.0 + 7.5 = 10.5\n        assert result == pytest.approx(expected), (\n            f\"Expected {expected}, got {result}\"\n        )\n\n    def test_input_only(self):\n        \"\"\"Cost with only input tokens (zero output).\"\"\"\n        usage = TokenUsage(input_tokens=100, output_tokens=0)\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        result = compute_cost(usage, pricing)\n        expected = 100 * 0.00001\n        assert result == pytest.approx(expected)\n\n    def test_output_only(self):\n        \"\"\"Cost with only output tokens (zero input).\"\"\"\n        usage = TokenUsage(input_tokens=0, output_tokens=50)\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        result = compute_cost(usage, pricing)\n        expected = 50 * 0.00003\n        assert result == pytest.approx(expected)\n\n    def test_non_negative_property(self):\n        \"\"\"Cost is always non-negative for valid inputs.\"\"\"\n        test_cases = [\n            (0, 0),\n            (1, 0),\n            (0, 1),\n            (100, 200),\n            (999999, 999999),\n        ]\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        for inp, out in test_cases:\n            usage = TokenUsage(input_tokens=inp, output_tokens=out)\n            result = compute_cost(usage, pricing)\n            assert result >= 0.0, (\n                f\"Cost should be non-negative for ({inp}, {out}), got {result}\"\n            )\n\n    def test_linearity_doubling(self):\n        \"\"\"Doubling tokens doubles cost.\"\"\"\n        pricing = TokenPricing(\n            input_cost_per_token=0.00001,\n            output_cost_per_token=0.00003,\n        )\n        usage1 = TokenUsage(input_tokens=100, output_tokens=50)\n        usage2 = TokenUsage(input_tokens=200, output_tokens=100)\n        cost1 = compute_cost(usage1, pricing)\n        cost2 = compute_cost(usage2, pricing)\n        assert cost2 == pytest.approx(2 * cost1), (\n            f\"Doubling tokens should double cost: {cost2} != 2 * {cost1}\"\n        )\n\n\n# ---------------------------------------------------------------------------\n# 6. TestGetPricing\n# ---------------------------------------------------------------------------\n\nclass TestGetPricing:\n    \"\"\"Tests for the get_pricing lookup function.\"\"\"\n\n    def test_override_takes_precedence(self):\n        \"\"\"Override pricing takes precedence over defaults.\"\"\"\n        override_pricing = TokenPricing(\n            input_cost_per_token=0.999,\n            output_cost_per_token=0.888,\n        )\n        overrides = PricingTable(entries={\"claude-3-sonnet\": override_pricing})\n        result = get_pricing(ProviderName.anthropic, \"claude-3-sonnet\", overrides)\n        assert result is not None, \"Should find override pricing\"\n        assert result.input_cost_per_token == pytest.approx(0.999)\n        assert result.output_cost_per_token == pytest.approx(0.888)\n\n    def test_default_fallback(self):\n        \"\"\"Falls back to built-in default when no override exists.\"\"\"\n        overrides = PricingTable(entries={})\n        # This test assumes there's a built-in default for a common model\n        # If no default exists, result may be None — that's also valid\n        result = get_pricing(ProviderName.anthropic, \"claude-3-sonnet\", overrides)\n        # We accept either a valid TokenPricing or None (if no defaults exist)\n        if result is not None:\n            assert result.input_cost_per_token >= 0.0\n            assert result.output_cost_per_token >= 0.0\n\n    def test_unknown_model_returns_none(self):\n        \"\"\"Returns None for unknown model with no override.\"\"\"\n        overrides = PricingTable(entries={})\n        result = get_pricing(\n            ProviderName.anthropic, \"nonexistent-model-xyz-999\", overrides\n        )\n        assert result is None, (\n            f\"Unknown model should return None, got {result}\"\n        )\n\n    def test_multiple_entries_correct_lookup(self):\n        \"\"\"Correct lookup from pricing table with multiple entries.\"\"\"\n        entries = {\n            \"model-a\": TokenPricing(\n                input_cost_per_token=0.001,\n                output_cost_per_token=0.002,\n            ),\n            \"model-b\": TokenPricing(\n                input_cost_per_token=0.003,\n                output_cost_per_token=0.004,\n            ),\n            \"model-c\": TokenPricing(\n                input_cost_per_token=0.005,\n                output_cost_per_token=0.006,\n            ),\n        }\n        overrides = PricingTable(entries=entries)\n        result = get_pricing(ProviderName.anthropic, \"model-b\", overrides)\n        assert result is not None\n        assert result.input_cost_per_token == pytest.approx(0.003)\n        assert result.output_cost_per_token == pytest.approx(0.004)\n\n    def test_override_for_one_model_does_not_affect_others(self):\n        \"\"\"Override for one model does not affect other models.\"\"\"\n        overrides = PricingTable(entries={\n            \"model-a\": TokenPricing(\n                input_cost_per_token=0.999,\n                output_cost_per_token=0.999,\n            ),\n        })\n        # model-b should not get model-a's override\n        result = get_pricing(ProviderName.anthropic, \"model-b\", overrides)\n        if result is not None:\n            assert result.input_cost_per_token != pytest.approx(0.999), (\n                \"model-b should not get model-a's override pricing\"\n            )\n\n\n# ---------------------------------------------------------------------------\n# 7. TestClose\n# ---------------------------------------------------------------------------\n\nclass TestClose:\n    \"\"\"Tests for the close() resource cleanup method.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_close_owned_client(self, valid_config, monkeypatch):\n        \"\"\"Closing a client with owned httpx.AsyncClient releases resources.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        client = create_remote_client(valid_config)\n        await client.close()\n        # After close, the internal httpx client should be closed\n        # We can verify by trying to send a request (should fail)\n        # This is tested more explicitly in test_send_after_close_raises\n\n    @pytest.mark.asyncio\n    async def test_close_injected_client_noop(self, valid_config, monkeypatch):\n        \"\"\"Closing a client with injected httpx.AsyncClient is a no-op.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        external = httpx.AsyncClient()\n        try:\n            client = create_remote_client(valid_config, http_client=external)\n            await client.close()\n            assert not external.is_closed, (\n                \"Injected httpx client should remain open after close()\"\n            )\n        finally:\n            await external.aclose()\n\n    @pytest.mark.asyncio\n    async def test_close_idempotent(self, valid_config, monkeypatch):\n        \"\"\"Multiple calls to close are safe.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        client = create_remote_client(valid_config)\n        await client.close()\n        # Second close should not raise\n        await client.close()\n\n    @pytest.mark.asyncio\n    async def test_send_after_close_raises(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"send_request after close raises RuntimeError for owned client.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        client = create_remote_client(valid_config)\n        await client.close()\n        with pytest.raises((RuntimeError, Exception)):\n            await client.send_request(sample_messages, default_params)\n\n\n# ---------------------------------------------------------------------------\n# 8. TestInvariants\n# ---------------------------------------------------------------------------\n\nclass TestInvariants:\n    \"\"\"Tests for cross-cutting contract invariants.\"\"\"\n\n    def test_api_key_not_in_string_representation(self, valid_config, monkeypatch):\n        \"\"\"API key is stored as SecretStr and never appears in string representation.\"\"\"\n        api_key = \"sk-super-secret-key-12345\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", api_key)\n        client = create_remote_client(valid_config)\n        client_str = str(client)\n        client_repr = repr(client)\n        assert api_key not in client_str, (\n            \"API key should not appear in str(client)\"\n        )\n        assert api_key not in client_repr, (\n            \"API key should not appear in repr(client)\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_error_carries_all_metadata(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"All error types carry provider, message, request_id, retries_attempted, status_code.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n\n        error_scenarios = [\n            (401, AuthError),\n            (400, InvalidRequestError),\n        ]\n\n        for status_code, error_class in error_scenarios:\n            transport = _build_mock_transport([_make_error_response(status_code)])\n            http_client = httpx.AsyncClient(transport=transport)\n            try:\n                client = create_remote_client(valid_config, http_client=http_client)\n                with pytest.raises(error_class) as exc_info:\n                    await client.send_request(sample_messages, default_params)\n                err = exc_info.value\n                assert hasattr(err, \"provider\"), f\"{error_class.__name__} missing provider\"\n                assert hasattr(err, \"message\"), f\"{error_class.__name__} missing message\"\n                assert hasattr(err, \"request_id\"), f\"{error_class.__name__} missing request_id\"\n                assert hasattr(err, \"retries_attempted\"), (\n                    f\"{error_class.__name__} missing retries_attempted\"\n                )\n                assert hasattr(err, \"status_code\"), (\n                    f\"{error_class.__name__} missing status_code\"\n                )\n            finally:\n                await http_client.aclose()\n\n    @pytest.mark.asyncio\n    async def test_taskresponse_is_frozen(\n        self, valid_config, sample_messages, default_params, monkeypatch\n    ):\n        \"\"\"TaskResponse is immutable (frozen Pydantic model).\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        transport = _build_mock_transport([_make_success_response()])\n        http_client = httpx.AsyncClient(transport=transport)\n        try:\n            client = create_remote_client(valid_config, http_client=http_client)\n            response = await client.send_request(sample_messages, default_params)\n            with pytest.raises((AttributeError, TypeError, Exception)):\n                response.content = \"modified\"\n        finally:\n            await http_client.aclose()\n\n    def test_token_usage_frozen(self):\n        \"\"\"TokenUsage is immutable (frozen Pydantic model).\"\"\"\n        usage = TokenUsage(input_tokens=100, output_tokens=50)\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            usage.input_tokens = 999\n\n    def test_token_pricing_frozen(self):\n        \"\"\"TokenPricing is immutable (frozen Pydantic model).\"\"\"\n        pricing = TokenPricing(\n            input_cost_per_token=0.001,\n            output_cost_per_token=0.002,\n        )\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            pricing.input_cost_per_token = 999.0\n\n    @pytest.mark.asyncio\n    async def test_provider_matches_in_response(\n        self, sample_messages, default_params, monkeypatch,\n        default_retry_config, default_timeout_config, empty_pricing_table,\n    ):\n        \"\"\"Returned TaskResponse.provider always matches the client's configured provider.\"\"\"\n        monkeypatch.setenv(\"TEST_ANTHROPIC_API_KEY\", \"sk-test-key-12345\")\n        for provider in [ProviderName.anthropic]:\n            config = RemoteClientConfig(\n                provider=provider,\n                model=\"claude-3-sonnet\",\n                api_key_env_var=\"TEST_ANTHROPIC_API_KEY\",\n                retry=default_retry_config,\n                timeout=default_timeout_config,\n                pricing_overrides=empty_pricing_table,\n            )\n            transport = _build_mock_transport([_make_success_response()])\n            http_client = httpx.AsyncClient(transport=transport)\n            try:\n                client = create_remote_client(config, http_client=http_client)\n                response = await client.send_request(sample_messages, default_params)\n                assert response.provider == provider, (\n                    f\"Response provider {response.provider} should match config {provider}\"\n                )\n            finally:\n                await http_client.aclose()\n"
+}

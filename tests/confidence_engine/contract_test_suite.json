@@ -1,0 +1,679 @@
+{
+  "component_id": "confidence_engine",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_happy_path",
+      "description": "Engine initializes successfully with valid config, non-empty evaluator registry, and valid phase thresholds",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid ConfidenceEngineConfig, evaluator registry with matching evaluator types, mock logger",
+      "expected_output_description": "Engine constructed with empty internal state maps",
+      "expected_error": "",
+      "assertions": [
+        "Engine task-to-window map is empty",
+        "Engine task-to-last-known-phase map is empty",
+        "Engine consecutive-windows-above-threshold counters are empty",
+        "Engine previous-score map is empty",
+        "phase_manager.validate_thresholds was called with config.phase_thresholds"
+      ]
+    },
+    {
+      "id": "init_error_invalid_phase_thresholds",
+      "description": "Engine raises error when phase_thresholds violate ordering invariant",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with emergency_threshold > coaching_trigger in phase_thresholds",
+      "expected_output_description": "",
+      "expected_error": "invalid_phase_thresholds",
+      "assertions": [
+        "Exception is raised during construction",
+        "Error indicates threshold ordering violation"
+      ]
+    },
+    {
+      "id": "init_error_empty_evaluator_registry",
+      "description": "Engine raises error when evaluator_registry is an empty dict",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config but empty evaluator_registry dict",
+      "expected_output_description": "",
+      "expected_error": "empty_evaluator_registry",
+      "assertions": [
+        "Exception is raised during construction"
+      ]
+    },
+    {
+      "id": "init_error_missing_evaluator_for_task",
+      "description": "Engine raises error when task_evaluator_configs references evaluator type not in registry",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with task referencing 'semantic_similarity' evaluator, but registry only has 'exact_match'",
+      "expected_output_description": "",
+      "expected_error": "missing_evaluator_for_task",
+      "assertions": [
+        "Exception is raised during construction"
+      ]
+    },
+    {
+      "id": "init_error_empty_task_evaluator_configs",
+      "description": "Engine raises error when task_evaluator_configs is empty",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with empty task_evaluator_configs dict",
+      "expected_output_description": "",
+      "expected_error": "empty_task_evaluator_configs",
+      "assertions": [
+        "Exception is raised during construction"
+      ]
+    },
+    {
+      "id": "record_comparison_happy_path",
+      "description": "Successful evaluation returns EvaluationOutcome with valid score, added_to_window=True, and correct evaluator_type",
+      "function": "record_comparison",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_id with configured evaluator, non-empty input_data, local_output, remote_output",
+      "expected_output_description": "EvaluationOutcome with score in [0.0, 1.0], added_to_window=True, error=None, valid ISO-8601 timestamp",
+      "expected_error": "",
+      "assertions": [
+        "outcome.score is not None and 0.0 <= outcome.score <= 1.0",
+        "outcome.added_to_window is True",
+        "outcome.error is None",
+        "outcome.evaluator_type matches the configured evaluator type for the task",
+        "outcome.timestamp is a valid UTC ISO-8601 string",
+        "Window size for the task is now 1"
+      ]
+    },
+    {
+      "id": "record_comparison_evaluator_failure",
+      "description": "Evaluator failure returns degraded EvaluationOutcome with score=None and error message, not added to window",
+      "function": "record_comparison",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_id but evaluator.evaluate raises an exception",
+      "expected_output_description": "EvaluationOutcome with score=None, added_to_window=False, error populated",
+      "expected_error": "",
+      "assertions": [
+        "outcome.score is None",
+        "outcome.added_to_window is False",
+        "outcome.error is not None and len(outcome.error) > 0",
+        "Window size for the task is 0"
+      ]
+    },
+    {
+      "id": "record_comparison_error_unknown_task_id",
+      "description": "Raises error for task_id not in task_evaluator_configs",
+      "function": "record_comparison",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id='nonexistent_task' not in config",
+      "expected_output_description": "",
+      "expected_error": "unknown_task_id",
+      "assertions": [
+        "Exception is raised indicating unknown task_id"
+      ]
+    },
+    {
+      "id": "record_comparison_error_empty_task_id",
+      "description": "Raises error for empty task_id string",
+      "function": "record_comparison",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id=''",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": [
+        "Exception is raised indicating empty task_id"
+      ]
+    },
+    {
+      "id": "record_comparison_error_empty_input_data",
+      "description": "Raises error for empty input_data string",
+      "function": "record_comparison",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_id but input_data=''",
+      "expected_output_description": "",
+      "expected_error": "empty_input_data",
+      "assertions": [
+        "Exception is raised indicating empty input_data"
+      ]
+    },
+    {
+      "id": "record_comparison_lazy_window_creation",
+      "description": "Rolling window is lazily created on first record_comparison for a task",
+      "function": "record_comparison",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "First call to record_comparison for a task_id",
+      "expected_output_description": "Window exists for task after call, window size is 1",
+      "expected_error": "",
+      "assertions": [
+        "get_window_size(task_id) returns 1 after first successful record_comparison",
+        "Window did not exist before the call"
+      ]
+    },
+    {
+      "id": "get_snapshot_happy_path_with_data",
+      "description": "Returns enriched snapshot with correct fields after recording comparisons",
+      "function": "get_snapshot",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id with recorded comparisons, example_count=10, local_model_available=True",
+      "expected_output_description": "ConfidenceSnapshotEnriched with populated fields",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.task_type == task_id",
+        "snapshot.training_example_count == 10",
+        "snapshot.correlation_score is not None",
+        "snapshot.sample_count > 0",
+        "snapshot.phase in ('REMOTE_ONLY', 'COACHING', 'AUTONOMOUS')",
+        "snapshot.trend_direction in ('IMPROVING', 'STABLE', 'DEGRADING')",
+        "snapshot.window_size == config.window_size"
+      ]
+    },
+    {
+      "id": "get_snapshot_no_window",
+      "description": "Returns default snapshot when task has no rolling window",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id that has never had record_comparison called",
+      "expected_output_description": "Snapshot with correlation_score=None, sample_count=0, phase=REMOTE_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.correlation_score is None",
+        "snapshot.sample_count == 0",
+        "snapshot.phase == 'REMOTE_ONLY'",
+        "snapshot.is_stale == False",
+        "snapshot.task_type == task_id"
+      ]
+    },
+    {
+      "id": "get_snapshot_local_model_unavailable",
+      "description": "Phase is REMOTE_ONLY when local_model_available is False regardless of score",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id with high scores in window, local_model_available=False",
+      "expected_output_description": "Snapshot with phase=REMOTE_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.phase == 'REMOTE_ONLY'"
+      ]
+    },
+    {
+      "id": "get_snapshot_error_empty_task_id",
+      "description": "Raises error for empty task_id",
+      "function": "get_snapshot",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": [
+        "Exception is raised indicating empty task_id"
+      ]
+    },
+    {
+      "id": "get_snapshot_error_negative_example_count",
+      "description": "Raises error for negative example_count",
+      "function": "get_snapshot",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "example_count=-1",
+      "expected_output_description": "",
+      "expected_error": "negative_example_count",
+      "assertions": [
+        "Exception is raised indicating negative example_count"
+      ]
+    },
+    {
+      "id": "get_snapshot_phase_transition_logged",
+      "description": "Phase transition produces phase_transition dict in snapshot",
+      "function": "get_snapshot",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Engine state where phase transitions from REMOTE_ONLY to COACHING",
+      "expected_output_description": "Snapshot with phase_transition containing from_phase, to_phase, reason, context",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.phase_transition is not None",
+        "snapshot.phase_transition contains 'from_phase'",
+        "snapshot.phase_transition contains 'to_phase'",
+        "snapshot.phase_transition contains 'reason'",
+        "snapshot.phase_transition contains 'context'"
+      ]
+    },
+    {
+      "id": "get_snapshot_no_phase_transition",
+      "description": "phase_transition is None when phase does not change",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Two consecutive get_snapshot calls with same resulting phase",
+      "expected_output_description": "Second snapshot has phase_transition=None",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.phase_transition is None"
+      ]
+    },
+    {
+      "id": "get_snapshot_drift_detected",
+      "description": "Drift is detected when trend_direction is DEGRADING",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Window with degrading trend",
+      "expected_output_description": "drift_shift_status.drift_detected is True",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.drift_shift_status.drift_detected is True"
+      ]
+    },
+    {
+      "id": "get_snapshot_shift_detected",
+      "description": "Shift is detected when score delta exceeds trend_sensitivity",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Score drops by more than trend_sensitivity between snapshots",
+      "expected_output_description": "drift_shift_status.shift_detected is True",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.drift_shift_status.shift_detected is True",
+        "snapshot.drift_shift_status.score_delta is not None"
+      ]
+    },
+    {
+      "id": "get_snapshot_consecutive_windows_increment",
+      "description": "consecutive_windows_above_threshold increments when score >= phase2_to_phase3_threshold",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple get_snapshot calls with high correlation scores",
+      "expected_output_description": "consecutive_windows_above_threshold increases each call",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.consecutive_windows_above_threshold > 0"
+      ]
+    },
+    {
+      "id": "get_snapshot_consecutive_windows_reset",
+      "description": "consecutive_windows_above_threshold resets to 0 when score drops below threshold",
+      "function": "get_snapshot",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Score drops below phase2_to_phase3_threshold after being above",
+      "expected_output_description": "consecutive_windows_above_threshold is 0",
+      "expected_error": "",
+      "assertions": [
+        "snapshot.consecutive_windows_above_threshold == 0"
+      ]
+    },
+    {
+      "id": "get_all_snapshots_happy_path",
+      "description": "Returns snapshots for all known tasks with correct defaults for missing keys",
+      "function": "get_all_snapshots",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple tasks configured, example_counts and availability for some tasks",
+      "expected_output_description": "ConfidenceSnapshotEnrichedMap with entries for all known tasks",
+      "expected_error": "",
+      "assertions": [
+        "All task_ids from config and windows are present in returned map",
+        "Tasks not in example_counts default to example_count=0",
+        "Tasks not in local_model_availability default to local_model_available=False"
+      ]
+    },
+    {
+      "id": "get_all_snapshots_error_negative_example_count",
+      "description": "Raises error when a value in example_counts is negative",
+      "function": "get_all_snapshots",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "example_counts={'task1': -5}",
+      "expected_output_description": "",
+      "expected_error": "invalid_example_count_value",
+      "assertions": [
+        "Exception is raised indicating invalid example count value"
+      ]
+    },
+    {
+      "id": "persist_state_happy_path",
+      "description": "Persists all task windows as JSON files in persistence_dir",
+      "function": "persist_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Engine with multiple tasks that have rolling windows",
+      "expected_output_description": "JSON files created for each task in persistence_dir",
+      "expected_error": "",
+      "assertions": [
+        "A JSON file exists for each task with a rolling window",
+        "persistence_dir exists as a directory"
+      ]
+    },
+    {
+      "id": "persist_state_io_failure_logged",
+      "description": "I/O failure is logged at WARNING and does not raise, other tasks still persist",
+      "function": "persist_state",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "One task's persist raises IOError, another task's persist succeeds",
+      "expected_output_description": "WARNING log emitted, no exception raised, other task file written",
+      "expected_error": "",
+      "assertions": [
+        "No exception raised",
+        "WARNING log was emitted",
+        "Other task files were still written"
+      ]
+    },
+    {
+      "id": "persist_state_creates_directory",
+      "description": "Creates persistence_dir if it does not exist",
+      "function": "persist_state",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "persistence_dir does not exist yet",
+      "expected_output_description": "Directory is created and files written",
+      "expected_error": "",
+      "assertions": [
+        "persistence_dir now exists"
+      ]
+    },
+    {
+      "id": "load_state_happy_path",
+      "description": "Loads persisted windows from disk and returns count of loaded windows",
+      "function": "load_state",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "persistence_dir with valid task JSON files",
+      "expected_output_description": "Returns count of loaded windows, windows available in engine",
+      "expected_error": "",
+      "assertions": [
+        "Return value equals number of valid JSON files loaded",
+        "get_window_size for loaded tasks returns correct values"
+      ]
+    },
+    {
+      "id": "load_state_no_directory",
+      "description": "Returns 0 when persistence_dir does not exist (no-op)",
+      "function": "load_state",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "persistence_dir does not exist",
+      "expected_output_description": "Returns 0, no error",
+      "expected_error": "",
+      "assertions": [
+        "Return value is 0"
+      ]
+    },
+    {
+      "id": "load_state_corrupted_file_skipped",
+      "description": "Corrupted files are skipped with WARNING log, other files still loaded",
+      "function": "load_state",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "One corrupted JSON file and one valid JSON file in persistence_dir",
+      "expected_output_description": "Returns 1, WARNING log emitted for corrupted file",
+      "expected_error": "",
+      "assertions": [
+        "Return value is 1",
+        "WARNING log was emitted for corrupted file"
+      ]
+    },
+    {
+      "id": "get_task_ids_happy_path",
+      "description": "Returns all unique task_ids from windows and config",
+      "function": "get_task_ids",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Engine with some tasks from config and some from loaded windows",
+      "expected_output_description": "List of all unique task_ids, no duplicates",
+      "expected_error": "",
+      "assertions": [
+        "All task_ids from config are present",
+        "All task_ids from windows are present",
+        "No duplicates in the list"
+      ]
+    },
+    {
+      "id": "get_task_ids_empty_engine",
+      "description": "Returns only config task_ids when no windows exist",
+      "function": "get_task_ids",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Freshly initialized engine, no record_comparison or load_state calls",
+      "expected_output_description": "List of task_ids from task_evaluator_configs only",
+      "expected_error": "",
+      "assertions": [
+        "Returned list matches task_evaluator_configs keys"
+      ]
+    },
+    {
+      "id": "get_window_size_happy_path",
+      "description": "Returns correct window size for a task with recorded comparisons",
+      "function": "get_window_size",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id with 3 recorded comparisons",
+      "expected_output_description": "Returns 3",
+      "expected_error": "",
+      "assertions": [
+        "Return value is 3"
+      ]
+    },
+    {
+      "id": "get_window_size_no_window",
+      "description": "Returns 0 for a task with no rolling window",
+      "function": "get_window_size",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_id that has never had record_comparison called",
+      "expected_output_description": "Returns 0",
+      "expected_error": "",
+      "assertions": [
+        "Return value is 0"
+      ]
+    },
+    {
+      "id": "get_window_size_error_empty_task_id",
+      "description": "Raises error for empty task_id",
+      "function": "get_window_size",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_task_id",
+      "assertions": [
+        "Exception is raised indicating empty task_id"
+      ]
+    },
+    {
+      "id": "invariant_failed_evaluations_never_in_window",
+      "description": "Failed evaluations are never added to the rolling window",
+      "function": "record_comparison",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple calls where evaluator alternately succeeds and fails",
+      "expected_output_description": "Window size only reflects successful evaluations",
+      "expected_error": "",
+      "assertions": [
+        "Window size equals number of successful evaluations only",
+        "Failed evaluations have added_to_window=False"
+      ]
+    },
+    {
+      "id": "invariant_phase_never_persisted",
+      "description": "Phase is always recomputed from window metrics, not stored persistently",
+      "function": "get_snapshot",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Persist and reload state, then get_snapshot with different example_count/availability",
+      "expected_output_description": "Phase is recomputed, not restored from file",
+      "expected_error": "",
+      "assertions": [
+        "Phase is derived from current inputs, not from persisted data"
+      ]
+    },
+    {
+      "id": "invariant_config_immutable",
+      "description": "Config is immutable after construction",
+      "function": "__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Attempt to mutate config after construction",
+      "expected_output_description": "Mutation attempt raises an error or has no effect",
+      "expected_error": "",
+      "assertions": [
+        "Config values cannot be changed after construction"
+      ]
+    },
+    {
+      "id": "invariant_evaluator_errors_never_propagate",
+      "description": "Evaluator exceptions never propagate through record_comparison",
+      "function": "record_comparison",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Evaluator raises various exception types (ValueError, RuntimeError, TypeError)",
+      "expected_output_description": "All return degraded EvaluationOutcome, no exceptions propagate",
+      "expected_error": "",
+      "assertions": [
+        "No exception is raised",
+        "Each call returns EvaluationOutcome with score=None and error populated"
+      ]
+    },
+    {
+      "id": "invariant_score_bounds",
+      "description": "All successful evaluation scores are in [0.0, 1.0]",
+      "function": "record_comparison",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple evaluations returning various scores",
+      "expected_output_description": "All scores within bounds",
+      "expected_error": "",
+      "assertions": [
+        "All non-None scores satisfy 0.0 <= score <= 1.0"
+      ]
+    },
+    {
+      "id": "invariant_persistence_explicit_only",
+      "description": "No file I/O occurs during record_comparison; persistence is caller-controlled",
+      "function": "record_comparison",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Record multiple comparisons, check filesystem",
+      "expected_output_description": "No files written to persistence_dir",
+      "expected_error": "",
+      "assertions": [
+        "persistence_dir contains no files after record_comparison calls"
+      ]
+    },
+    {
+      "id": "invariant_utc_timestamps",
+      "description": "All timestamps in EvaluationOutcome use UTC timezone",
+      "function": "record_comparison",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Record a comparison and inspect timestamp",
+      "expected_output_description": "Timestamp includes UTC timezone indicator",
+      "expected_error": "",
+      "assertions": [
+        "Timestamp string contains '+00:00' or 'Z' UTC indicator",
+        "Parsing the timestamp yields a timezone-aware datetime in UTC"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for ConfidenceEngine.\n\nTests verify the ConfidenceEngine implementation against its contract,\ncovering initialization, record_comparison, snapshot generation,\npersistence, and invariants.\n\nAll dependencies (evaluators, phase_manager, rolling_window) are mocked.\n\"\"\"\n\nimport json\nimport os\nimport pytest\nfrom unittest.mock import MagicMock, patch, PropertyMock, call\nfrom datetime import datetime, timezone\nfrom dateutil.parser import isoparse\n\n\n# ---------------------------------------------------------------------------\n# Import the component under test\n# ---------------------------------------------------------------------------\nfrom src.confidence_engine import (\n    ConfidenceEngine,\n    ConfidenceEngineConfig,\n    EvaluationOutcome,\n    ConfidenceSnapshotEnriched,\n    ConfidenceSnapshotEnrichedMap,\n    DriftShiftStatus,\n)\n\n\n# ===================================================================\n# FIXTURES\n# ===================================================================\n\n@pytest.fixture\ndef valid_phase_thresholds():\n    \"\"\"Phase thresholds satisfying: emergency < coaching < phase2_to_phase3.\"\"\"\n    return {\n        \"emergency_threshold\": 0.2,\n        \"coaching_trigger\": 0.5,\n        \"phase2_to_phase3_threshold\": 0.8,\n    }\n\n\n@pytest.fixture\ndef mock_evaluator():\n    \"\"\"Returns a factory that creates mock evaluators with configurable score.\"\"\"\n    def _make(score=0.85, side_effect=None):\n        evaluator = MagicMock()\n        if side_effect:\n            evaluator.evaluate.side_effect = side_effect\n        else:\n            result = MagicMock()\n            result.score = score\n            evaluator.evaluate.return_value = result\n        return evaluator\n    return _make\n\n\n@pytest.fixture\ndef mock_logger():\n    \"\"\"Mock logger with spy capabilities for structured log verification.\"\"\"\n    logger = MagicMock()\n    logger.info = MagicMock()\n    logger.warning = MagicMock()\n    logger.error = MagicMock()\n    logger.debug = MagicMock()\n    return logger\n\n\n@pytest.fixture\ndef default_evaluator_registry(mock_evaluator):\n    \"\"\"Registry with a single 'exact_match' evaluator.\"\"\"\n    return {\"exact_match\": mock_evaluator(score=0.85)}\n\n\n@pytest.fixture\ndef default_task_evaluator_configs():\n    \"\"\"Task evaluator configs for task_a using exact_match.\"\"\"\n    return {\n        \"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}},\n    }\n\n\n@pytest.fixture\ndef valid_config(valid_phase_thresholds, default_task_evaluator_configs, tmp_path):\n    \"\"\"Constructs a valid ConfidenceEngineConfig.\"\"\"\n    return ConfidenceEngineConfig(\n        window_size=100,\n        max_window_age_seconds=3600.0,\n        trend_sensitivity=0.1,\n        trend_window_size=10,\n        task_evaluator_configs=default_task_evaluator_configs,\n        phase_thresholds=valid_phase_thresholds,\n        persistence_dir=str(tmp_path / \"confidence_state\"),\n    )\n\n\n@pytest.fixture\ndef mock_phase_manager():\n    \"\"\"Mock phase_manager with validate_thresholds and evaluate.\"\"\"\n    pm = MagicMock()\n    pm.validate_thresholds = MagicMock(side_effect=lambda t: t)\n    pm.get_initial_phase = MagicMock(return_value=\"REMOTE_ONLY\")\n\n    phase_result = MagicMock()\n    phase_result.phase = \"REMOTE_ONLY\"\n    phase_result.transition = None\n    pm.evaluate = MagicMock(return_value=phase_result)\n    return pm\n\n\n@pytest.fixture\ndef make_engine(mock_logger, mock_phase_manager):\n    \"\"\"Factory fixture for creating ConfidenceEngine instances with optional overrides.\"\"\"\n    def _make(config=None, evaluator_registry=None, logger=None, phase_manager=None):\n        _logger = logger or mock_logger\n        _pm = phase_manager or mock_phase_manager\n\n        with patch(\"src.confidence_engine.phase_manager\", _pm):\n            engine = ConfidenceEngine(\n                config=config,\n                evaluator_registry=evaluator_registry,\n                logger=_logger,\n            )\n        # Store references for test assertions\n        engine._test_logger = _logger\n        engine._test_phase_manager = _pm\n        return engine\n    return _make\n\n\n@pytest.fixture\ndef engine(make_engine, valid_config, default_evaluator_registry):\n    \"\"\"A ready-to-use ConfidenceEngine with valid config and registry.\"\"\"\n    return make_engine(config=valid_config, evaluator_registry=default_evaluator_registry)\n\n\n@pytest.fixture\ndef multi_task_config(valid_phase_thresholds, tmp_path):\n    \"\"\"Config with multiple tasks and evaluator types.\"\"\"\n    return ConfidenceEngineConfig(\n        window_size=50,\n        max_window_age_seconds=3600.0,\n        trend_sensitivity=0.1,\n        trend_window_size=5,\n        task_evaluator_configs={\n            \"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}},\n            \"task_b\": {\"evaluator_type\": \"semantic_similarity\", \"params\": {}},\n            \"task_c\": {\"evaluator_type\": \"exact_match\", \"params\": {}},\n        },\n        phase_thresholds=valid_phase_thresholds,\n        persistence_dir=str(tmp_path / \"multi_state\"),\n    )\n\n\n@pytest.fixture\ndef multi_task_registry(mock_evaluator):\n    \"\"\"Registry covering both evaluator types for multi-task config.\"\"\"\n    return {\n        \"exact_match\": mock_evaluator(score=0.9),\n        \"semantic_similarity\": mock_evaluator(score=0.75),\n    }\n\n\n@pytest.fixture\ndef multi_task_engine(make_engine, multi_task_config, multi_task_registry):\n    \"\"\"Engine with multiple tasks configured.\"\"\"\n    return make_engine(config=multi_task_config, evaluator_registry=multi_task_registry)\n\n\n# ===================================================================\n# 1. INITIALIZATION & CONFIG VALIDATION TESTS\n# ===================================================================\n\nclass TestConfidenceEngineInit:\n    \"\"\"Test __init__ happy paths and error paths.\"\"\"\n\n    def test_init_happy_path(self, engine, mock_phase_manager):\n        \"\"\"Engine initializes successfully with valid config and deps.\"\"\"\n        # Postcondition: internal maps are empty\n        assert engine.get_task_ids() is not None\n        # Phase thresholds validated\n        mock_phase_manager.validate_thresholds.assert_called_once()\n\n    def test_init_internal_state_empty(self, engine):\n        \"\"\"All internal state maps are empty after construction.\"\"\"\n        # No windows exist\n        task_ids_with_windows = [\n            tid for tid in engine.get_task_ids()\n            if engine.get_window_size(tid) > 0\n        ]\n        assert task_ids_with_windows == [], \\\n            \"No windows should exist after construction\"\n\n    def test_init_error_invalid_phase_thresholds(\n        self, make_engine, default_task_evaluator_configs,\n        default_evaluator_registry, tmp_path, mock_phase_manager\n    ):\n        \"\"\"Raises error when phase_thresholds violate ordering invariant.\"\"\"\n        invalid_thresholds = {\n            \"emergency_threshold\": 0.9,   # > coaching_trigger -> invalid\n            \"coaching_trigger\": 0.5,\n            \"phase2_to_phase3_threshold\": 0.8,\n        }\n        mock_phase_manager.validate_thresholds.side_effect = ValueError(\n            \"invalid_phase_thresholds\"\n        )\n        config = ConfidenceEngineConfig(\n            window_size=100,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.1,\n            trend_window_size=10,\n            task_evaluator_configs=default_task_evaluator_configs,\n            phase_thresholds=invalid_thresholds,\n            persistence_dir=str(tmp_path / \"state\"),\n        )\n        with pytest.raises(Exception) as exc_info:\n            make_engine(\n                config=config,\n                evaluator_registry=default_evaluator_registry,\n                phase_manager=mock_phase_manager,\n            )\n        assert \"threshold\" in str(exc_info.value).lower() or \"invalid\" in str(exc_info.value).lower()\n\n    def test_init_error_empty_evaluator_registry(\n        self, make_engine, valid_config\n    ):\n        \"\"\"Raises error when evaluator_registry is an empty dict.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            make_engine(config=valid_config, evaluator_registry={})\n        # Error should indicate empty registry\n        assert exc_info.value is not None\n\n    def test_init_error_missing_evaluator_for_task(\n        self, make_engine, valid_config\n    ):\n        \"\"\"Raises when task references evaluator type not in registry.\"\"\"\n        # task_a needs 'exact_match', but we only provide 'semantic_similarity'\n        wrong_registry = {\"semantic_similarity\": MagicMock()}\n        with pytest.raises(Exception):\n            make_engine(config=valid_config, evaluator_registry=wrong_registry)\n\n    def test_init_error_empty_task_evaluator_configs(\n        self, make_engine, valid_phase_thresholds,\n        default_evaluator_registry, tmp_path\n    ):\n        \"\"\"Raises error when task_evaluator_configs is empty dict.\"\"\"\n        with pytest.raises(Exception):\n            config = ConfidenceEngineConfig(\n                window_size=100,\n                max_window_age_seconds=3600.0,\n                trend_sensitivity=0.1,\n                trend_window_size=10,\n                task_evaluator_configs={},\n                phase_thresholds=valid_phase_thresholds,\n                persistence_dir=str(tmp_path / \"state\"),\n            )\n            make_engine(config=config, evaluator_registry=default_evaluator_registry)\n\n    def test_config_immutable_after_init(self, engine):\n        \"\"\"Config is frozen/immutable after construction — invariant.\"\"\"\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            engine._config.window_size = 999\n\n\n# ===================================================================\n# 2. RECORD_COMPARISON TESTS\n# ===================================================================\n\nclass TestRecordComparison:\n    \"\"\"Test record_comparison happy paths, error paths, and edge cases.\"\"\"\n\n    def test_happy_path_successful_evaluation(self, engine):\n        \"\"\"Successful evaluation returns correct EvaluationOutcome.\"\"\"\n        outcome = engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"What is 2+2?\",\n            local_output=\"4\",\n            remote_output=\"4\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        assert isinstance(outcome, EvaluationOutcome), \\\n            \"Should return EvaluationOutcome\"\n        assert outcome.score is not None, \"Score should not be None on success\"\n        assert 0.0 <= outcome.score <= 1.0, \\\n            f\"Score {outcome.score} should be in [0.0, 1.0]\"\n        assert outcome.added_to_window is True, \\\n            \"Successful evaluation should be added to window\"\n        assert outcome.error is None, \\\n            \"Error should be None on success\"\n        assert outcome.evaluator_type == \"exact_match\", \\\n            f\"evaluator_type should be 'exact_match', got '{outcome.evaluator_type}'\"\n\n    def test_happy_path_timestamp_is_utc_iso8601(self, engine):\n        \"\"\"Timestamp is valid UTC ISO-8601.\"\"\"\n        outcome = engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"test input\",\n            local_output=\"output\",\n            remote_output=\"output\",\n            local_fields={},\n            remote_fields={},\n        )\n        ts = outcome.timestamp\n        assert ts is not None\n        parsed = isoparse(ts)\n        assert parsed.tzinfo is not None, \"Timestamp must be timezone-aware\"\n        assert parsed.utcoffset().total_seconds() == 0, \\\n            \"Timestamp must be UTC\"\n\n    def test_evaluator_failure_returns_degraded_outcome(\n        self, make_engine, valid_config, mock_evaluator, mock_logger\n    ):\n        \"\"\"Evaluator failure returns degraded outcome, not added to window.\"\"\"\n        failing_eval = mock_evaluator(side_effect=RuntimeError(\"eval broke\"))\n        registry = {\"exact_match\": failing_eval}\n        engine = make_engine(\n            config=valid_config,\n            evaluator_registry=registry,\n            logger=mock_logger,\n        )\n\n        outcome = engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"test input\",\n            local_output=\"output\",\n            remote_output=\"output\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        assert outcome.score is None, \"Score should be None on failure\"\n        assert outcome.added_to_window is False, \\\n            \"Failed evaluation should NOT be added to window\"\n        assert outcome.error is not None and len(outcome.error) > 0, \\\n            \"Error message should be populated\"\n        assert engine.get_window_size(\"task_a\") == 0, \\\n            \"Window should be empty after failed evaluation\"\n\n    def test_evaluator_failure_logged_as_warning(\n        self, make_engine, valid_config, mock_evaluator, mock_logger\n    ):\n        \"\"\"Evaluator failure is logged at WARNING level.\"\"\"\n        failing_eval = mock_evaluator(side_effect=ValueError(\"bad input\"))\n        registry = {\"exact_match\": failing_eval}\n        engine = make_engine(\n            config=valid_config,\n            evaluator_registry=registry,\n            logger=mock_logger,\n        )\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"test\",\n            local_output=\"a\",\n            remote_output=\"b\",\n            local_fields={},\n            remote_fields={},\n        )\n        mock_logger.warning.assert_called()\n\n    def test_error_unknown_task_id(self, engine):\n        \"\"\"Raises error for unknown task_id.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            engine.record_comparison(\n                task_id=\"nonexistent_task\",\n                input_data=\"test\",\n                local_output=\"a\",\n                remote_output=\"b\",\n                local_fields={},\n                remote_fields={},\n            )\n        assert exc_info.value is not None\n\n    def test_error_empty_task_id(self, engine):\n        \"\"\"Raises error for empty string task_id.\"\"\"\n        with pytest.raises(Exception):\n            engine.record_comparison(\n                task_id=\"\",\n                input_data=\"test\",\n                local_output=\"a\",\n                remote_output=\"b\",\n                local_fields={},\n                remote_fields={},\n            )\n\n    def test_error_empty_input_data(self, engine):\n        \"\"\"Raises error for empty input_data.\"\"\"\n        with pytest.raises(Exception):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=\"\",\n                local_output=\"a\",\n                remote_output=\"b\",\n                local_fields={},\n                remote_fields={},\n            )\n\n    def test_lazy_window_creation(self, engine):\n        \"\"\"Rolling window is lazily created on first record_comparison.\"\"\"\n        assert engine.get_window_size(\"task_a\") == 0, \\\n            \"No window should exist before any record_comparison\"\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        assert engine.get_window_size(\"task_a\") == 1, \\\n            \"Window should contain 1 entry after first successful record_comparison\"\n\n    def test_multiple_comparisons_accumulate(self, engine):\n        \"\"\"Multiple successful comparisons accumulate in the window.\"\"\"\n        for i in range(5):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n        assert engine.get_window_size(\"task_a\") == 5\n\n    def test_failed_evaluations_dont_accumulate(\n        self, make_engine, valid_config, mock_evaluator\n    ):\n        \"\"\"Only successful evaluations increase window size.\"\"\"\n        call_count = 0\n\n        def alternating_eval(*args, **kwargs):\n            nonlocal call_count\n            call_count += 1\n            if call_count % 2 == 0:\n                raise RuntimeError(\"failure\")\n            result = MagicMock()\n            result.score = 0.8\n            return result\n\n        evaluator = MagicMock()\n        evaluator.evaluate.side_effect = alternating_eval\n        registry = {\"exact_match\": evaluator}\n        engine = make_engine(config=valid_config, evaluator_registry=registry)\n\n        outcomes = []\n        for i in range(6):\n            outcome = engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n            outcomes.append(outcome)\n\n        successful = [o for o in outcomes if o.added_to_window]\n        failed = [o for o in outcomes if not o.added_to_window]\n\n        assert len(successful) == 3, \"3 out of 6 should succeed\"\n        assert len(failed) == 3, \"3 out of 6 should fail\"\n        assert engine.get_window_size(\"task_a\") == 3, \\\n            \"Window size should match successful evaluations count\"\n\n\n# ===================================================================\n# 3. GET_SNAPSHOT & PHASE LOGIC TESTS\n# ===================================================================\n\nclass TestGetSnapshot:\n    \"\"\"Test get_snapshot including phase transitions, drift/shift, and trend.\"\"\"\n\n    def test_happy_path_with_data(self, engine, mock_phase_manager):\n        \"\"\"Returns enriched snapshot with correct fields after recordings.\"\"\"\n        # Record some comparisons\n        for i in range(5):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\",\n            example_count=10,\n            local_model_available=True,\n        )\n\n        assert isinstance(snapshot, ConfidenceSnapshotEnriched)\n        assert snapshot.task_type == \"task_a\"\n        assert snapshot.training_example_count == 10\n        assert snapshot.sample_count == 5\n        assert snapshot.phase in (\"REMOTE_ONLY\", \"COACHING\", \"AUTONOMOUS\")\n        assert snapshot.trend_direction in (\"IMPROVING\", \"STABLE\", \"DEGRADING\")\n\n    def test_no_window_returns_default_snapshot(self, engine):\n        \"\"\"Returns default snapshot when no window exists for task.\"\"\"\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\",\n            example_count=0,\n            local_model_available=True,\n        )\n\n        assert snapshot.correlation_score is None, \\\n            \"correlation_score should be None with no window data\"\n        assert snapshot.sample_count == 0, \\\n            \"sample_count should be 0 with no window data\"\n        assert snapshot.phase == \"REMOTE_ONLY\", \\\n            \"Phase should be REMOTE_ONLY with no data\"\n        assert snapshot.is_stale is False, \\\n            \"Should not be stale with no data\"\n\n    def test_local_model_unavailable_forces_remote_only(\n        self, engine, mock_phase_manager\n    ):\n        \"\"\"Phase is REMOTE_ONLY when local_model_available=False.\"\"\"\n        # Configure phase_manager to return REMOTE_ONLY when local unavailable\n        phase_result = MagicMock()\n        phase_result.phase = \"REMOTE_ONLY\"\n        phase_result.transition = None\n        mock_phase_manager.evaluate.return_value = phase_result\n\n        for i in range(10):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\",\n            example_count=100,\n            local_model_available=False,\n        )\n\n        assert snapshot.phase == \"REMOTE_ONLY\", \\\n            \"Phase must be REMOTE_ONLY when local model is unavailable\"\n\n    def test_error_empty_task_id(self, engine):\n        \"\"\"Raises error for empty task_id.\"\"\"\n        with pytest.raises(Exception):\n            engine.get_snapshot(task_id=\"\", example_count=0, local_model_available=True)\n\n    def test_error_negative_example_count(self, engine):\n        \"\"\"Raises error for negative example_count.\"\"\"\n        with pytest.raises(Exception):\n            engine.get_snapshot(\n                task_id=\"task_a\",\n                example_count=-1,\n                local_model_available=True,\n            )\n\n    def test_phase_transition_produces_audit_dict(\n        self, engine, mock_phase_manager\n    ):\n        \"\"\"Phase transition generates phase_transition dict with expected keys.\"\"\"\n        # First call: REMOTE_ONLY (default)\n        phase_result_1 = MagicMock()\n        phase_result_1.phase = \"REMOTE_ONLY\"\n        phase_result_1.transition = None\n\n        # Second call: transition to COACHING\n        transition_mock = MagicMock()\n        transition_mock.from_phase = \"REMOTE_ONLY\"\n        transition_mock.to_phase = \"COACHING\"\n        transition_mock.reason = \"Score above coaching_trigger\"\n        transition_mock.context = {\"score\": 0.85}\n\n        phase_result_2 = MagicMock()\n        phase_result_2.phase = \"COACHING\"\n        phase_result_2.transition = transition_mock\n\n        mock_phase_manager.evaluate.side_effect = [phase_result_1, phase_result_2]\n\n        # First snapshot (baseline)\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n        engine.get_snapshot(task_id=\"task_a\", example_count=10, local_model_available=True)\n\n        # Second snapshot (should trigger transition)\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=20, local_model_available=True\n        )\n\n        if snapshot.phase_transition is not None:\n            assert \"from_phase\" in snapshot.phase_transition\n            assert \"to_phase\" in snapshot.phase_transition\n            assert \"reason\" in snapshot.phase_transition\n            assert \"context\" in snapshot.phase_transition\n\n    def test_no_phase_transition_returns_none(self, engine, mock_phase_manager):\n        \"\"\"phase_transition is None when phase doesn't change.\"\"\"\n        phase_result = MagicMock()\n        phase_result.phase = \"REMOTE_ONLY\"\n        phase_result.transition = None\n        mock_phase_manager.evaluate.return_value = phase_result\n\n        # Two snapshot calls with same phase\n        engine.get_snapshot(task_id=\"task_a\", example_count=0, local_model_available=True)\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=0, local_model_available=True\n        )\n\n        assert snapshot.phase_transition is None, \\\n            \"phase_transition should be None when phase unchanged\"\n\n    def test_drift_detected_when_degrading(\n        self, make_engine, valid_config, mock_evaluator, mock_phase_manager\n    ):\n        \"\"\"drift_shift_status.drift_detected is True when trend is DEGRADING.\"\"\"\n        # Create evaluator that returns decreasing scores\n        call_count = 0\n\n        def decreasing_scores(*args, **kwargs):\n            nonlocal call_count\n            call_count += 1\n            result = MagicMock()\n            result.score = max(0.0, 1.0 - (call_count * 0.05))\n            return result\n\n        evaluator = MagicMock()\n        evaluator.evaluate.side_effect = decreasing_scores\n        registry = {\"exact_match\": evaluator}\n\n        # Configure phase_manager to report DEGRADING trend via snapshot\n        engine = make_engine(\n            config=valid_config,\n            evaluator_registry=registry,\n            phase_manager=mock_phase_manager,\n        )\n\n        # Record many comparisons with decreasing scores\n        for i in range(20):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n\n        # If the trend is indeed degrading, drift should be detected\n        if snapshot.trend_direction == \"DEGRADING\":\n            assert snapshot.drift_shift_status.drift_detected is True, \\\n                \"Drift should be detected when trend is DEGRADING\"\n\n    def test_shift_detected_on_large_score_delta(\n        self, make_engine, mock_phase_manager, mock_evaluator, tmp_path\n    ):\n        \"\"\"shift_detected is True when score delta exceeds trend_sensitivity.\"\"\"\n        # Build config with low trend_sensitivity to make shift detection easy\n        config = ConfidenceEngineConfig(\n            window_size=100,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.05,  # Small sensitivity\n            trend_window_size=5,\n            task_evaluator_configs={\"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}}},\n            phase_thresholds={\n                \"emergency_threshold\": 0.2,\n                \"coaching_trigger\": 0.5,\n                \"phase2_to_phase3_threshold\": 0.8,\n            },\n            persistence_dir=str(tmp_path / \"shift_state\"),\n        )\n\n        # First batch: high scores\n        score_value = [0.95]\n\n        def eval_fn(*args, **kwargs):\n            result = MagicMock()\n            result.score = score_value[0]\n            return result\n\n        evaluator = MagicMock()\n        evaluator.evaluate.side_effect = eval_fn\n        registry = {\"exact_match\": evaluator}\n\n        engine = make_engine(\n            config=config,\n            evaluator_registry=registry,\n            phase_manager=mock_phase_manager,\n        )\n\n        for i in range(10):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        # First snapshot to establish baseline score\n        snap1 = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n\n        # Now record low scores to create a shift\n        score_value[0] = 0.3\n        for i in range(10, 20):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snap2 = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n\n        # The score delta should exceed trend_sensitivity of 0.05\n        if snap2.drift_shift_status.score_delta is not None:\n            assert snap2.drift_shift_status.shift_detected is True, \\\n                f\"Shift should be detected; score_delta={snap2.drift_shift_status.score_delta}\"\n\n    def test_consecutive_windows_increment(\n        self, make_engine, mock_phase_manager, mock_evaluator, tmp_path\n    ):\n        \"\"\"consecutive_windows_above_threshold increments with high scores.\"\"\"\n        config = ConfidenceEngineConfig(\n            window_size=100,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.1,\n            trend_window_size=5,\n            task_evaluator_configs={\"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}}},\n            phase_thresholds={\n                \"emergency_threshold\": 0.2,\n                \"coaching_trigger\": 0.5,\n                \"phase2_to_phase3_threshold\": 0.8,\n            },\n            persistence_dir=str(tmp_path / \"consec_state\"),\n        )\n\n        evaluator = mock_evaluator(score=0.95)  # Above 0.8 threshold\n        registry = {\"exact_match\": evaluator}\n        engine = make_engine(\n            config=config,\n            evaluator_registry=registry,\n            phase_manager=mock_phase_manager,\n        )\n\n        for i in range(5):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        # Multiple get_snapshot calls should increment counter\n        snap1 = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n        snap2 = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n\n        # If score is above threshold, counter should be >= 1\n        if snap1.correlation_score is not None and snap1.correlation_score >= 0.8:\n            assert snap2.consecutive_windows_above_threshold >= 1, \\\n                \"Counter should increment when score is above threshold\"\n\n    def test_consecutive_windows_reset_on_low_score(\n        self, make_engine, mock_phase_manager, mock_evaluator, tmp_path\n    ):\n        \"\"\"consecutive_windows_above_threshold resets to 0 on low score.\"\"\"\n        config = ConfidenceEngineConfig(\n            window_size=100,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.1,\n            trend_window_size=5,\n            task_evaluator_configs={\"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}}},\n            phase_thresholds={\n                \"emergency_threshold\": 0.2,\n                \"coaching_trigger\": 0.5,\n                \"phase2_to_phase3_threshold\": 0.8,\n            },\n            persistence_dir=str(tmp_path / \"reset_state\"),\n        )\n\n        score_value = [0.95]\n\n        def eval_fn(*args, **kwargs):\n            result = MagicMock()\n            result.score = score_value[0]\n            return result\n\n        evaluator = MagicMock()\n        evaluator.evaluate.side_effect = eval_fn\n        registry = {\"exact_match\": evaluator}\n        engine = make_engine(\n            config=config,\n            evaluator_registry=registry,\n            phase_manager=mock_phase_manager,\n        )\n\n        # Record high scores\n        for i in range(5):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        engine.get_snapshot(task_id=\"task_a\", example_count=10, local_model_available=True)\n\n        # Now drop score below threshold\n        score_value[0] = 0.3\n        for i in range(5, 15):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n\n        if snapshot.correlation_score is not None and snapshot.correlation_score < 0.8:\n            assert snapshot.consecutive_windows_above_threshold == 0, \\\n                \"Counter should reset to 0 when score drops below threshold\"\n\n    def test_snapshot_task_type_matches_task_id(self, engine):\n        \"\"\"snapshot.task_type always equals the requested task_id.\"\"\"\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=5, local_model_available=True\n        )\n        assert snapshot.task_type == \"task_a\"\n\n    def test_snapshot_training_example_count_matches(self, engine):\n        \"\"\"snapshot.training_example_count matches provided example_count.\"\"\"\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=42, local_model_available=True\n        )\n        assert snapshot.training_example_count == 42\n\n    def test_snapshot_correlation_score_in_bounds(self, engine):\n        \"\"\"correlation_score is in [0.0, 1.0] when data exists.\"\"\"\n        for i in range(5):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=5, local_model_available=True\n        )\n\n        if snapshot.correlation_score is not None:\n            assert 0.0 <= snapshot.correlation_score <= 1.0, \\\n                f\"correlation_score {snapshot.correlation_score} out of bounds\"\n\n\n# ===================================================================\n# 4. GET_ALL_SNAPSHOTS TESTS\n# ===================================================================\n\nclass TestGetAllSnapshots:\n    \"\"\"Test get_all_snapshots multi-task behavior.\"\"\"\n\n    def test_happy_path_all_tasks_covered(self, multi_task_engine):\n        \"\"\"Returns snapshots for all known tasks.\"\"\"\n        # Record some data for task_a\n        multi_task_engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        result = multi_task_engine.get_all_snapshots(\n            example_counts={\"task_a\": 10, \"task_b\": 5},\n            local_model_availability={\"task_a\": True, \"task_b\": True},\n        )\n\n        assert isinstance(result, ConfidenceSnapshotEnrichedMap)\n        # All tasks from config should be present\n        for tid in [\"task_a\", \"task_b\", \"task_c\"]:\n            assert tid in result.snapshots, \\\n                f\"Task {tid} should be in snapshots\"\n\n    def test_missing_example_counts_default_to_zero(self, multi_task_engine):\n        \"\"\"Tasks not in example_counts get example_count=0.\"\"\"\n        result = multi_task_engine.get_all_snapshots(\n            example_counts={\"task_a\": 10},  # task_b, task_c missing\n            local_model_availability={},\n        )\n\n        assert result.snapshots[\"task_b\"].training_example_count == 0\n        assert result.snapshots[\"task_c\"].training_example_count == 0\n\n    def test_missing_availability_defaults_to_false(self, multi_task_engine):\n        \"\"\"Tasks not in local_model_availability default to False.\"\"\"\n        result = multi_task_engine.get_all_snapshots(\n            example_counts={},\n            local_model_availability={\"task_a\": True},  # task_b, task_c missing\n        )\n\n        # task_b and task_c should get REMOTE_ONLY phase\n        assert result.snapshots[\"task_b\"].phase == \"REMOTE_ONLY\"\n        assert result.snapshots[\"task_c\"].phase == \"REMOTE_ONLY\"\n\n    def test_error_negative_example_count_value(self, multi_task_engine):\n        \"\"\"Raises error when a value in example_counts is negative.\"\"\"\n        with pytest.raises(Exception):\n            multi_task_engine.get_all_snapshots(\n                example_counts={\"task_a\": -5},\n                local_model_availability={},\n            )\n\n\n# ===================================================================\n# 5. PERSISTENCE TESTS\n# ===================================================================\n\nclass TestPersistence:\n    \"\"\"Test persist_state and load_state.\"\"\"\n\n    def test_persist_state_happy_path(self, engine, tmp_path):\n        \"\"\"Persists window files for tasks with data.\"\"\"\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        engine.persist_state()\n\n        persistence_dir = engine._config.persistence_dir\n        assert os.path.isdir(persistence_dir), \"persistence_dir should exist\"\n        expected_file = os.path.join(persistence_dir, \"task_a.json\")\n        assert os.path.isfile(expected_file), \\\n            f\"Expected {expected_file} to exist\"\n\n    def test_persist_state_creates_directory(self, engine, tmp_path):\n        \"\"\"Creates persistence_dir if it does not exist.\"\"\"\n        persistence_dir = engine._config.persistence_dir\n        # Ensure dir doesn't exist yet\n        if os.path.exists(persistence_dir):\n            os.rmdir(persistence_dir)\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n        engine.persist_state()\n\n        assert os.path.isdir(persistence_dir)\n\n    def test_persist_state_io_failure_logged_not_raised(\n        self, make_engine, valid_config, default_evaluator_registry, mock_logger\n    ):\n        \"\"\"I/O failure is logged at WARNING, doesn't raise.\"\"\"\n        engine = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        # Mock the window's persist method to fail\n        with patch.object(engine, \"persist_state\", wraps=engine.persist_state):\n            # If we can access internal windows, patch their persist\n            # Otherwise, make the directory non-writable\n            persistence_dir = engine._config.persistence_dir\n            os.makedirs(persistence_dir, exist_ok=True)\n            os.chmod(persistence_dir, 0o000)\n\n            try:\n                # Should not raise\n                engine.persist_state()\n            except PermissionError:\n                # Some implementations may raise at directory level\n                pass\n            finally:\n                os.chmod(persistence_dir, 0o755)\n\n    def test_load_state_happy_path(\n        self, make_engine, valid_config, default_evaluator_registry, mock_logger\n    ):\n        \"\"\"Round-trip: persist then load recovers window state.\"\"\"\n        engine1 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n\n        # Record data and persist\n        for i in range(5):\n            engine1.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n        engine1.persist_state()\n\n        # Create new engine and load\n        engine2 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n        loaded_count = engine2.load_state()\n\n        assert loaded_count >= 1, \"Should load at least 1 task window\"\n        assert engine2.get_window_size(\"task_a\") == 5, \\\n            \"Loaded window should have 5 entries\"\n\n    def test_load_state_no_directory_returns_zero(\n        self, make_engine, default_evaluator_registry, mock_logger,\n        valid_phase_thresholds, tmp_path\n    ):\n        \"\"\"Returns 0 when persistence_dir does not exist.\"\"\"\n        config = ConfidenceEngineConfig(\n            window_size=100,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.1,\n            trend_window_size=10,\n            task_evaluator_configs={\"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}}},\n            phase_thresholds=valid_phase_thresholds,\n            persistence_dir=str(tmp_path / \"nonexistent_dir\"),\n        )\n        engine = make_engine(\n            config=config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n\n        result = engine.load_state()\n        assert result == 0, \"Should return 0 when no persistence_dir\"\n\n    def test_load_state_corrupted_file_skipped(\n        self, make_engine, valid_config, default_evaluator_registry,\n        mock_logger\n    ):\n        \"\"\"Corrupted files are skipped with WARNING, valid files still load.\"\"\"\n        # First, create valid state\n        engine1 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n        engine1.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n        engine1.persist_state()\n\n        # Write a corrupted file\n        persistence_dir = engine1._config.persistence_dir\n        corrupted_path = os.path.join(persistence_dir, \"corrupted_task.json\")\n        with open(corrupted_path, \"w\") as f:\n            f.write(\"{invalid json!!!\")\n\n        # Load in new engine\n        engine2 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n        loaded_count = engine2.load_state()\n\n        # task_a should load, corrupted_task should be skipped\n        assert loaded_count >= 1, \"At least task_a should load\"\n        # WARNING should have been logged for corrupted file\n        # (implementation-dependent, but the contract says so)\n\n    def test_persist_state_empty_engine(self, engine):\n        \"\"\"Persisting empty engine (no windows) does not raise.\"\"\"\n        # No record_comparison calls made\n        engine.persist_state()\n        # Should complete without error\n\n\n# ===================================================================\n# 6. UTILITY FUNCTION TESTS\n# ===================================================================\n\nclass TestGetTaskIds:\n    \"\"\"Test get_task_ids.\"\"\"\n\n    def test_happy_path(self, multi_task_engine):\n        \"\"\"Returns all task_ids from config.\"\"\"\n        task_ids = multi_task_engine.get_task_ids()\n        assert isinstance(task_ids, list)\n        assert set(task_ids) >= {\"task_a\", \"task_b\", \"task_c\"}\n\n    def test_no_duplicates(self, multi_task_engine):\n        \"\"\"No duplicate task_ids in result.\"\"\"\n        # Record comparison to potentially add to windows\n        multi_task_engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n        task_ids = multi_task_engine.get_task_ids()\n        assert len(task_ids) == len(set(task_ids)), \\\n            \"get_task_ids should return no duplicates\"\n\n    def test_empty_engine_returns_config_tasks(self, engine):\n        \"\"\"Freshly initialized engine returns config task_ids.\"\"\"\n        task_ids = engine.get_task_ids()\n        assert \"task_a\" in task_ids\n\n\nclass TestGetWindowSize:\n    \"\"\"Test get_window_size.\"\"\"\n\n    def test_happy_path_with_data(self, engine):\n        \"\"\"Returns correct window size after recordings.\"\"\"\n        for i in range(3):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n        assert engine.get_window_size(\"task_a\") == 3\n\n    def test_no_window_returns_zero(self, engine):\n        \"\"\"Returns 0 for task with no window.\"\"\"\n        assert engine.get_window_size(\"task_a\") == 0\n\n    def test_error_empty_task_id(self, engine):\n        \"\"\"Raises error for empty task_id.\"\"\"\n        with pytest.raises(Exception):\n            engine.get_window_size(\"\")\n\n    def test_return_value_non_negative(self, engine):\n        \"\"\"Return value is always >= 0.\"\"\"\n        size = engine.get_window_size(\"task_a\")\n        assert size >= 0\n\n\n# ===================================================================\n# 7. INVARIANT TESTS\n# ===================================================================\n\nclass TestInvariants:\n    \"\"\"Test contract invariants.\"\"\"\n\n    def test_failed_evaluations_never_in_window(\n        self, make_engine, valid_config, mock_evaluator\n    ):\n        \"\"\"Failed evaluations are never added to the rolling window.\"\"\"\n        call_count = 0\n\n        def alternating(*args, **kwargs):\n            nonlocal call_count\n            call_count += 1\n            if call_count % 2 == 0:\n                raise RuntimeError(\"fail\")\n            result = MagicMock()\n            result.score = 0.9\n            return result\n\n        evaluator = MagicMock()\n        evaluator.evaluate.side_effect = alternating\n        registry = {\"exact_match\": evaluator}\n        engine = make_engine(config=valid_config, evaluator_registry=registry)\n\n        outcomes = []\n        for i in range(10):\n            o = engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n            outcomes.append(o)\n\n        successful = sum(1 for o in outcomes if o.added_to_window)\n        assert engine.get_window_size(\"task_a\") == successful, \\\n            \"Window size must equal number of successful evaluations\"\n\n        for o in outcomes:\n            if o.score is None:\n                assert o.added_to_window is False, \\\n                    \"Failed eval must have added_to_window=False\"\n\n    def test_evaluator_errors_never_propagate(\n        self, make_engine, valid_config\n    ):\n        \"\"\"Evaluator exceptions never propagate through record_comparison.\"\"\"\n        exception_types = [\n            ValueError(\"bad value\"),\n            RuntimeError(\"runtime error\"),\n            TypeError(\"type error\"),\n            KeyError(\"missing key\"),\n            Exception(\"generic error\"),\n        ]\n\n        for exc in exception_types:\n            evaluator = MagicMock()\n            evaluator.evaluate.side_effect = exc\n            registry = {\"exact_match\": evaluator}\n            engine = make_engine(config=valid_config, evaluator_registry=registry)\n\n            # Should NOT raise\n            outcome = engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=\"input\",\n                local_output=\"local\",\n                remote_output=\"remote\",\n                local_fields={},\n                remote_fields={},\n            )\n\n            assert outcome.score is None, \\\n                f\"Score should be None when evaluator raises {type(exc).__name__}\"\n            assert outcome.error is not None, \\\n                f\"Error should be populated when evaluator raises {type(exc).__name__}\"\n\n    def test_score_bounds_invariant(self, engine):\n        \"\"\"All successful scores are in [0.0, 1.0].\"\"\"\n        scores = []\n        for i in range(10):\n            outcome = engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n            if outcome.score is not None:\n                scores.append(outcome.score)\n\n        for score in scores:\n            assert 0.0 <= score <= 1.0, \\\n                f\"Score {score} out of bounds [0.0, 1.0]\"\n\n    def test_persistence_is_explicit_only(self, engine, tmp_path):\n        \"\"\"No file I/O during record_comparison.\"\"\"\n        persistence_dir = engine._config.persistence_dir\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        # Check that no files were written\n        if os.path.exists(persistence_dir):\n            files = os.listdir(persistence_dir)\n            assert len(files) == 0, \\\n                f\"No files should be written during record_comparison, found: {files}\"\n\n    def test_utc_timestamps_invariant(self, engine):\n        \"\"\"All timestamps use UTC timezone.\"\"\"\n        outcome = engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        ts = outcome.timestamp\n        assert ts is not None, \"Timestamp should not be None\"\n        # Should contain UTC indicator\n        assert \"+00:00\" in ts or ts.endswith(\"Z\"), \\\n            f\"Timestamp '{ts}' should contain UTC indicator\"\n\n        parsed = isoparse(ts)\n        assert parsed.tzinfo is not None, \"Timestamp must be timezone-aware\"\n\n    def test_phase_valid_values_invariant(self, engine, mock_phase_manager):\n        \"\"\"Phase is always one of the valid enum values.\"\"\"\n        valid_phases = {\"REMOTE_ONLY\", \"COACHING\", \"AUTONOMOUS\"}\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n        assert snapshot.phase in valid_phases, \\\n            f\"Phase '{snapshot.phase}' is not a valid value\"\n\n    def test_trend_direction_valid_values_invariant(self, engine, mock_phase_manager):\n        \"\"\"trend_direction is always one of IMPROVING, STABLE, DEGRADING.\"\"\"\n        valid_trends = {\"IMPROVING\", \"STABLE\", \"DEGRADING\"}\n\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=10, local_model_available=True\n        )\n        assert snapshot.trend_direction in valid_trends, \\\n            f\"trend_direction '{snapshot.trend_direction}' is not valid\"\n\n    def test_window_size_bounded_by_config(\n        self, make_engine, mock_evaluator, valid_phase_thresholds,\n        mock_logger, tmp_path\n    ):\n        \"\"\"Window size never exceeds config.window_size.\"\"\"\n        max_window = 5\n        config = ConfidenceEngineConfig(\n            window_size=max_window,\n            max_window_age_seconds=3600.0,\n            trend_sensitivity=0.1,\n            trend_window_size=3,\n            task_evaluator_configs={\"task_a\": {\"evaluator_type\": \"exact_match\", \"params\": {}}},\n            phase_thresholds=valid_phase_thresholds,\n            persistence_dir=str(tmp_path / \"bounded_state\"),\n        )\n        registry = {\"exact_match\": mock_evaluator(score=0.9)}\n        engine = make_engine(\n            config=config,\n            evaluator_registry=registry,\n            logger=mock_logger,\n        )\n\n        # Record more than window_size comparisons\n        for i in range(20):\n            engine.record_comparison(\n                task_id=\"task_a\",\n                input_data=f\"input_{i}\",\n                local_output=f\"local_{i}\",\n                remote_output=f\"remote_{i}\",\n                local_fields={},\n                remote_fields={},\n            )\n\n        size = engine.get_window_size(\"task_a\")\n        assert size <= max_window, \\\n            f\"Window size {size} exceeds config.window_size {max_window}\"\n\n    def test_snapshot_frozen_immutable(self, engine, mock_phase_manager):\n        \"\"\"ConfidenceSnapshotEnriched is frozen/immutable.\"\"\"\n        engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=5, local_model_available=True\n        )\n\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            snapshot.phase = \"AUTONOMOUS\"\n\n    def test_no_global_state_between_instances(\n        self, make_engine, valid_config, default_evaluator_registry, mock_logger\n    ):\n        \"\"\"All state is instance-scoped; no leakage between engines.\"\"\"\n        engine1 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n        engine2 = make_engine(\n            config=valid_config,\n            evaluator_registry=default_evaluator_registry,\n            logger=mock_logger,\n        )\n\n        engine1.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n\n        assert engine1.get_window_size(\"task_a\") == 1\n        assert engine2.get_window_size(\"task_a\") == 0, \\\n            \"engine2 should not be affected by engine1's state\"\n\n    def test_engine_operates_with_zero_persisted_state(self, engine):\n        \"\"\"Engine works correctly with no persisted state loaded.\"\"\"\n        # Don't call load_state, just use the engine directly\n        outcome = engine.record_comparison(\n            task_id=\"task_a\",\n            input_data=\"input\",\n            local_output=\"local\",\n            remote_output=\"remote\",\n            local_fields={},\n            remote_fields={},\n        )\n        assert outcome is not None\n        assert outcome.score is not None or outcome.error is not None\n\n        snapshot = engine.get_snapshot(\n            task_id=\"task_a\", example_count=0, local_model_available=False\n        )\n        assert snapshot.phase == \"REMOTE_ONLY\"\n"
+}

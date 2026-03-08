@@ -1,0 +1,4780 @@
+{
+  "component_id": "config_and_registry",
+  "name": "Configuration, Task Registry & Data Models",
+  "description": "Parses and strictly validates apprentice.yaml at startup using Pydantic v2 models. Defines all shared data models (TaskRequest, TaskResponse, TrainingExample, ComparisonPair, ConfidenceSnapshot, BudgetState, AuditEntry, SamplingDecision, EvaluationResult variants, ModelVersion) used across the entire system. Includes the Task Registry which holds configured task types with their schemas, prompt templates, evaluator types, match fields, and confidence thresholds. Includes the config loader which reads YAML, resolves env:VAR_NAME references, and validates via Pydantic v2 strict mode. Fails fast with clear, field-path-aware error messages on invalid config. This is the foundational layer — every other component depends on these types. Structured internally as six modules: types.py (primitives/enums), models.py (shared data models), config.py (configuration models), factories.py (factory functions), registry.py (TaskRegistry), loader.py (YAML loading). Import chain: types → models → config → factories → registry → loader with no backward imports.",
+  "version": 1,
+  "types": [
+    {
+      "name": "TaskId",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[str, MinLen(1), MaxLen(128), Pattern(r'^[a-z][a-z0-9_-]*$')]. Domain-specific identifier for a task type. Prevents mixup with other string IDs."
+    },
+    {
+      "name": "ModelId",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[str, MinLen(1), MaxLen(256)]. Domain-specific identifier for a model (local or remote). Prevents mixup with other string IDs."
+    },
+    {
+      "name": "ConfidenceScore",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[float, Ge(0.0), Le(1.0)]. A confidence score in the closed interval [0.0, 1.0]. Used throughout the system to drive phase transitions and sampling."
+    },
+    {
+      "name": "CostAmount",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Annotated[Decimal, Ge(0)]. Non-negative decimal monetary amount for budget tracking. Decimal ensures exact arithmetic for hard budget enforcement."
+    },
+    {
+      "name": "AwareDatetime",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "datetime with required tzinfo (timezone-aware). No naive datetimes allowed anywhere in the system. Serialized as ISO 8601 string with timezone offset."
+    },
+    {
+      "name": "SecretStr",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic SecretStr — masks value in repr/logs, accessible via .get_secret_value(). Used for API keys and other sensitive config fields."
+    },
+    {
+      "name": "Path",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "pathlib.Path representing a filesystem path."
+    },
+    {
+      "name": "EnvMapping",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Mapping[str, str] — an immutable string-to-string mapping, typically os.environ or a test override."
+    },
+    {
+      "name": "JsonSchemaDict",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A dict representing a JSON Schema object. Must be a valid JSON Schema with at minimum a 'type' key. Used for input_schema and output_schema on TaskConfig. Runtime type is dict[str, any]."
+    },
+    {
+      "name": "SerializedModel",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "str — A JSON string produced by Pydantic's model_dump_json(). Used for serialization round-trip functions."
+    },
+    {
+      "name": "Phase",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "PHASE_1_REMOTE_ONLY",
+        "PHASE_2_SAMPLING",
+        "PHASE_3_LOCAL_PRIMARY"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing the current operational phase. Phases are emergent from confidence scores, not manually triggered."
+    },
+    {
+      "name": "RoutingDecision",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "REMOTE",
+        "LOCAL",
+        "LOCAL_WITH_REMOTE_COMPARISON",
+        "LOCAL_FALLBACK_TO_REMOTE"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing where a request is routed."
+    },
+    {
+      "name": "EvaluatorType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "EXACT_MATCH",
+        "FUZZY_MATCH",
+        "SEMANTIC_SIMILARITY",
+        "LLM_JUDGE",
+        "CUSTOM"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing the type of evaluator used for comparing responses."
+    },
+    {
+      "name": "BudgetPeriodUnit",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "HOURLY",
+        "DAILY",
+        "WEEKLY",
+        "MONTHLY"
+      ],
+      "inner_types": [],
+      "description": "StrEnum for budget period granularity."
+    },
+    {
+      "name": "EvaluationResultType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "EXACT_MATCH_RESULT",
+        "FUZZY_MATCH_RESULT",
+        "SEMANTIC_SIMILARITY_RESULT",
+        "LLM_JUDGE_RESULT",
+        "CUSTOM_RESULT"
+      ],
+      "inner_types": [],
+      "description": "StrEnum discriminator for the EvaluationResult discriminated union."
+    },
+    {
+      "name": "EvaluatorTypeName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "exact_match",
+        "semantic_similarity",
+        "llm_judge",
+        "regex_match",
+        "json_schema_match"
+      ],
+      "inner_types": [],
+      "description": "Discriminated evaluator type identifiers from config. Each maps to a specific evaluator implementation."
+    },
+    {
+      "name": "FinetuningBackendName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "openai",
+        "anyscale",
+        "local_lora",
+        "axolotl",
+        "custom"
+      ],
+      "inner_types": [],
+      "description": "Supported fine-tuning backend identifiers. Used as discriminator for backend plugin selection."
+    },
+    {
+      "name": "LogLevel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "inner_types": [],
+      "description": "Standard Python logging levels for audit configuration."
+    },
+    {
+      "name": "TaskRequest",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Globally unique request identifier (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Identifies which configured task type this request is for.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The actual input payload. Schema varies per task_id as defined in TaskConfig.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timezone-aware timestamp when the request was created.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional caller-supplied metadata for tracing and auditing. Not interpreted by the system.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing an incoming task request. Primary input contract between the Unified Interface and all downstream components."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Matches the request_id from the corresponding TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Echoed from the TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The response payload. Schema varies per task_id.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model produced this response.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "How the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase at the time this request was served.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time of routing.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when the response was generated.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "latency_ms must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "cost_incurred",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Monetary cost incurred for this response. Zero for local-only responses.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional system-generated metadata.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing the response to a task request. Returned by the Unified Interface to the caller."
+    },
+    {
+      "name": "TrainingExample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "example_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this training example (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type this example belongs to.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input that was sent to the model.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The reference output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model generated this output.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this example was recorded.",
+          "validators": []
+        },
+        {
+          "name": "quality_score",
+          "type_ref": "ConfidenceScore",
+          "required": false,
+          "default": "None",
+          "description": "Optional quality assessment of this example. If absent, assumed high quality.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest that generated this example.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a single training example derived from a remote model response. Flows to the Training Data Store."
+    },
+    {
+      "name": "ComparisonPair",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "pair_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this comparison pair (UUID4 string).",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type for this comparison.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input sent to both models.",
+          "validators": []
+        },
+        {
+          "name": "remote_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "local_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the local model.",
+          "validators": []
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the remote model used.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the local model used.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_result",
+          "type_ref": "EvaluationResult",
+          "required": false,
+          "default": "None",
+          "description": "If evaluation has been performed, the result. None if pending.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this comparison was created.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a side-by-side comparison of remote vs. local model outputs for the same input. Used during Phase 2 sampling to evaluate local model quality."
+    },
+    {
+      "name": "ConfidenceSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this confidence snapshot belongs to.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase derived from the confidence score and configured thresholds.",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison samples that contributed to this score.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the most recent score update.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase2",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 2 begins (sampling starts).",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase3",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 3 begins (local primary).",
+          "validators": []
+        },
+        {
+          "name": "trend",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Short-term score trend: positive means improving, negative means degrading.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model capturing the confidence state for a task at a point in time. Phase is derived from score and thresholds, not set manually."
+    },
+    {
+      "name": "BudgetPeriod",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "unit",
+          "type_ref": "BudgetPeriodUnit",
+          "required": true,
+          "default": "",
+          "description": "Granularity of this period.",
+          "validators": []
+        },
+        {
+          "name": "period_start",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Start of the current budget period.",
+          "validators": []
+        },
+        {
+          "name": "period_end",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "End of the current budget period.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model tracking a single budget period window."
+    },
+    {
+      "name": "BudgetState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this budget state belongs to.",
+          "validators": []
+        },
+        {
+          "name": "total_budget",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Total budget for the current period.",
+          "validators": []
+        },
+        {
+          "name": "spent",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Amount already spent in the current period.",
+          "validators": []
+        },
+        {
+          "name": "remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining: total_budget - spent. Derived but stored for fast access.",
+          "validators": []
+        },
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period window.",
+          "validators": []
+        },
+        {
+          "name": "is_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True when remaining <= 0. System must serve from local only.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the last budget state update.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of requests that incurred cost in this period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "request_count must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='ignore' for persistence forward-compat) representing current budget state. Persisted as JSON file. Uses Decimal for exact cost arithmetic. New instances created via record_cost() returning a copy."
+    },
+    {
+      "name": "AuditEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "When this decision was made. Timezone-aware.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request that triggered this decision.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "Where the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model ultimately served the request.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time of routing.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "System phase at decision time.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred for this request.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "latency_ms must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": false,
+          "default": "None",
+          "description": "Sampling probability if Phase 2, absent otherwise.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback from local to remote occurred.",
+          "validators": []
+        },
+        {
+          "name": "error",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Error message if something went wrong during processing.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional structured context for auditing.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='forbid') representing a single auditable decision. Structured for JSON logging via Python stdlib logging with JSON formatter."
+    },
+    {
+      "name": "SamplingDecision",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request this decision applies to.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "The routing decision made.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The probability used for the sampling coin flip. 0.0 in Phase 1, 1.0 in Phase 3.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "sampling_probability must be in [0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at the time of decision.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at decision time.",
+          "validators": []
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining at decision time.",
+          "validators": []
+        },
+        {
+          "name": "rationale",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation of why this routing decision was made. Logged for auditability.",
+          "validators": []
+        },
+        {
+          "name": "decided_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp of the decision.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a routing/sampling decision made by the Router."
+    },
+    {
+      "name": "ExactMatchResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "",
+          "description": "Discriminator. Must be EXACT_MATCH_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "is_match",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the local and remote outputs matched exactly.",
+          "validators": []
+        },
+        {
+          "name": "matched_fields",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "List of field names that were compared and matched.",
+          "validators": []
+        },
+        {
+          "name": "mismatched_fields",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "List of field names that did not match.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for exact match comparison."
+    },
+    {
+      "name": "FuzzyMatchResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "",
+          "description": "Discriminator. Must be FUZZY_MATCH_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "similarity_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Similarity score between local and remote outputs in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether similarity_score >= threshold.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for fuzzy/approximate match comparison."
+    },
+    {
+      "name": "SemanticSimilarityResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "",
+          "description": "Discriminator. Must be SEMANTIC_SIMILARITY_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "similarity_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Semantic similarity score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether similarity_score >= threshold.",
+          "validators": []
+        },
+        {
+          "name": "embedding_model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name/ID of the embedding model used for comparison.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result for semantic similarity comparison. Requires optional dependency (loaded lazily)."
+    },
+    {
+      "name": "LlmJudgeResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "",
+          "description": "Discriminator. Must be LLM_JUDGE_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Judge-assigned quality score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "threshold",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "The threshold used to determine pass/fail.",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether score >= threshold.",
+          "validators": []
+        },
+        {
+          "name": "judge_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model was used as judge.",
+          "validators": []
+        },
+        {
+          "name": "reasoning",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The judge's reasoning for the score.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost of the judge API call.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result from an LLM-as-judge comparison."
+    },
+    {
+      "name": "CustomEvalResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "result_type",
+          "type_ref": "EvaluationResultType",
+          "required": true,
+          "default": "",
+          "description": "Discriminator. Must be CUSTOM_RESULT.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Custom evaluator score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "is_pass",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the evaluation passed.",
+          "validators": []
+        },
+        {
+          "name": "evaluator_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the custom evaluator.",
+          "validators": []
+        },
+        {
+          "name": "details",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Arbitrary evaluator-specific details.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Evaluation result from a custom/plugin evaluator."
+    },
+    {
+      "name": "EvaluationResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "ExactMatchResult",
+        "FuzzyMatchResult",
+        "SemanticSimilarityResult",
+        "LlmJudgeResult",
+        "CustomEvalResult"
+      ],
+      "description": "Discriminated union of all evaluation result types. Discriminated on result_type field."
+    },
+    {
+      "name": "ModelVersion",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this model version (UUID4 or semantic version string).",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "The logical model this version belongs to.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path or URI to the model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "validation_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Validation score achieved during fine-tuning evaluation.",
+          "validators": []
+        },
+        {
+          "name": "promoted_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp when this version was promoted to active. None if not yet promoted.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": true,
+          "default": "",
+          "description": "Timestamp when this version was created.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training examples used to produce this version.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "training_example_count must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "parent_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "The version this was fine-tuned from. None for initial versions.",
+          "validators": []
+        },
+        {
+          "name": "is_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this is the currently active version for serving.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model (extra='ignore' for persistence forward-compat) representing a versioned local model. Persisted as JSON."
+    },
+    {
+      "name": "ProviderConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "api_base_url",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base URL of the remote LLM API endpoint.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "api_base_url must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "api_key",
+          "type_ref": "SecretStr",
+          "required": true,
+          "default": "",
+          "description": "API key for the remote provider. Specified as env:VAR_NAME in YAML, resolved from environment at parse time via BeforeValidator, then wrapped in SecretStr.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier for the remote provider (e.g. 'gpt-4o', 'claude-3-sonnet').",
+          "validators": []
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "30",
+          "description": "HTTP request timeout in seconds for remote API calls.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 600",
+              "error_message": "timeout_seconds must be between 1 and 600"
+            }
+          ]
+        },
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": false,
+          "default": "3",
+          "description": "Maximum retry attempts for transient remote API failures.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 10",
+              "error_message": "max_retries must be between 0 and 10"
+            }
+          ]
+        },
+        {
+          "name": "retry_base_delay_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Base delay in seconds for exponential backoff on retries.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.1 <= value <= 60.0",
+              "error_message": "retry_base_delay_seconds must be between 0.1 and 60.0"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the remote LLM API provider. Frozen, strict, extra='forbid'. api_key is resolved from env var reference at parse time and wrapped in SecretStr. No defaults for api_key or model — must be explicit."
+    },
+    {
+      "name": "LocalModelConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "endpoint",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "URL of the local model inference server (e.g. 'http://localhost:8080/v1').",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^https?://.+",
+              "error_message": "endpoint must be a valid HTTP(S) URL"
+            }
+          ]
+        },
+        {
+          "name": "model_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name/identifier of the local model to use for inference.",
+          "validators": []
+        },
+        {
+          "name": "timeout_seconds",
+          "type_ref": "int",
+          "required": false,
+          "default": "60",
+          "description": "HTTP request timeout in seconds for local model calls.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 600",
+              "error_message": "timeout_seconds must be between 1 and 600"
+            }
+          ]
+        },
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Retry attempts for local model server calls (low since fallback to remote exists).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 5",
+              "error_message": "max_retries must be between 0 and 5"
+            }
+          ]
+        },
+        {
+          "name": "health_check_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "/health",
+          "description": "HTTP path for local model server health check endpoint.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the local model server. Frozen, strict, extra='forbid'. No defaults for model_name or endpoint — must be explicit."
+    },
+    {
+      "name": "MatchFieldSpec",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the field in the task output schema to match on.",
+          "validators": []
+        },
+        {
+          "name": "weight",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Weight of this match field in aggregate confidence scoring.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 10.0",
+              "error_message": "weight must be between 0.0 (exclusive) and 10.0 (inclusive)"
+            }
+          ]
+        },
+        {
+          "name": "case_sensitive",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether string comparison is case-sensitive for this field.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Specification for a single match field used by evaluators to compare expected vs actual outputs. Frozen, strict."
+    },
+    {
+      "name": "MatchFieldSpecList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "MatchFieldSpec",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of match field specifications."
+    },
+    {
+      "name": "ConfigConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "local_ready",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at or above which the system begins routing to the local model (Phase 2 → Phase 3 transition). No default — must be explicitly set per task.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "local_ready must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "local_only",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at or above which the system routes exclusively to local model (full Phase 3). Must be >= local_ready. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "local_only must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "degraded_threshold",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.3",
+          "description": "Confidence score below which a warning is logged indicating degraded quality.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "degraded_threshold must be in [0.0, 1.0]"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence score thresholds from config that govern phase transitions for a task. Phase transitions are emergent from these scores, not manually triggered. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "EvaluatorConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "type",
+          "type_ref": "EvaluatorTypeName",
+          "required": true,
+          "default": "",
+          "description": "Evaluator implementation type. Determines which evaluator class is instantiated.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "MatchFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Fields in the task output schema to evaluate. Must reference fields that exist in the parent task's output_schema.",
+          "validators": []
+        },
+        {
+          "name": "semantic_model",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Model name for semantic_similarity evaluator. Required when type is 'semantic_similarity', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "judge_prompt_template",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Prompt template for llm_judge evaluator. Required when type is 'llm_judge', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "regex_pattern",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Regex pattern for regex_match evaluator. Required when type is 'regex_match', ignored otherwise.",
+          "validators": []
+        },
+        {
+          "name": "json_schema_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Path to JSON schema file for json_schema_match evaluator. Required when type is 'json_schema_match', ignored otherwise.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for a single evaluator instance attached to a task. Uses discriminated union on 'type' field to select evaluator implementation. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "EvaluatorConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "EvaluatorConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of evaluator configurations for a task."
+    },
+    {
+      "name": "TaskFieldSpec",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Field name in the task input/output.",
+          "validators": []
+        },
+        {
+          "name": "type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Type of the field (e.g. 'str', 'int', 'float', 'bool', 'list[str]').",
+          "validators": []
+        },
+        {
+          "name": "required",
+          "type_ref": "bool",
+          "required": false,
+          "default": "true",
+          "description": "Whether this field is required in task input/output.",
+          "validators": []
+        },
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Human-readable description of this field.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Schema definition for a single field in a task's input or output schema. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "TaskFieldSpecList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskFieldSpec",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of task field specifications."
+    },
+    {
+      "name": "ConfigTaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this task type. Used as registry key.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]{1,62}[a-z0-9]$",
+              "error_message": "task_name must be 3-64 chars, lowercase snake_case, start with letter, end with alphanumeric"
+            }
+          ]
+        },
+        {
+          "name": "prompt_template",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Jinja2-style prompt template. Placeholders must correspond to input_schema field names.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "1 <= len <= 10000",
+              "error_message": "prompt_template must be between 1 and 10000 characters"
+            }
+          ]
+        },
+        {
+          "name": "input_schema",
+          "type_ref": "TaskFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Schema for task input fields. At least one field required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "input_schema must have at least one field"
+            }
+          ]
+        },
+        {
+          "name": "output_schema",
+          "type_ref": "TaskFieldSpecList",
+          "required": true,
+          "default": "",
+          "description": "Schema for task output fields. Evaluator match_fields must reference fields defined here.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "output_schema must have at least one field"
+            }
+          ]
+        },
+        {
+          "name": "evaluators",
+          "type_ref": "EvaluatorConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of evaluators for this task. At least one evaluator required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "evaluators must have at least one evaluator"
+            }
+          ]
+        },
+        {
+          "name": "thresholds",
+          "type_ref": "ConfigConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Confidence thresholds governing phase transitions for this task.",
+          "validators": []
+        },
+        {
+          "name": "sampling_rate_initial",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Initial sampling rate for dual-inference. 1.0 means all requests sampled.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "sampling_rate_initial must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "min_training_examples",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Minimum number of training examples before first fine-tuning run is triggered.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 100000",
+              "error_message": "min_training_examples must be between 1 and 100000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for a single task type from YAML. Defines schema, prompt template, evaluators, match fields, and confidence thresholds. Frozen, strict, extra='forbid'. No defaults for critical fields."
+    },
+    {
+      "name": "ConfigTaskConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ConfigTaskConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of task configurations from YAML."
+    },
+    {
+      "name": "BudgetConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_daily_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Maximum daily spend in USD across all remote API calls. No default — must be explicit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.01 <= value <= 100000.0",
+              "error_message": "max_daily_cost_usd must be between 0.01 and 100000.0"
+            }
+          ]
+        },
+        {
+          "name": "max_monthly_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Maximum monthly spend in USD. No default — must be explicit.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.01 <= value <= 1000000.0",
+              "error_message": "max_monthly_cost_usd must be between 0.01 and 1000000.0"
+            }
+          ]
+        },
+        {
+          "name": "rolling_window_hours",
+          "type_ref": "int",
+          "required": false,
+          "default": "24",
+          "description": "Rolling window size in hours for daily cost tracking.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 720",
+              "error_message": "rolling_window_hours must be between 1 and 720"
+            }
+          ]
+        },
+        {
+          "name": "cost_per_input_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per input token for the remote provider model. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "cost_per_input_token must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "cost_per_output_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per output token for the remote provider model. No default.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "cost_per_output_token must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "budget_state_path",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/budget_state.json",
+          "description": "File path for persisting budget state as JSON.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Hard budget enforcement configuration. Budget enforcement is hard — the system stops spending, never exceeds limits. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "FinetuningConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "backend",
+          "type_ref": "FinetuningBackendName",
+          "required": true,
+          "default": "",
+          "description": "Fine-tuning backend to use. Determines which plugin is loaded.",
+          "validators": []
+        },
+        {
+          "name": "model_base",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Base model identifier for fine-tuning (e.g. 'meta-llama/Llama-3-8B').",
+          "validators": []
+        },
+        {
+          "name": "batch_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Number of training examples per fine-tuning batch.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "batch_size must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "trigger_interval_hours",
+          "type_ref": "int",
+          "required": false,
+          "default": "24",
+          "description": "Minimum hours between fine-tuning runs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 720",
+              "error_message": "trigger_interval_hours must be between 1 and 720"
+            }
+          ]
+        },
+        {
+          "name": "api_key",
+          "type_ref": "SecretStr",
+          "required": false,
+          "default": "None",
+          "description": "API key for remote fine-tuning backends (e.g. OpenAI). Specified as env:VAR_NAME in YAML. Not required for local backends.",
+          "validators": []
+        },
+        {
+          "name": "api_base_url",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Base URL for remote fine-tuning API. Required for remote backends, ignored for local.",
+          "validators": []
+        },
+        {
+          "name": "output_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/models/",
+          "description": "Directory for storing fine-tuned model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "max_concurrent_jobs",
+          "type_ref": "int",
+          "required": false,
+          "default": "1",
+          "description": "Maximum concurrent fine-tuning jobs.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10",
+              "error_message": "max_concurrent_jobs must be between 1 and 10"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the fine-tuning orchestrator. Backend is selected via discriminated union pattern. Frozen, strict, extra='forbid'. No defaults for backend or model_base — must be explicit."
+    },
+    {
+      "name": "AuditConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/audit.log",
+          "description": "File path for the audit log output.",
+          "validators": []
+        },
+        {
+          "name": "log_level",
+          "type_ref": "LogLevel",
+          "required": false,
+          "default": "INFO",
+          "description": "Minimum log level for audit entries.",
+          "validators": []
+        },
+        {
+          "name": "log_to_stdout",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "Whether to also emit audit log entries to stdout.",
+          "validators": []
+        },
+        {
+          "name": "max_file_size_mb",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum audit log file size in MB before rotation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 10000",
+              "error_message": "max_file_size_mb must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "backup_count",
+          "type_ref": "int",
+          "required": false,
+          "default": "5",
+          "description": "Number of rotated audit log backup files to retain.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 100",
+              "error_message": "backup_count must be between 0 and 100"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the structured audit logging system. Uses Python stdlib logging with JSON formatter. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "TrainingDataStoreConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "storage_dir",
+          "type_ref": "str",
+          "required": false,
+          "default": ".apprentice/training_data/",
+          "description": "Directory for persisting training examples as JSON files.",
+          "validators": []
+        },
+        {
+          "name": "max_examples_per_task",
+          "type_ref": "int",
+          "required": false,
+          "default": "50000",
+          "description": "Maximum training examples retained per task before oldest are evicted.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "100 <= value <= 10000000",
+              "error_message": "max_examples_per_task must be between 100 and 10000000"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for the training data store, which persists training examples for fine-tuning. Frozen, strict, extra='forbid'."
+    },
+    {
+      "name": "ApprenticeConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderConfig",
+          "required": true,
+          "default": "",
+          "description": "Remote LLM provider configuration. No defaults — must be fully specified.",
+          "validators": []
+        },
+        {
+          "name": "local_model",
+          "type_ref": "LocalModelConfig",
+          "required": true,
+          "default": "",
+          "description": "Local model server configuration. No defaults for endpoint/model_name.",
+          "validators": []
+        },
+        {
+          "name": "tasks",
+          "type_ref": "ConfigTaskConfigList",
+          "required": true,
+          "default": "",
+          "description": "List of configured task types. At least one task required.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "At least one task must be configured"
+            }
+          ]
+        },
+        {
+          "name": "budget",
+          "type_ref": "BudgetConfig",
+          "required": true,
+          "default": "",
+          "description": "Budget enforcement configuration. No defaults for cost limits.",
+          "validators": []
+        },
+        {
+          "name": "finetuning",
+          "type_ref": "FinetuningConfig",
+          "required": true,
+          "default": "",
+          "description": "Fine-tuning orchestrator configuration. No defaults for backend/model_base.",
+          "validators": []
+        },
+        {
+          "name": "audit",
+          "type_ref": "AuditConfig",
+          "required": false,
+          "default": "None",
+          "description": "Audit logging configuration. Has sensible defaults for all fields.",
+          "validators": []
+        },
+        {
+          "name": "training_data",
+          "type_ref": "TrainingDataStoreConfig",
+          "required": false,
+          "default": "None",
+          "description": "Training data store configuration. Has sensible defaults for all fields.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Root configuration model. Frozen and immutable after construction. ConfigDict(frozen=True, strict=True, extra='forbid'). Cross-field model_validator(mode='after') validates: (1) backend combinations are supported, (2) evaluator types referenced by tasks are valid, (3) match fields reference fields in task output_schema, (4) thresholds.local_only >= thresholds.local_ready, (5) budget.max_monthly_cost_usd >= budget.max_daily_cost_usd, (6) semantic_similarity evaluators have semantic_model set, (7) llm_judge evaluators have judge_prompt_template set, (8) regex_match evaluators have regex_pattern set, (9) json_schema_match evaluators have json_schema_path set, (10) all task_name values are unique."
+    },
+    {
+      "name": "ConfigError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Filesystem path of the config file that caused the error.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Dot-notation path to the specific field that caused the error (e.g. 'tasks.0.evaluators.0.type').",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base domain exception for all config-related errors. Contains structured context for clear error reporting."
+    },
+    {
+      "name": "ConfigFileNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message including the missing file path.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path that was not found.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when the specified config file does not exist at the given path. Subclass of ConfigError."
+    },
+    {
+      "name": "ConfigParseError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of the YAML syntax error.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the file with YAML syntax errors.",
+          "validators": []
+        },
+        {
+          "name": "line",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Line number where the YAML parse error occurred, if available.",
+          "validators": []
+        },
+        {
+          "name": "column",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Column number where the YAML parse error occurred, if available.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when YAML parsing fails due to syntax errors. Subclass of ConfigError."
+    },
+    {
+      "name": "ConfigValidationError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Summary error message.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the config file.",
+          "validators": []
+        },
+        {
+          "name": "validation_errors",
+          "type_ref": "ValidationErrorDetailList",
+          "required": true,
+          "default": "",
+          "description": "Structured list of individual validation errors from Pydantic.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when Pydantic validation fails — missing required fields, invalid types, cross-field constraint violations, etc. Subclass of ConfigError. Wraps the structured Pydantic error list."
+    },
+    {
+      "name": "ValidationErrorDetail",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Dot-notation path to the field (e.g. 'tasks.0.thresholds.local_ready').",
+          "validators": []
+        },
+        {
+          "name": "error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Pydantic error type code (e.g. 'missing', 'string_type', 'value_error').",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message for this specific validation failure.",
+          "validators": []
+        },
+        {
+          "name": "value",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "String representation of the rejected value, if available.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single structured validation error from Pydantic, with field path and error context."
+    },
+    {
+      "name": "ValidationErrorDetailList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ValidationErrorDetail",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of individual validation error details."
+    },
+    {
+      "name": "EnvVarNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message including the missing env var name.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path of the config file.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Dot-notation path to the field referencing the missing env var.",
+          "validators": []
+        },
+        {
+          "name": "env_var_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the environment variable that was not found.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when an env:VAR_NAME reference in the config cannot be resolved because the environment variable is not set. Subclass of ConfigError."
+    },
+    {
+      "name": "RegistryConfidenceThresholds",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase1_to_phase2_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Minimum number of validated training examples required before transitioning from Phase 1 to Phase 2. Must be >= 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "phase1_to_phase2_example_count must be >= 1"
+            }
+          ]
+        },
+        {
+          "name": "phase2_to_phase3_correlation",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Minimum correlation score to transition from Phase 2 to Phase 3. Must be in (0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "phase2_to_phase3_correlation must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "coaching_trigger",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score below which the system triggers a coaching/retraining cycle. Must be in (0.0, 1.0) and strictly less than phase2_to_phase3_correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value < 1.0",
+              "error_message": "coaching_trigger must be in (0.0, 1.0)"
+            }
+          ]
+        },
+        {
+          "name": "emergency_threshold",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Confidence score below which the system raises emergency alert and falls back to remote. Must be in [0.0, 1.0) and strictly less than coaching_trigger.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value < 1.0",
+              "error_message": "emergency_threshold must be in [0.0, 1.0)"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Confidence thresholds from the Task Registry governing phase transitions and alerting for a task. Frozen Pydantic v2 BaseModel. Cross-field invariant: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation <= 1.0."
+    },
+    {
+      "name": "RegistryTaskConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique task identifier. Must be a non-empty snake_case string.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-z][a-z0-9_]*$",
+              "error_message": "name must be lowercase snake_case starting with a letter"
+            },
+            {
+              "kind": "length",
+              "expression": "1 <= len <= 128",
+              "error_message": "name must be between 1 and 128 characters"
+            }
+          ]
+        },
+        {
+          "name": "description",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable description of what this task does.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "description must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "input_schema",
+          "type_ref": "JsonSchemaDict",
+          "required": true,
+          "default": "",
+          "description": "JSON Schema defining the expected input structure. Must have 'type': 'object' and 'properties' key.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "'type' in value and value['type'] == 'object' and 'properties' in value",
+              "error_message": "input_schema must be a JSON Schema object with 'type': 'object' and 'properties'"
+            }
+          ]
+        },
+        {
+          "name": "output_schema",
+          "type_ref": "JsonSchemaDict",
+          "required": true,
+          "default": "",
+          "description": "JSON Schema defining the expected output structure. Must have 'type': 'object' and 'properties' key.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "'type' in value and value['type'] == 'object' and 'properties' in value",
+              "error_message": "output_schema must be a JSON Schema object with 'type': 'object' and 'properties'"
+            }
+          ]
+        },
+        {
+          "name": "system_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "System prompt sent to the LLM for this task. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "system_prompt must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "prompt_template",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Python str.format-style template for the user prompt. All placeholders must correspond to keys in input_schema.properties.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "prompt_template must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "evaluator_type",
+          "type_ref": "EvaluatorType",
+          "required": true,
+          "default": "",
+          "description": "Which evaluator strategy to use when scoring local model outputs against remote reference outputs.",
+          "validators": []
+        },
+        {
+          "name": "match_fields",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of output field names used by the evaluator to compare outputs. Each must be a key in output_schema.properties. Non-empty list of strings.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "match_fields must have at least one field"
+            }
+          ]
+        },
+        {
+          "name": "confidence_thresholds",
+          "type_ref": "RegistryConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "Confidence thresholds controlling phase transitions and alerting for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Full configuration for a single task type in the Task Registry. Frozen Pydantic v2 BaseModel with extra='forbid'. Model validators ensure: (1) all match_fields reference keys present in output_schema properties, (2) all placeholders in prompt_template reference keys present in input_schema properties, (3) system_prompt is non-empty, (4) name is a non-empty lowercase_snake identifier."
+    },
+    {
+      "name": "RegistryTaskConfigList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "RegistryTaskConfig",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of RegistryTaskConfig objects, used as the input to TaskRegistry construction."
+    },
+    {
+      "name": "TaskRegistry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Internal mapping from task name (str) to RegistryTaskConfig. Built from the validated task list at construction. Keys are task names, values are RegistryTaskConfig instances.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic v2 BaseModel containing a validated, immutable mapping of task names to RegistryTaskConfig objects. Constructed from a list of RegistryTaskConfig objects. A model_validator detects duplicate task names at construction time. After construction, fully immutable — no tasks can be added, removed, or modified."
+    },
+    {
+      "name": "TaskNotFoundError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name that was requested but not found.",
+          "validators": []
+        },
+        {
+          "name": "available_tasks",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Sorted list of task names that are available in the registry, for diagnostic messages.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Domain exception raised when a task name lookup fails in the registry. Contains the requested task name and the set of available task names for diagnostic purposes."
+    },
+    {
+      "name": "ValidationErrorList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ValidationErrorDetail",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of validation error details returned by validate_model."
+    }
+  ],
+  "functions": [
+    {
+      "name": "load_config",
+      "description": "Main entry point: loads and validates an Apprentice configuration from a YAML file. Pure function with no internal state. Reads the file, parses YAML via yaml.safe_load(), resolves env:VAR_NAME references using the provided env mapping (or os.environ by default), constructs and validates ApprenticeConfig via Pydantic v2 with strict mode, and returns a frozen/immutable config object. All exceptions from the loading pipeline are caught and re-raised as domain-specific ConfigError subclasses with file path, field path, and clear messages.",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "Path",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the apprentice.yaml config file.",
+          "validators": []
+        },
+        {
+          "name": "env",
+          "type_ref": "EnvMapping",
+          "required": false,
+          "default": "None",
+          "description": "Optional environment variable mapping. Defaults to os.environ if not provided.",
+          "validators": []
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The file at the specified path does not exist",
+          "error_type": "ConfigFileNotFoundError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "file_not_readable",
+          "condition": "The file exists but cannot be read due to permissions or I/O error",
+          "error_type": "ConfigError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Cannot read config file: {path}: {detail}"
+          }
+        },
+        {
+          "name": "yaml_syntax_error",
+          "condition": "The file content is not valid YAML (syntax error in YAML)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "YAML syntax error in {path}: {detail}"
+          }
+        },
+        {
+          "name": "empty_config_file",
+          "condition": "The YAML file is empty or contains only comments (yaml.safe_load returns None)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file is empty: {path}"
+          }
+        },
+        {
+          "name": "yaml_not_a_mapping",
+          "condition": "The top-level YAML content is not a mapping/dict (e.g. it's a list or scalar)",
+          "error_type": "ConfigParseError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config file root must be a YAML mapping, got {type}: {path}"
+          }
+        },
+        {
+          "name": "missing_required_field",
+          "condition": "A required field is missing from the config",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: {count} error(s)"
+          }
+        },
+        {
+          "name": "invalid_field_type",
+          "condition": "A field value has the wrong type (e.g. string where int expected, due to strict mode)",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: {count} error(s)"
+          }
+        },
+        {
+          "name": "extra_field_forbidden",
+          "condition": "An unrecognized/extra field is present in the config (extra='forbid')",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unknown field '{field_name}'"
+          }
+        },
+        {
+          "name": "unknown_evaluator_type",
+          "condition": "A task references an evaluator type not in the EvaluatorTypeName enum",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unknown evaluator type '{type}'"
+          }
+        },
+        {
+          "name": "unknown_backend",
+          "condition": "The finetuning backend is not in the FinetuningBackendName enum",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed for {path}: unsupported finetuning backend '{backend}'"
+          }
+        },
+        {
+          "name": "match_field_not_in_output_schema",
+          "condition": "An evaluator's match_field references a field name not present in the task's output_schema",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: match field '{field}' not found in output_schema of task '{task}'"
+          }
+        },
+        {
+          "name": "threshold_ordering_violation",
+          "condition": "A task's thresholds.local_only < thresholds.local_ready",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: local_only must be >= local_ready for task '{task}'"
+          }
+        },
+        {
+          "name": "monthly_less_than_daily",
+          "condition": "budget.max_monthly_cost_usd < budget.max_daily_cost_usd",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: max_monthly_cost_usd must be >= max_daily_cost_usd"
+          }
+        },
+        {
+          "name": "semantic_similarity_missing_model",
+          "condition": "An evaluator of type 'semantic_similarity' does not have semantic_model set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: semantic_similarity evaluator requires 'semantic_model' for task '{task}'"
+          }
+        },
+        {
+          "name": "llm_judge_missing_template",
+          "condition": "An evaluator of type 'llm_judge' does not have judge_prompt_template set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: llm_judge evaluator requires 'judge_prompt_template' for task '{task}'"
+          }
+        },
+        {
+          "name": "duplicate_task_names",
+          "condition": "Two or more tasks have the same task_name",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: duplicate task name '{task_name}'"
+          }
+        },
+        {
+          "name": "unsupported_backend_combination",
+          "condition": "The finetuning backend requires fields that are missing (e.g. remote backend without api_key or api_base_url)",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: backend '{backend}' requires '{field}'"
+          }
+        },
+        {
+          "name": "env_var_not_found",
+          "condition": "An env:VAR_NAME reference cannot be resolved because the environment variable is not set",
+          "error_type": "EnvVarNotFoundError",
+          "error_data": {
+            "path": "str(path)",
+            "env_var_name": "VAR_NAME",
+            "field_path": "dotted.field.path",
+            "message": "Environment variable '{var}' not found (referenced by {field_path} in {path})"
+          }
+        },
+        {
+          "name": "regex_match_missing_pattern",
+          "condition": "An evaluator of type 'regex_match' does not have regex_pattern set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: regex_match evaluator requires 'regex_pattern' for task '{task}'"
+          }
+        },
+        {
+          "name": "json_schema_match_missing_path",
+          "condition": "An evaluator of type 'json_schema_match' does not have json_schema_path set",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "path": "str(path)",
+            "message": "Config validation failed: json_schema_match evaluator requires 'json_schema_path' for task '{task}'"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is a non-empty Path object",
+        "If env is provided, it must be a Mapping[str, str]"
+      ],
+      "postconditions": [
+        "Returned ApprenticeConfig is frozen/immutable — no field can be modified after construction",
+        "All env:VAR_NAME references have been resolved to actual values",
+        "All SecretStr fields contain resolved secret values accessible via .get_secret_value()",
+        "All cross-field validations have passed (thresholds ordering, backend compatibility, match field existence, evaluator-specific required fields)",
+        "All task_name values in tasks list are unique",
+        "Returned config is fully valid and ready for dependency injection into all downstream components"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "path",
+          "description": "Reads the YAML config file from disk"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_env_var",
+      "description": "Resolves an env:VAR_NAME reference string by looking up the variable name in the provided environment mapping. Used internally as a Pydantic BeforeValidator. If the input string does not start with 'env:', it is returned unchanged. If it does, the VAR_NAME portion is extracted and looked up in the env mapping. This function is exposed for testing but is primarily called within Pydantic's validation pipeline via validation context.",
+      "inputs": [
+        {
+          "name": "value",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The string value to resolve. If it starts with 'env:', the remainder is treated as an environment variable name.",
+          "validators": []
+        },
+        {
+          "name": "env",
+          "type_ref": "EnvMapping",
+          "required": true,
+          "default": "",
+          "description": "Environment variable mapping to look up variable names in.",
+          "validators": []
+        },
+        {
+          "name": "field_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Dot-notation field path for error reporting context.",
+          "validators": []
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "env_var_not_set",
+          "condition": "The value starts with 'env:' but the referenced environment variable is not present in the env mapping",
+          "error_type": "EnvVarNotFoundError",
+          "error_data": {
+            "env_var_name": "VAR_NAME",
+            "field_path": "field_path",
+            "message": "Environment variable '{var}' not found"
+          }
+        },
+        {
+          "name": "empty_var_name",
+          "condition": "The value is exactly 'env:' with no variable name following the colon",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "message": "Empty environment variable name in 'env:' reference at {field_path}"
+          }
+        }
+      ],
+      "preconditions": [
+        "value is a non-null string",
+        "env is a valid Mapping[str, str]"
+      ],
+      "postconditions": [
+        "If value did not start with 'env:', the returned string equals the input value unchanged",
+        "If value started with 'env:' and the variable was found, the returned string is the resolved environment variable value",
+        "The returned string is never empty when the input env var reference resolved to a non-empty value"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_cross_field_constraints",
+      "description": "Performs all cross-field validations on a fully constructed ApprenticeConfig. Invoked as a @model_validator(mode='after') on ApprenticeConfig. Validates: threshold ordering (local_only >= local_ready), budget consistency (monthly >= daily), match fields exist in output schemas, evaluator-specific required fields are present, backend+field compatibility, and task name uniqueness. Returns the config if valid, raises ConfigValidationError with all collected violations if not.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "ApprenticeConfig",
+          "required": true,
+          "default": "",
+          "description": "Fully constructed ApprenticeConfig instance to validate.",
+          "validators": []
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "cross_field_violations",
+          "condition": "One or more cross-field constraints are violated",
+          "error_type": "ConfigValidationError",
+          "error_data": {
+            "message": "Cross-field validation failed with {count} error(s)"
+          }
+        }
+      ],
+      "preconditions": [
+        "All individual field validations have already passed (this runs in mode='after')",
+        "config is a fully constructed ApprenticeConfig instance"
+      ],
+      "postconditions": [
+        "For every task: thresholds.local_only >= thresholds.local_ready",
+        "budget.max_monthly_cost_usd >= budget.max_daily_cost_usd",
+        "For every evaluator in every task: all match_field names exist in that task's output_schema",
+        "Every semantic_similarity evaluator has a non-empty semantic_model",
+        "Every llm_judge evaluator has a non-empty judge_prompt_template",
+        "Every regex_match evaluator has a non-empty regex_pattern",
+        "Every json_schema_match evaluator has a non-empty json_schema_path",
+        "All task_name values are unique across the tasks list",
+        "Remote finetuning backends (openai, anyscale) have api_key and api_base_url set",
+        "The returned config is the same object, unmodified (frozen model)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskRegistry.__init__",
+      "description": "Construct a TaskRegistry from a list of RegistryTaskConfig objects. Validates all tasks, detects duplicate names, builds the internal immutable mapping. This is the only way to create a TaskRegistry — it is frozen after construction. Typically called by config_loader after parsing apprentice.yaml.",
+      "inputs": [
+        {
+          "name": "task_list",
+          "type_ref": "RegistryTaskConfigList",
+          "required": true,
+          "default": "",
+          "description": "Non-empty list of RegistryTaskConfig objects to register.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "At least one task must be configured"
+            }
+          ]
+        }
+      ],
+      "output_type": "TaskRegistry",
+      "error_cases": [
+        {
+          "name": "duplicate_task_names",
+          "condition": "Two or more RegistryTaskConfig objects in task_list share the same name",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Duplicate task name(s) found: {names}"
+          }
+        },
+        {
+          "name": "empty_task_list",
+          "condition": "task_list is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "At least one task must be configured."
+          }
+        },
+        {
+          "name": "invalid_task_config",
+          "condition": "Any RegistryTaskConfig in task_list fails Pydantic validation",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Pydantic ValidationError with details about which field(s) failed"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_list is a non-empty list of RegistryTaskConfig objects",
+        "Each RegistryTaskConfig in task_list has already passed its own field-level and model-level validation",
+        "All RegistryTaskConfig objects have been deserialized from a valid YAML config source"
+      ],
+      "postconditions": [
+        "Returned TaskRegistry is frozen — no mutations possible after construction",
+        "registry.tasks contains exactly one entry per input RegistryTaskConfig, keyed by RegistryTaskConfig.name",
+        "len(registry) == len(task_list)",
+        "For every tc in task_list: tc.name in registry and registry.get_task(tc.name) == tc",
+        "registry.task_names == frozenset(tc.name for tc in task_list)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskRegistry.get_task",
+      "description": "Look up a task configuration by its unique name. Returns the frozen RegistryTaskConfig for the given task name. Raises TaskNotFoundError if the name is not in the registry.",
+      "inputs": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task name to look up.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len >= 1",
+              "error_message": "Task name must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "RegistryTaskConfig",
+      "error_cases": [
+        {
+          "name": "task_not_found",
+          "condition": "name is not a key in the registry's internal tasks mapping",
+          "error_type": "TaskNotFoundError",
+          "error_data": {
+            "task_name": "The requested task name",
+            "available_tasks": "Sorted list of all registered task names"
+          }
+        }
+      ],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed (all startup validation passed)",
+        "name is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned RegistryTaskConfig has config.name == name",
+        "Returned RegistryTaskConfig is the same object stored at construction time (identity equality due to frozen model)",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskRegistry.__contains__",
+      "description": "Check whether a task name exists in the registry. Supports the 'in' operator: 'my_task' in registry. Returns True if the task name is registered, False otherwise.",
+      "inputs": [
+        {
+          "name": "name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Task name to check for existence.",
+          "validators": []
+        }
+      ],
+      "output_type": "bool",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returns True if and only if name is a key in the internal tasks mapping",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskRegistry.task_names",
+      "description": "Property returning the frozenset of all registered task names. Useful for diagnostics, logging, and iteration. Returns an immutable set — callers cannot modify the registry through this property.",
+      "inputs": [],
+      "output_type": "str",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returned frozenset contains exactly the task names that were provided at construction time",
+        "len(returned) == len(registry)",
+        "For every name in returned: registry.get_task(name) succeeds",
+        "The registry is not modified by this call"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "TaskRegistry.__len__",
+      "description": "Return the number of tasks in the registry. Supports the len() builtin: len(registry).",
+      "inputs": [],
+      "output_type": "int",
+      "error_cases": [],
+      "preconditions": [
+        "The TaskRegistry has been successfully constructed"
+      ],
+      "postconditions": [
+        "Returned value == number of RegistryTaskConfig objects provided at construction time",
+        "Returned value >= 1 (since construction requires at least one task)",
+        "Returned value == len(registry.task_names)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "RegistryTaskConfig.validate_match_fields_against_output_schema",
+      "description": "Pydantic @model_validator(mode='after') on RegistryTaskConfig that checks every entry in match_fields is a key in output_schema['properties']. Runs automatically during RegistryTaskConfig construction. Ensures evaluator can actually find the fields it needs in the task output.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "RegistryTaskConfig",
+          "required": true,
+          "default": "",
+          "description": "The RegistryTaskConfig instance being validated.",
+          "validators": []
+        }
+      ],
+      "output_type": "RegistryTaskConfig",
+      "error_cases": [
+        {
+          "name": "match_field_not_in_output_schema",
+          "condition": "One or more entries in match_fields are not keys in output_schema['properties']",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "match_fields references unknown output_schema properties: {missing_fields}. Available properties: {available_fields}"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level validators on RegistryTaskConfig have passed",
+        "output_schema has 'properties' key (enforced by field validator)",
+        "match_fields is a non-empty list of strings (enforced by field validator)"
+      ],
+      "postconditions": [
+        "Every string in match_fields is a key in output_schema['properties']",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "RegistryTaskConfig.validate_prompt_template_against_input_schema",
+      "description": "Pydantic @model_validator(mode='after') on RegistryTaskConfig that extracts all {placeholder} names from prompt_template using string.Formatter and verifies each one is a key in input_schema['properties']. Runs automatically during RegistryTaskConfig construction.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "RegistryTaskConfig",
+          "required": true,
+          "default": "",
+          "description": "The RegistryTaskConfig instance being validated.",
+          "validators": []
+        }
+      ],
+      "output_type": "RegistryTaskConfig",
+      "error_cases": [
+        {
+          "name": "template_placeholder_not_in_input_schema",
+          "condition": "One or more placeholder names in prompt_template do not match keys in input_schema['properties']",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "prompt_template references unknown input_schema properties: {missing_placeholders}. Available properties: {available_fields}"
+          }
+        },
+        {
+          "name": "malformed_prompt_template",
+          "condition": "prompt_template contains syntax errors that prevent placeholder extraction (e.g. unmatched braces)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "prompt_template has invalid format string syntax: {parse_error}"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level validators on RegistryTaskConfig have passed",
+        "input_schema has 'properties' key (enforced by field validator)",
+        "prompt_template is a non-empty string (enforced by field validator)"
+      ],
+      "postconditions": [
+        "Every placeholder name extracted from prompt_template is a key in input_schema['properties']",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "RegistryConfidenceThresholds.validate_threshold_ordering",
+      "description": "Pydantic @model_validator(mode='after') on RegistryConfidenceThresholds that verifies the logical ordering: emergency_threshold < coaching_trigger < phase2_to_phase3_correlation. Ensures the confidence score boundaries make semantic sense for phase transitions.",
+      "inputs": [
+        {
+          "name": "self",
+          "type_ref": "RegistryConfidenceThresholds",
+          "required": true,
+          "default": "",
+          "description": "The RegistryConfidenceThresholds instance being validated.",
+          "validators": []
+        }
+      ],
+      "output_type": "RegistryConfidenceThresholds",
+      "error_cases": [
+        {
+          "name": "invalid_threshold_ordering",
+          "condition": "emergency_threshold >= coaching_trigger OR coaching_trigger >= phase2_to_phase3_correlation",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Confidence thresholds must satisfy: emergency_threshold ({e}) < coaching_trigger ({c}) < phase2_to_phase3_correlation ({p})"
+          }
+        }
+      ],
+      "preconditions": [
+        "All field-level range validators have passed",
+        "emergency_threshold is in [0.0, 1.0)",
+        "coaching_trigger is in (0.0, 1.0)",
+        "phase2_to_phase3_correlation is in (0.0, 1.0]"
+      ],
+      "postconditions": [
+        "emergency_threshold < coaching_trigger",
+        "coaching_trigger < phase2_to_phase3_correlation",
+        "Returns self unchanged if validation passes"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_task_request",
+      "description": "Factory function to construct and validate a TaskRequest. Generates a UUID4 request_id and sets created_at to the current UTC time if not provided. Validates all fields strictly.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Identifies which configured task type this request is for.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The actual input payload.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional caller-supplied metadata.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Optional UUID4 request ID. Auto-generated if not provided.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Optional timestamp. Defaults to current UTC time.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskRequest",
+      "error_cases": [
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match the TaskId pattern or is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "invalid_input_data",
+          "condition": "input_data is not a valid dict",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "input_data"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is a non-empty string matching ^[a-z][a-z0-9_-]*$",
+        "input_data is a valid dict"
+      ],
+      "postconditions": [
+        "Returned TaskRequest is frozen and passes Pydantic validation",
+        "request_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_task_response",
+      "description": "Factory function to construct and validate a TaskResponse. Validates all fields strictly.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Matches the request_id from the corresponding TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Echoed from the TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The response payload.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model produced this response.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "How the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "The phase at the time this request was served.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at the time of routing.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": []
+        },
+        {
+          "name": "cost_incurred",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Monetary cost incurred.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional system-generated metadata.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskResponse",
+      "error_cases": [
+        {
+          "name": "invalid_routing_decision",
+          "condition": "routing_decision is not a valid RoutingDecision variant",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "routing_decision"
+          }
+        },
+        {
+          "name": "invalid_phase",
+          "condition": "phase is not a valid Phase variant",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "phase"
+          }
+        },
+        {
+          "name": "negative_latency",
+          "condition": "latency_ms < 0.0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "latency_ms"
+          }
+        },
+        {
+          "name": "negative_cost",
+          "condition": "cost_incurred < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "cost_incurred"
+          }
+        }
+      ],
+      "preconditions": [
+        "request_id is a non-empty string",
+        "latency_ms >= 0.0",
+        "cost_incurred >= 0"
+      ],
+      "postconditions": [
+        "Returned TaskResponse is frozen and passes Pydantic validation",
+        "All enum fields hold valid enum values"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_confidence_snapshot",
+      "description": "Constructs a ConfidenceSnapshot. Derives the phase from the score and the two thresholds (threshold_phase2, threshold_phase3) using the rule: score < threshold_phase2 => PHASE_1, threshold_phase2 <= score < threshold_phase3 => PHASE_2, score >= threshold_phase3 => PHASE_3.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this confidence snapshot belongs to.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison samples that contributed to this score.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase2",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 2 begins.",
+          "validators": []
+        },
+        {
+          "name": "threshold_phase3",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Score threshold at which Phase 3 begins.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "trend",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Short-term score trend.",
+          "validators": []
+        }
+      ],
+      "output_type": "ConfidenceSnapshot",
+      "error_cases": [
+        {
+          "name": "invalid_score",
+          "condition": "score is not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "score"
+          }
+        },
+        {
+          "name": "invalid_thresholds",
+          "condition": "threshold_phase2 > threshold_phase3 or either is out of [0.0, 1.0]",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "threshold_phase2 must be <= threshold_phase3 and both in [0.0, 1.0]"
+          }
+        },
+        {
+          "name": "negative_sample_count",
+          "condition": "sample_count < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "sample_count"
+          }
+        }
+      ],
+      "preconditions": [
+        "0.0 <= score <= 1.0",
+        "0.0 <= threshold_phase2 <= threshold_phase3 <= 1.0",
+        "sample_count >= 0"
+      ],
+      "postconditions": [
+        "Returned ConfidenceSnapshot.phase is correctly derived from score and thresholds",
+        "If score < threshold_phase2 then phase == PHASE_1_REMOTE_ONLY",
+        "If threshold_phase2 <= score < threshold_phase3 then phase == PHASE_2_SAMPLING",
+        "If score >= threshold_phase3 then phase == PHASE_3_LOCAL_PRIMARY",
+        "Snapshot is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_budget_state",
+      "description": "Constructs a BudgetState. Computes remaining = total_budget - spent and is_exhausted = remaining <= 0.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "Which task this budget state belongs to.",
+          "validators": []
+        },
+        {
+          "name": "total_budget",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Total budget for the current period.",
+          "validators": []
+        },
+        {
+          "name": "spent",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Amount already spent in the current period.",
+          "validators": []
+        },
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period window.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of requests that incurred cost in this period.",
+          "validators": []
+        },
+        {
+          "name": "last_updated",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetState",
+      "error_cases": [
+        {
+          "name": "negative_budget",
+          "condition": "total_budget < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "total_budget"
+          }
+        },
+        {
+          "name": "negative_spent",
+          "condition": "spent < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "spent"
+          }
+        },
+        {
+          "name": "invalid_period",
+          "condition": "period.period_start >= period.period_end",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "period_start must be before period_end"
+          }
+        }
+      ],
+      "preconditions": [
+        "total_budget >= 0",
+        "spent >= 0",
+        "request_count >= 0",
+        "period.period_start < period.period_end"
+      ],
+      "postconditions": [
+        "remaining == total_budget - spent",
+        "is_exhausted == (remaining <= 0)",
+        "BudgetState is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "record_cost",
+      "description": "Returns a new BudgetState with cost added to spent, remaining decremented, and is_exhausted recomputed. Uses model_copy for immutable update. This is the ONLY way to update budget state.",
+      "inputs": [
+        {
+          "name": "budget_state",
+          "type_ref": "BudgetState",
+          "required": true,
+          "default": "",
+          "description": "The current budget state to update.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost amount to record.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp of the cost event. Defaults to current UTC time.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetState",
+      "error_cases": [
+        {
+          "name": "negative_cost",
+          "condition": "cost < 0",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Cost to record must be non-negative"
+          }
+        }
+      ],
+      "preconditions": [
+        "cost >= 0",
+        "budget_state is a valid BudgetState"
+      ],
+      "postconditions": [
+        "Returned BudgetState.spent == original.spent + cost",
+        "Returned BudgetState.remaining == original.total_budget - (original.spent + cost)",
+        "Returned BudgetState.is_exhausted == (returned.remaining <= 0)",
+        "Returned BudgetState.request_count == original.request_count + 1",
+        "Original budget_state is not mutated",
+        "Returned BudgetState is a new frozen instance"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_audit_entry",
+      "description": "Factory function to construct and validate an AuditEntry. Structured for emission via Python stdlib logging with JSON formatter.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request that triggered this decision.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "routing_decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "Where the request was routed.",
+          "validators": []
+        },
+        {
+          "name": "model_used",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model served the request.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at routing time.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "System phase at decision time.",
+          "validators": []
+        },
+        {
+          "name": "cost",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Cost incurred.",
+          "validators": []
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "End-to-end latency in milliseconds.",
+          "validators": []
+        },
+        {
+          "name": "fallback_triggered",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a fallback from local to remote occurred.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": false,
+          "default": "None",
+          "description": "Sampling probability if Phase 2.",
+          "validators": []
+        },
+        {
+          "name": "error",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Error message if something went wrong.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Additional structured context.",
+          "validators": []
+        }
+      ],
+      "output_type": "AuditEntry",
+      "error_cases": [
+        {
+          "name": "invalid_request_id",
+          "condition": "request_id is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "request_id"
+          }
+        },
+        {
+          "name": "negative_latency",
+          "condition": "latency_ms < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "latency_ms"
+          }
+        }
+      ],
+      "preconditions": [
+        "request_id is non-empty",
+        "latency_ms >= 0.0",
+        "cost >= 0"
+      ],
+      "postconditions": [
+        "Returned AuditEntry is frozen",
+        "timestamp is timezone-aware",
+        "AuditEntry can be serialized to JSON via model_dump_json()"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_sampling_decision",
+      "description": "Factory function to construct and validate a SamplingDecision from the Router.",
+      "inputs": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request this decision applies to.",
+          "validators": []
+        },
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "RoutingDecision",
+          "required": true,
+          "default": "",
+          "description": "The routing decision made.",
+          "validators": []
+        },
+        {
+          "name": "sampling_probability",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The probability used for the sampling coin flip.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "Phase",
+          "required": true,
+          "default": "",
+          "description": "Phase at the time of decision.",
+          "validators": []
+        },
+        {
+          "name": "confidence_at_decision",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Confidence score at decision time.",
+          "validators": []
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "CostAmount",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining at decision time.",
+          "validators": []
+        },
+        {
+          "name": "rationale",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable explanation of the routing decision.",
+          "validators": []
+        },
+        {
+          "name": "decided_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        }
+      ],
+      "output_type": "SamplingDecision",
+      "error_cases": [
+        {
+          "name": "invalid_sampling_probability",
+          "condition": "sampling_probability not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "sampling_probability"
+          }
+        },
+        {
+          "name": "empty_rationale",
+          "condition": "rationale is empty string",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "rationale"
+          }
+        }
+      ],
+      "preconditions": [
+        "0.0 <= sampling_probability <= 1.0",
+        "rationale is non-empty"
+      ],
+      "postconditions": [
+        "Returned SamplingDecision is frozen",
+        "decided_at is timezone-aware"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_training_example",
+      "description": "Factory function to construct and validate a TrainingExample from a remote model response.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type this example belongs to.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input that was sent to the model.",
+          "validators": []
+        },
+        {
+          "name": "output_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The reference output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "Which model generated this output.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "example_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Optional UUID4. Auto-generated if not provided.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "quality_score",
+          "type_ref": "ConfidenceScore",
+          "required": false,
+          "default": "None",
+          "description": "Optional quality assessment.",
+          "validators": []
+        }
+      ],
+      "output_type": "TrainingExample",
+      "error_cases": [
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match TaskId pattern",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        },
+        {
+          "name": "empty_source_request_id",
+          "condition": "source_request_id is empty",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "source_request_id"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is valid",
+        "source_request_id is non-empty"
+      ],
+      "postconditions": [
+        "Returned TrainingExample is frozen",
+        "example_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_comparison_pair",
+      "description": "Factory function to construct and validate a ComparisonPair from dual model outputs.",
+      "inputs": [
+        {
+          "name": "task_id",
+          "type_ref": "TaskId",
+          "required": true,
+          "default": "",
+          "description": "The task type for this comparison.",
+          "validators": []
+        },
+        {
+          "name": "input_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The input sent to both models.",
+          "validators": []
+        },
+        {
+          "name": "remote_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the remote model.",
+          "validators": []
+        },
+        {
+          "name": "local_output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Output from the local model.",
+          "validators": []
+        },
+        {
+          "name": "remote_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the remote model used.",
+          "validators": []
+        },
+        {
+          "name": "local_model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "ID of the local model used.",
+          "validators": []
+        },
+        {
+          "name": "source_request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The request_id of the original TaskRequest.",
+          "validators": []
+        },
+        {
+          "name": "pair_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Optional UUID4. Auto-generated if not provided.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_result",
+          "type_ref": "EvaluationResult",
+          "required": false,
+          "default": "None",
+          "description": "Optional evaluation result if already evaluated.",
+          "validators": []
+        }
+      ],
+      "output_type": "ComparisonPair",
+      "error_cases": [
+        {
+          "name": "same_model_ids",
+          "condition": "remote_model_id == local_model_id",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Remote and local model IDs must be different for a valid comparison"
+          }
+        },
+        {
+          "name": "invalid_task_id",
+          "condition": "task_id does not match TaskId pattern",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "task_id"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_id is valid",
+        "source_request_id is non-empty",
+        "remote_model_id != local_model_id"
+      ],
+      "postconditions": [
+        "Returned ComparisonPair is frozen",
+        "pair_id is a valid UUID4 string",
+        "created_at is timezone-aware"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "create_model_version",
+      "description": "Factory function to construct and validate a ModelVersion record.",
+      "inputs": [
+        {
+          "name": "model_id",
+          "type_ref": "ModelId",
+          "required": true,
+          "default": "",
+          "description": "The logical model this version belongs to.",
+          "validators": []
+        },
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path or URI to the model artifacts.",
+          "validators": []
+        },
+        {
+          "name": "validation_score",
+          "type_ref": "ConfidenceScore",
+          "required": true,
+          "default": "",
+          "description": "Validation score achieved during fine-tuning evaluation.",
+          "validators": []
+        },
+        {
+          "name": "training_example_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of training examples used.",
+          "validators": []
+        },
+        {
+          "name": "is_active",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether this is the currently active version.",
+          "validators": []
+        },
+        {
+          "name": "version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "Optional UUID4. Auto-generated if not provided.",
+          "validators": []
+        },
+        {
+          "name": "created_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Timestamp. Defaults to current UTC time.",
+          "validators": []
+        },
+        {
+          "name": "promoted_at",
+          "type_ref": "AwareDatetime",
+          "required": false,
+          "default": "None",
+          "description": "Promotion timestamp. If is_active is True and not provided, set to created_at.",
+          "validators": []
+        },
+        {
+          "name": "parent_version_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "None",
+          "description": "The version this was fine-tuned from.",
+          "validators": []
+        }
+      ],
+      "output_type": "ModelVersion",
+      "error_cases": [
+        {
+          "name": "empty_path",
+          "condition": "path is empty string",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "path"
+          }
+        },
+        {
+          "name": "negative_example_count",
+          "condition": "training_example_count < 0",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "training_example_count"
+          }
+        },
+        {
+          "name": "invalid_validation_score",
+          "condition": "validation_score not in [0.0, 1.0]",
+          "error_type": "ValidationError",
+          "error_data": {
+            "field": "validation_score"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is non-empty",
+        "training_example_count >= 0",
+        "0.0 <= validation_score <= 1.0"
+      ],
+      "postconditions": [
+        "Returned ModelVersion is frozen",
+        "version_id is a valid UUID4 string",
+        "created_at is timezone-aware",
+        "If is_active is True and promoted_at was not provided, promoted_at is set to created_at"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "serialize_model",
+      "description": "Serializes any data model defined in this component to a JSON string using Pydantic's model_dump_json(). Guarantees clean round-trip serialization.",
+      "inputs": [
+        {
+          "name": "model_instance",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "An instance of a Pydantic BaseModel defined in this component.",
+          "validators": []
+        }
+      ],
+      "output_type": "SerializedModel",
+      "error_cases": [
+        {
+          "name": "not_a_pydantic_model",
+          "condition": "model_instance is not a Pydantic BaseModel",
+          "error_type": "TypeError",
+          "error_data": {
+            "detail": "model_instance must be a Pydantic BaseModel"
+          }
+        },
+        {
+          "name": "serialization_error",
+          "condition": "Model contains non-serializable fields",
+          "error_type": "SerializationError",
+          "error_data": {}
+        }
+      ],
+      "preconditions": [
+        "model_instance is an instance of a Pydantic BaseModel defined in this component"
+      ],
+      "postconditions": [
+        "Returned string is valid JSON",
+        "Calling deserialize_model with the result and the model's type returns an equivalent instance",
+        "Decimal fields are serialized as strings to preserve precision",
+        "AwareDatetime fields are serialized as ISO 8601 strings with timezone"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "deserialize_model",
+      "description": "Deserializes a JSON string back into a typed Pydantic model instance using model_validate_json(). Performs full validation on deserialization.",
+      "inputs": [
+        {
+          "name": "json_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "A valid JSON string to deserialize.",
+          "validators": []
+        },
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the model type to deserialize into. Must be one of the model type names defined in this component.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "invalid_json",
+          "condition": "json_data is not valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Input is not valid JSON"
+          }
+        },
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "JSON data does not conform to the target model's schema",
+          "error_type": "ValidationError",
+          "error_data": {}
+        },
+        {
+          "name": "extra_fields_forbidden",
+          "condition": "JSON contains extra fields and the model uses extra='forbid'",
+          "error_type": "ValidationError",
+          "error_data": {
+            "detail": "Extra fields not permitted"
+          }
+        }
+      ],
+      "preconditions": [
+        "json_data is a valid JSON string",
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returned instance is of the specified model_type",
+        "Returned instance passes all Pydantic validation",
+        "Returned instance is frozen if the model type is frozen"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_model",
+      "description": "Validates raw data (dict) against a model type without constructing the full model. Returns a list of validation errors or an empty list if valid. Useful for pre-flight validation.",
+      "inputs": [
+        {
+          "name": "data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Raw data dict to validate.",
+          "validators": []
+        },
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the model type to validate against.",
+          "validators": []
+        }
+      ],
+      "output_type": "ValidationErrorList",
+      "error_cases": [
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        }
+      ],
+      "preconditions": [
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returns empty list if data is valid against the model type",
+        "Returns one or more ValidationErrorDetail items if validation fails",
+        "Does not raise exceptions — all validation issues are captured in the return value"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_model_json_schema",
+      "description": "Returns the JSON Schema for a model type. Useful for documentation, config validation, and client SDK generation.",
+      "inputs": [
+        {
+          "name": "model_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the model type to get the schema for.",
+          "validators": []
+        }
+      ],
+      "output_type": "dict",
+      "error_cases": [
+        {
+          "name": "unknown_model_type",
+          "condition": "model_type does not match any defined model",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown model type"
+          }
+        }
+      ],
+      "preconditions": [
+        "model_type is one of the model type names defined in this component"
+      ],
+      "postconditions": [
+        "Returned dict is a valid JSON Schema (Draft 2020-12 compatible via Pydantic)",
+        "Schema includes all field definitions, types, constraints, and descriptions"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "config_loader",
+    "task_registry",
+    "data_models"
+  ],
+  "dependency_contracts": {
+    "config_loader": [
+      "load_config",
+      "resolve_env_var",
+      "validate_cross_field_constraints",
+      "ApprenticeConfig",
+      "ProviderConfig",
+      "LocalModelConfig",
+      "MatchFieldSpec",
+      "ConfidenceThresholds",
+      "EvaluatorConfig",
+      "TaskFieldSpec",
+      "TaskConfig",
+      "BudgetConfig",
+      "FinetuningConfig",
+      "AuditConfig",
+      "TrainingDataStoreConfig",
+      "ConfigError",
+      "ConfigFileNotFoundError",
+      "ConfigParseError",
+      "ConfigValidationError",
+      "ValidationErrorDetail",
+      "EnvVarNotFoundError",
+      "EvaluatorTypeName",
+      "FinetuningBackendName",
+      "LogLevel"
+    ],
+    "task_registry": [
+      "TaskRegistry",
+      "TaskRegistryProtocol",
+      "TaskNotFoundError",
+      "TaskConfig",
+      "ConfidenceThresholds",
+      "EvaluatorType",
+      "get_task",
+      "__contains__",
+      "task_names",
+      "__len__"
+    ],
+    "data_models": [
+      "TaskRequest",
+      "TaskResponse",
+      "TrainingExample",
+      "ComparisonPair",
+      "ConfidenceSnapshot",
+      "BudgetPeriod",
+      "BudgetState",
+      "AuditEntry",
+      "SamplingDecision",
+      "ExactMatchResult",
+      "FuzzyMatchResult",
+      "SemanticSimilarityResult",
+      "LlmJudgeResult",
+      "CustomEvalResult",
+      "ModelVersion",
+      "Phase",
+      "RoutingDecision",
+      "EvaluatorType",
+      "BudgetPeriodUnit",
+      "EvaluationResultType",
+      "create_task_request",
+      "create_task_response",
+      "create_confidence_snapshot",
+      "create_budget_state",
+      "record_cost",
+      "create_audit_entry",
+      "create_sampling_decision",
+      "create_training_example",
+      "create_comparison_pair",
+      "create_model_version",
+      "serialize_model",
+      "deserialize_model",
+      "validate_model",
+      "get_model_json_schema"
+    ]
+  },
+  "invariants": [
+    "ApprenticeConfig is frozen/immutable after construction — no mutation is possible",
+    "All SecretStr fields mask their values in repr and str — secrets never appear in logs or error messages",
+    "All env:VAR_NAME references are resolved at parse time — no deferred resolution at runtime",
+    "Config validation is exhaustive — if load_config returns without error, the config is fully valid for all downstream components",
+    "No silent defaults for critical fields — api keys, model names, task definitions, budget limits, and backend selection must always be explicitly specified",
+    "Extra/unknown fields in YAML always cause validation failure (extra='forbid') — no silent field dropping",
+    "Strict type coercion — '3' as a string is not accepted where int is expected (strict=True)",
+    "All task_name values in the config are unique",
+    "Cross-field constraints are enforced atomically — either all pass or the entire config is rejected",
+    "The loader function is pure and stateless — calling it twice with the same inputs produces identical results",
+    "YAML parsing uses safe_load only — no arbitrary Python object deserialization",
+    "The TaskRegistry is immutable after construction — no tasks can be added, removed, or modified at runtime",
+    "Every RegistryTaskConfig in the registry has a unique name",
+    "len(registry) >= 1 — a registry must contain at least one task",
+    "For every RegistryTaskConfig tc in the registry: all entries in tc.match_fields are keys in tc.output_schema['properties']",
+    "For every RegistryTaskConfig tc in the registry: all {placeholder} names in tc.prompt_template are keys in tc.input_schema['properties']",
+    "For every RegistryTaskConfig tc in the registry: tc.confidence_thresholds.emergency_threshold < tc.confidence_thresholds.coaching_trigger < tc.confidence_thresholds.phase2_to_phase3_correlation",
+    "registry.task_names returns a frozenset equal to the set of keys in registry.tasks",
+    "All Pydantic ValidationErrors from invalid config propagate at construction time — the registry never exists in an invalid state",
+    "All model instances with frozen=True are immutable after construction — no field can be reassigned",
+    "All models with extra='forbid' reject any fields not explicitly defined in the schema",
+    "All models with extra='ignore' silently discard unknown fields (forward compatibility for persisted state)",
+    "All CostAmount fields use Decimal arithmetic — no floating point for monetary values",
+    "All timestamp fields are timezone-aware (AwareDatetime) — naive datetimes are rejected at validation",
+    "All models round-trip cleanly through JSON: model_validate_json(model.model_dump_json()) produces an equivalent instance",
+    "Phase is always derived from ConfidenceScore and thresholds, never set independently",
+    "BudgetState.remaining always equals BudgetState.total_budget - BudgetState.spent",
+    "BudgetState.is_exhausted always equals (BudgetState.remaining <= 0)",
+    "EvaluationResult is a discriminated union — the result_type field determines which variant is active",
+    "TaskId values match the pattern ^[a-z][a-z0-9_-]*$ and are between 1 and 128 characters",
+    "ModelId values are non-empty strings of at most 256 characters",
+    "ConfidenceScore values are always in the closed interval [0.0, 1.0]",
+    "No model in this component performs I/O, network calls, or mutates global state — all functions are pure (except load_config which reads files)",
+    "Composition over inheritance: no model type inherits from another model type in this component"
+  ],
+  "requires": [
+    "pydantic>=2.0",
+    "pyyaml>=6.0"
+  ]
+}

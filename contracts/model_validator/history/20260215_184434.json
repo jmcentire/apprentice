@@ -1,0 +1,1005 @@
+{
+  "component_id": "model_validator",
+  "name": "Model Validator & Promoter",
+  "description": "Validates a newly fine-tuned model before promoting it to serve live traffic. Runs the new model against the held-out test set from the training data store. Computes evaluation scores using the same evaluators as the confidence engine. Promotion criteria: new model must score above a configurable threshold (default: phase2_to_phase3 threshold) on the test set. If validation passes: signals the Local Model Server to swap to the new model version. If validation fails: logs warning, keeps current model, discards the candidate. Records validation results and promotion decisions in the audit log. Designed with clear separation between validation (pure evaluation) and promotion (side-effectful swap) to enable testing, auditing, and manual review workflows.",
+  "version": 1,
+  "types": [
+    {
+      "name": "PromotionDecision",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "PROMOTED",
+        "REJECTED_BELOW_THRESHOLD",
+        "REJECTED_EVALUATION_ERROR",
+        "SWAP_FAILED",
+        "SKIPPED_NO_TEST_DATA"
+      ],
+      "inner_types": [],
+      "description": "StrEnum representing the outcome of a model validation and promotion attempt. Provides full auditability of why a candidate was or was not promoted."
+    },
+    {
+      "name": "ThresholdComparison",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "gte",
+        "gt"
+      ],
+      "inner_types": [],
+      "description": "Comparison operator used when checking aggregate score against the promotion threshold."
+    },
+    {
+      "name": "PerMetricThreshold",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "metric_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the evaluation metric (must match a key in ValidationResult.per_metric_scores).",
+          "validators": []
+        },
+        {
+          "name": "min_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Minimum acceptable score for this metric.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Per-metric threshold min_score must be in [0.0, 1.0]."
+            }
+          ]
+        },
+        {
+          "name": "comparison",
+          "type_ref": "ThresholdComparison",
+          "required": false,
+          "default": "gte",
+          "description": "Comparison operator for this metric threshold.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A threshold constraint for an individual evaluation metric. If specified, the candidate must also pass each per-metric threshold in addition to the aggregate threshold."
+    },
+    {
+      "name": "ValidationConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "promotion_threshold",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.8",
+          "description": "Aggregate score threshold the candidate must meet or exceed (depending on threshold_comparison) to be promoted. Defaults to the phase2_to_phase3 confidence threshold.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "promotion_threshold must be in [0.0, 1.0]."
+            }
+          ]
+        },
+        {
+          "name": "min_test_samples",
+          "type_ref": "int",
+          "required": false,
+          "default": "10",
+          "description": "Minimum number of held-out test samples required to run validation. If the test set has fewer samples, validation is skipped with SKIPPED_NO_TEST_DATA.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "min_test_samples must be at least 1."
+            }
+          ]
+        },
+        {
+          "name": "threshold_comparison",
+          "type_ref": "ThresholdComparison",
+          "required": false,
+          "default": "gte",
+          "description": "Comparison operator used when checking aggregate score against promotion_threshold. 'gte' means score >= threshold; 'gt' means score > threshold.",
+          "validators": []
+        },
+        {
+          "name": "per_metric_thresholds",
+          "type_ref": "PerMetricThresholdList",
+          "required": false,
+          "default": "[]",
+          "description": "Optional list of per-metric threshold constraints. If provided, each listed metric must independently pass its threshold in addition to the aggregate threshold.",
+          "validators": []
+        },
+        {
+          "name": "swap_timeout_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "120.0",
+          "description": "Maximum time in seconds to wait for the model server to complete the model swap operation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value > 0.0",
+              "error_message": "swap_timeout_seconds must be positive."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic configuration model controlling validation and promotion behavior. Parsed strictly at startup; invalid config causes immediate failure with a clear error message."
+    },
+    {
+      "name": "PerMetricThresholdList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "PerMetricThreshold",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of per-metric threshold constraints."
+    },
+    {
+      "name": "TestSetReference",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "test_set_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the test set in the training data store.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "test_set_id must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "content_hash",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "SHA-256 hex digest of the test set contents, ensuring the exact data used is recorded.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^[a-f0-9]{64}$",
+              "error_message": "content_hash must be a valid SHA-256 hex digest (64 lowercase hex characters)."
+            }
+          ]
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of test samples in the test set.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "sample_count must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable reference to the held-out test set used during validation, providing full traceability for audit purposes."
+    },
+    {
+      "name": "TestSample",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "sample_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this test sample.",
+          "validators": []
+        },
+        {
+          "name": "input_prompt",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The input prompt to send to the candidate model.",
+          "validators": []
+        },
+        {
+          "name": "reference_output",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The expected/reference output for evaluation comparison.",
+          "validators": []
+        },
+        {
+          "name": "metadata",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Optional metadata associated with this sample (e.g., domain, difficulty).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single sample from the held-out test set, containing the input prompt and the expected reference output for evaluation."
+    },
+    {
+      "name": "TestSet",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "reference",
+          "type_ref": "TestSetReference",
+          "required": true,
+          "default": "",
+          "description": "Immutable reference metadata for this test set.",
+          "validators": []
+        },
+        {
+          "name": "samples",
+          "type_ref": "TestSampleList",
+          "required": true,
+          "default": "",
+          "description": "The list of test samples.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "The held-out test set retrieved from the training data store, including reference metadata and all samples."
+    },
+    {
+      "name": "TestSampleList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TestSample",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of test samples."
+    },
+    {
+      "name": "EvaluationScore",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "metric_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the evaluation metric.",
+          "validators": []
+        },
+        {
+          "name": "score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The score assigned by this evaluator, normalized to [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Evaluation score must be in [0.0, 1.0]."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Score result from a single evaluator for a single test sample."
+    },
+    {
+      "name": "ValidationResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "candidate_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the candidate fine-tuned model being validated.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "candidate_model_id must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the validation was performed.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+              "error_message": "timestamp_utc must be in ISO 8601 format."
+            }
+          ]
+        },
+        {
+          "name": "per_metric_scores",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping of metric name to average score across all test samples for that metric. Keys are str, values are float in [0.0, 1.0].",
+          "validators": []
+        },
+        {
+          "name": "aggregate_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Weighted or unweighted mean of all per-metric scores. This is the primary score compared against the promotion threshold.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "aggregate_score must be in [0.0, 1.0]."
+            }
+          ]
+        },
+        {
+          "name": "threshold_used",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The promotion threshold that was applied for this validation decision.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "threshold_used must be in [0.0, 1.0]."
+            }
+          ]
+        },
+        {
+          "name": "threshold_comparison_used",
+          "type_ref": "ThresholdComparison",
+          "required": true,
+          "default": "",
+          "description": "The comparison operator that was applied (gte or gt).",
+          "validators": []
+        },
+        {
+          "name": "test_set_reference",
+          "type_ref": "TestSetReference",
+          "required": true,
+          "default": "",
+          "description": "Reference to the exact test set used, including content hash for reproducibility.",
+          "validators": []
+        },
+        {
+          "name": "decision",
+          "type_ref": "PromotionDecision",
+          "required": true,
+          "default": "",
+          "description": "The outcome of the validation evaluation (does not include swap result — that is in PromotionRecord).",
+          "validators": []
+        },
+        {
+          "name": "failed_per_metric_thresholds",
+          "type_ref": "FailedMetricList",
+          "required": false,
+          "default": "[]",
+          "description": "List of metric names that failed their per-metric threshold checks (empty if all passed or no per-metric thresholds configured).",
+          "validators": []
+        },
+        {
+          "name": "evaluation_error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If decision is REJECTED_EVALUATION_ERROR, contains a human-readable description of what went wrong during evaluation. Empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "samples_evaluated",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of test samples that were successfully evaluated.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "samples_evaluated must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen (immutable) Pydantic model capturing the complete result of a candidate model validation. Contains all information needed for audit trail and promotion decision. This is the pure evaluation output — no side effects have occurred at this point."
+    },
+    {
+      "name": "FailedMetricList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "str",
+      "variants": [],
+      "inner_types": [],
+      "description": "List of metric names that failed per-metric threshold checks."
+    },
+    {
+      "name": "PromotionRecord",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "validation_result",
+          "type_ref": "ValidationResult",
+          "required": true,
+          "default": "",
+          "description": "The immutable validation result that informed the promotion decision.",
+          "validators": []
+        },
+        {
+          "name": "promotion_attempted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether a model swap was attempted (true only if validation passed).",
+          "validators": []
+        },
+        {
+          "name": "swap_started_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the model swap was initiated. Empty string if no swap was attempted.",
+          "validators": []
+        },
+        {
+          "name": "swap_completed_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the model swap completed (successfully or with error). Empty string if no swap was attempted.",
+          "validators": []
+        },
+        {
+          "name": "swap_duration_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Time in seconds the swap operation took. 0.0 if no swap was attempted.",
+          "validators": []
+        },
+        {
+          "name": "final_decision",
+          "type_ref": "PromotionDecision",
+          "required": true,
+          "default": "",
+          "description": "The final promotion decision, which may differ from the validation decision if the swap failed (e.g., validation said PROMOTED but swap_failed overrides to SWAP_FAILED).",
+          "validators": []
+        },
+        {
+          "name": "swap_error_detail",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If final_decision is SWAP_FAILED, contains a human-readable description of the swap error. Empty string otherwise.",
+          "validators": []
+        },
+        {
+          "name": "previous_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The model ID that was serving before this promotion attempt. Empty string if unknown or no swap was attempted.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Extends ValidationResult with promotion execution details. This is the complete audit record of a validation-and-promotion attempt, including any swap timing and errors."
+    },
+    {
+      "name": "ModelServerStatus",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "is_healthy",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the model server is reachable and healthy.",
+          "validators": []
+        },
+        {
+          "name": "current_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model ID currently being served. Empty string if no model loaded.",
+          "validators": []
+        },
+        {
+          "name": "ready_to_swap",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the model server is in a state that allows a model swap.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Status response from the local model server, used to verify the current serving model and health before and after swaps."
+    },
+    {
+      "name": "SwapResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "success",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the swap completed successfully.",
+          "validators": []
+        },
+        {
+          "name": "previous_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model ID that was serving before the swap.",
+          "validators": []
+        },
+        {
+          "name": "new_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model ID now serving (should match candidate if success is true).",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error message if swap failed. Empty string on success.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of a model swap operation from the ModelServer protocol."
+    },
+    {
+      "name": "ValidationResultOptional",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "ValidationResult"
+      ],
+      "description": "An optional ValidationResult, used when validation may not have been performed."
+    }
+  ],
+  "functions": [
+    {
+      "name": "validate_candidate",
+      "description": "Runs the candidate fine-tuned model against the held-out test set from the training data store, computes evaluation scores using the injected evaluators (same as confidence engine), and returns an immutable ValidationResult. This is a pure evaluation method — it performs no side effects on the serving model. The candidate model must already be loadable/accessible by the model server for inference. The test set is fetched from the TrainingDataStore. All evaluation errors are caught internally and result in REJECTED_EVALUATION_ERROR decision rather than raising exceptions.",
+      "inputs": [
+        {
+          "name": "candidate_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the candidate fine-tuned model to validate.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "candidate_model_id must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "test_set_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Identifier of the held-out test set in the training data store to use for evaluation. If empty, the store's default held-out set for this model's domain is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "ValidationResult",
+      "error_cases": [
+        {
+          "name": "test_set_not_found",
+          "condition": "The specified test_set_id does not exist in the TrainingDataStore.",
+          "error_type": "ValidationResult",
+          "error_data": {
+            "decision": "SKIPPED_NO_TEST_DATA",
+            "detail": "Returns a ValidationResult with decision=SKIPPED_NO_TEST_DATA and zero scores rather than raising an exception."
+          }
+        },
+        {
+          "name": "test_set_below_minimum",
+          "condition": "The test set exists but has fewer samples than ValidationConfig.min_test_samples.",
+          "error_type": "ValidationResult",
+          "error_data": {
+            "decision": "SKIPPED_NO_TEST_DATA",
+            "detail": "Returns a ValidationResult with decision=SKIPPED_NO_TEST_DATA. evaluation_error_detail describes the sample count shortfall."
+          }
+        },
+        {
+          "name": "all_evaluators_failed",
+          "condition": "Every evaluator raises an exception or returns invalid results for all test samples.",
+          "error_type": "ValidationResult",
+          "error_data": {
+            "decision": "REJECTED_EVALUATION_ERROR",
+            "detail": "Returns a ValidationResult with decision=REJECTED_EVALUATION_ERROR, aggregate_score=0.0, and evaluation_error_detail describing the failures."
+          }
+        },
+        {
+          "name": "candidate_model_inference_error",
+          "condition": "The candidate model cannot be loaded or fails to produce outputs for the test samples via the model server.",
+          "error_type": "ValidationResult",
+          "error_data": {
+            "decision": "REJECTED_EVALUATION_ERROR",
+            "detail": "Returns a ValidationResult with decision=REJECTED_EVALUATION_ERROR and evaluation_error_detail describing the inference failure."
+          }
+        },
+        {
+          "name": "training_data_store_unavailable",
+          "condition": "The TrainingDataStore is unreachable or returns an error when fetching the test set.",
+          "error_type": "ValidationResult",
+          "error_data": {
+            "decision": "SKIPPED_NO_TEST_DATA",
+            "detail": "Returns a ValidationResult with decision=SKIPPED_NO_TEST_DATA and evaluation_error_detail describing the store access failure."
+          }
+        }
+      ],
+      "preconditions": [
+        "The ModelValidator has been initialized with valid ValidationConfig, at least one Evaluator, a TrainingDataStore, a ModelServer, and an AuditLogger.",
+        "candidate_model_id refers to a model that the model server can load for inference (not necessarily currently serving)."
+      ],
+      "postconditions": [
+        "Returns an immutable ValidationResult with all fields populated.",
+        "ValidationResult.decision is one of: PROMOTED (passes threshold), REJECTED_BELOW_THRESHOLD, REJECTED_EVALUATION_ERROR, or SKIPPED_NO_TEST_DATA.",
+        "ValidationResult.decision is never SWAP_FAILED (swaps are not performed by this method).",
+        "ValidationResult.per_metric_scores contains one entry per evaluator that completed successfully.",
+        "ValidationResult.aggregate_score is the mean of per_metric_scores values, or 0.0 if no metrics completed.",
+        "ValidationResult.test_set_reference accurately reflects the test set that was used.",
+        "ValidationResult.timestamp_utc is set to the current UTC time at the start of validation.",
+        "No mutation to the currently serving model occurs.",
+        "The validation result is logged to the audit logger before returning."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "AuditLogger",
+          "description": "Logs the complete ValidationResult as a structured JSON audit entry."
+        },
+        {
+          "kind": "network_call",
+          "target": "ModelServer",
+          "description": "Sends inference requests to the candidate model via the model server to generate outputs for test samples."
+        },
+        {
+          "kind": "network_call",
+          "target": "TrainingDataStore",
+          "description": "Fetches the held-out test set from the training data store."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "promote_candidate",
+      "description": "Attempts to promote a validated candidate model to serve live traffic by instructing the local model server to swap to the new model version. This is the side-effectful counterpart to validate_candidate. Only proceeds with the swap if the ValidationResult indicates the candidate passed validation (decision == PROMOTED). If the ValidationResult decision is anything other than PROMOTED, no swap is attempted and a PromotionRecord is returned reflecting the original decision. Swap errors are caught and recorded — the method never raises exceptions past the public boundary.",
+      "inputs": [
+        {
+          "name": "validation_result",
+          "type_ref": "ValidationResult",
+          "required": true,
+          "default": "",
+          "description": "The immutable validation result from a prior call to validate_candidate. Must not be modified between validation and promotion.",
+          "validators": []
+        }
+      ],
+      "output_type": "PromotionRecord",
+      "error_cases": [
+        {
+          "name": "swap_timeout",
+          "condition": "The model server does not complete the swap within ValidationConfig.swap_timeout_seconds.",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "SWAP_FAILED",
+            "detail": "Returns PromotionRecord with final_decision=SWAP_FAILED, swap_error_detail describes the timeout. Previous model continues serving."
+          }
+        },
+        {
+          "name": "swap_connection_error",
+          "condition": "The model server is unreachable when attempting the swap.",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "SWAP_FAILED",
+            "detail": "Returns PromotionRecord with final_decision=SWAP_FAILED, swap_error_detail describes the connection failure."
+          }
+        },
+        {
+          "name": "swap_model_load_error",
+          "condition": "The model server accepts the swap request but fails to load the candidate model (e.g., corrupt weights, incompatible format).",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "SWAP_FAILED",
+            "detail": "Returns PromotionRecord with final_decision=SWAP_FAILED, swap_error_detail includes the server's error response. Previous model is restored."
+          }
+        },
+        {
+          "name": "model_server_not_ready",
+          "condition": "The model server reports it is not in a state that allows swaps (e.g., currently serving a batch, another swap in progress).",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "SWAP_FAILED",
+            "detail": "Returns PromotionRecord with final_decision=SWAP_FAILED, swap_error_detail describes the server's not-ready state."
+          }
+        },
+        {
+          "name": "validation_not_passed",
+          "condition": "validation_result.decision is not PROMOTED (e.g., REJECTED_BELOW_THRESHOLD, REJECTED_EVALUATION_ERROR, SKIPPED_NO_TEST_DATA).",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "matches validation_result.decision",
+            "detail": "Returns PromotionRecord with promotion_attempted=false and final_decision matching the validation decision. No swap is attempted."
+          }
+        }
+      ],
+      "preconditions": [
+        "The ModelValidator has been initialized with a valid ModelServer and AuditLogger.",
+        "validation_result is a complete, unmodified ValidationResult from a prior validate_candidate call.",
+        "validation_result.candidate_model_id still refers to an accessible model."
+      ],
+      "postconditions": [
+        "Returns a PromotionRecord with all fields populated.",
+        "If validation_result.decision != PROMOTED: promotion_attempted is false, final_decision matches validation_result.decision, no swap is attempted.",
+        "If validation_result.decision == PROMOTED and swap succeeds: final_decision is PROMOTED, promotion_attempted is true, swap timing fields are populated.",
+        "If validation_result.decision == PROMOTED and swap fails: final_decision is SWAP_FAILED, promotion_attempted is true, swap_error_detail is populated, the previous model continues serving.",
+        "The PromotionRecord is logged to the audit logger before returning.",
+        "If swap fails, the model server continues serving the previous model version — no partial state."
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "ModelServer",
+          "description": "If validation passed: instructs the local model server to swap from the current model to the candidate model version."
+        },
+        {
+          "kind": "logging",
+          "target": "AuditLogger",
+          "description": "Logs the complete PromotionRecord as a structured JSON audit entry, including swap timing and any errors."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "validate_and_promote",
+      "description": "Convenience method that runs validate_candidate followed by promote_candidate in sequence. Equivalent to calling validate_candidate then passing the result to promote_candidate. Provides a single-call workflow for automated pipelines where manual review between validation and promotion is not needed.",
+      "inputs": [
+        {
+          "name": "candidate_model_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier of the candidate fine-tuned model to validate and potentially promote.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "candidate_model_id must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "test_set_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Identifier of the held-out test set. If empty, the store's default held-out set is used.",
+          "validators": []
+        }
+      ],
+      "output_type": "PromotionRecord",
+      "error_cases": [
+        {
+          "name": "validation_phase_error",
+          "condition": "Any error that would occur during validate_candidate (test set not found, evaluator failures, etc.).",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "detail": "The error is captured in the ValidationResult within the PromotionRecord. promotion_attempted is false. See validate_candidate error cases."
+          }
+        },
+        {
+          "name": "promotion_phase_error",
+          "condition": "Validation passes but the swap fails for any reason.",
+          "error_type": "PromotionRecord",
+          "error_data": {
+            "final_decision": "SWAP_FAILED",
+            "detail": "The swap error is captured in the PromotionRecord. See promote_candidate error cases."
+          }
+        }
+      ],
+      "preconditions": [
+        "The ModelValidator has been fully initialized with all dependencies.",
+        "candidate_model_id refers to an accessible model."
+      ],
+      "postconditions": [
+        "Returns a PromotionRecord with a populated validation_result field.",
+        "All postconditions of validate_candidate and promote_candidate apply.",
+        "Both the ValidationResult and the PromotionRecord are logged to the audit logger."
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "TrainingDataStore",
+          "description": "Fetches the held-out test set."
+        },
+        {
+          "kind": "network_call",
+          "target": "ModelServer",
+          "description": "Sends inference requests during validation and swap requests during promotion."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "ModelServer",
+          "description": "If validation passes: instructs model swap."
+        },
+        {
+          "kind": "logging",
+          "target": "AuditLogger",
+          "description": "Logs both ValidationResult and PromotionRecord."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_validation_history",
+      "description": "Retrieves the history of validation results for a given model ID or all models. Reads from the audit log to reconstruct past validation and promotion records. Useful for monitoring trends, debugging, and compliance auditing.",
+      "inputs": [
+        {
+          "name": "candidate_model_id",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Filter by candidate model ID. If empty, returns history for all models.",
+          "validators": []
+        },
+        {
+          "name": "limit",
+          "type_ref": "int",
+          "required": false,
+          "default": "50",
+          "description": "Maximum number of records to return, most recent first.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 1000",
+              "error_message": "limit must be between 1 and 1000."
+            }
+          ]
+        }
+      ],
+      "output_type": "PromotionRecordList",
+      "error_cases": [
+        {
+          "name": "audit_log_unavailable",
+          "condition": "The audit logger's backing store is unreachable or corrupted.",
+          "error_type": "PromotionRecordList",
+          "error_data": {
+            "detail": "Returns an empty list and logs a warning. Does not raise an exception."
+          }
+        }
+      ],
+      "preconditions": [
+        "The ModelValidator has been initialized with a valid AuditLogger."
+      ],
+      "postconditions": [
+        "Returns a list of PromotionRecords ordered by timestamp descending (most recent first).",
+        "If candidate_model_id is provided, only records matching that model ID are returned.",
+        "The list contains at most 'limit' entries.",
+        "If no history exists, returns an empty list."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "AuditLogger",
+          "description": "Reads historical validation and promotion records from the audit log's backing store."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "confidence_engine",
+    "local_model_server",
+    "training_data_store",
+    "audit_logger"
+  ],
+  "dependency_contracts": {
+    "confidence_engine": [
+      "Provides Evaluator protocol instances that compute scores for model outputs against reference outputs.",
+      "Each Evaluator has an async evaluate(output: str, reference: str) -> EvaluationScore method.",
+      "Evaluators are stateless and safe to share across components.",
+      "The same evaluator instances used for live confidence scoring are injected into the validator for consistency."
+    ],
+    "local_model_server": [
+      "Provides a ModelServer protocol with async methods: get_status() -> ModelServerStatus, swap_model(model_id: str) -> SwapResult, generate(model_id: str, prompt: str) -> str.",
+      "swap_model is atomic — either the new model is fully loaded and serving, or the previous model is restored.",
+      "generate can target a specific model_id for inference without changing the serving model.",
+      "The model server respects the swap_timeout_seconds configuration for swap operations."
+    ],
+    "training_data_store": [
+      "Provides a TrainingDataStore protocol with async method: get_test_set(test_set_id: str) -> TestSet.",
+      "If test_set_id is empty, returns the default held-out test set.",
+      "The returned TestSet includes a TestSetReference with a content_hash for traceability.",
+      "Raises an identifiable error if the test set does not exist."
+    ],
+    "audit_logger": [
+      "Provides an AuditLogger protocol with async methods: log_validation(result: ValidationResult) -> None, log_promotion(record: PromotionRecord) -> None, query_history(model_id: str, limit: int) -> list[PromotionRecord].",
+      "All log methods are non-blocking and must not raise exceptions that propagate to the caller.",
+      "Logged entries are persisted as structured JSON for machine-readable audit trails.",
+      "query_history returns records ordered by timestamp descending."
+    ]
+  },
+  "invariants": [
+    "No exceptions are raised past the public interface boundary — all error conditions are represented in the return type (ValidationResult or PromotionRecord).",
+    "validate_candidate never mutates the currently serving model on the model server.",
+    "promote_candidate only attempts a swap if the provided ValidationResult.decision == PROMOTED.",
+    "If a model swap fails, the previous model continues serving — no partial state is possible.",
+    "All validation results and promotion decisions are logged to the audit logger before being returned to the caller.",
+    "The same evaluator implementations used by the confidence engine are used for validation, ensuring score consistency.",
+    "ValidationResult is immutable (frozen Pydantic model) — it cannot be modified after creation.",
+    "ValidationConfig is validated at initialization time — invalid config causes immediate failure, never silent defaults.",
+    "per_metric_scores keys always correspond to the metric names of the injected evaluators that completed successfully.",
+    "aggregate_score is always the arithmetic mean of per_metric_scores values, or 0.0 if per_metric_scores is empty.",
+    "All timestamps are UTC in ISO 8601 format.",
+    "No global state — all state flows through constructor-injected dependencies or explicit parameters."
+  ],
+  "requires": [
+    "python >= 3.12",
+    "pydantic >= 2.0",
+    "httpx"
+  ]
+}

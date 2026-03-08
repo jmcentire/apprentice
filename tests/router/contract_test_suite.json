@@ -1,0 +1,832 @@
+{
+  "component_id": "router",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "hp_compute_p1_budget",
+      "description": "Phase 1 with budget available returns REMOTE_ONLY",
+      "function": "compute_routing_action",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_1",
+        "is_coaching_sample": "False",
+        "budget_available": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.REMOTE_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.REMOTE_ONLY"
+      ]
+    },
+    {
+      "id": "hp_compute_p2_coaching_budget",
+      "description": "Phase 2 with coaching sample and budget returns BOTH_RETURN_REMOTE",
+      "function": "compute_routing_action",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_2",
+        "is_coaching_sample": "True",
+        "budget_available": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.BOTH_RETURN_REMOTE",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.BOTH_RETURN_REMOTE"
+      ]
+    },
+    {
+      "id": "hp_compute_p3_coaching_budget",
+      "description": "Phase 3 with coaching sample and budget returns BOTH_RETURN_LOCAL",
+      "function": "compute_routing_action",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_3",
+        "is_coaching_sample": "True",
+        "budget_available": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.BOTH_RETURN_LOCAL",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.BOTH_RETURN_LOCAL"
+      ]
+    },
+    {
+      "id": "hp_compute_p3_no_coaching",
+      "description": "Phase 3 without coaching sample returns LOCAL_ONLY regardless of budget",
+      "function": "compute_routing_action",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_3",
+        "is_coaching_sample": "False",
+        "budget_available": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.LOCAL_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.LOCAL_ONLY"
+      ]
+    },
+    {
+      "id": "edge_compute_p1_no_budget",
+      "description": "Phase 1 with exhausted budget returns LOCAL_ONLY (degraded)",
+      "function": "compute_routing_action",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_1",
+        "is_coaching_sample": "False",
+        "budget_available": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.LOCAL_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.LOCAL_ONLY"
+      ]
+    },
+    {
+      "id": "edge_compute_p2_no_budget",
+      "description": "Phase 2 with exhausted budget returns LOCAL_ONLY (degraded)",
+      "function": "compute_routing_action",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_2",
+        "is_coaching_sample": "True",
+        "budget_available": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.LOCAL_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.LOCAL_ONLY"
+      ]
+    },
+    {
+      "id": "edge_compute_p3_coaching_no_budget",
+      "description": "Phase 3 with coaching sample but no budget returns LOCAL_ONLY (degraded, skips coaching)",
+      "function": "compute_routing_action",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_3",
+        "is_coaching_sample": "True",
+        "budget_available": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.LOCAL_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.LOCAL_ONLY"
+      ]
+    },
+    {
+      "id": "edge_compute_p2_not_coaching_budget",
+      "description": "Phase 2 without coaching sample but with budget returns BOTH_RETURN_REMOTE",
+      "function": "compute_routing_action",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_2",
+        "is_coaching_sample": "False",
+        "budget_available": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.BOTH_RETURN_REMOTE",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.BOTH_RETURN_REMOTE"
+      ]
+    },
+    {
+      "id": "edge_compute_p3_no_coaching_no_budget",
+      "description": "Phase 3 without coaching and no budget returns LOCAL_ONLY",
+      "function": "compute_routing_action",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "phase": "PHASE_3",
+        "is_coaching_sample": "False",
+        "budget_available": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "RoutingAction.LOCAL_ONLY",
+      "expected_error": "",
+      "assertions": [
+        "result == RoutingAction.LOCAL_ONLY"
+      ]
+    },
+    {
+      "id": "inv_compute_no_budget_never_remote",
+      "description": "When budget_available is False, result is never REMOTE_ONLY, BOTH_RETURN_REMOTE, or BOTH_RETURN_LOCAL",
+      "function": "compute_routing_action",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "budget_available": "False"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result not in (RoutingAction.REMOTE_ONLY, RoutingAction.BOTH_RETURN_REMOTE, RoutingAction.BOTH_RETURN_LOCAL)"
+      ]
+    },
+    {
+      "id": "inv_compute_deterministic",
+      "description": "Same inputs always produce the same output (determinism)",
+      "function": "compute_routing_action",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result1 == result2"
+      ]
+    },
+    {
+      "id": "hp_route_phase1",
+      "description": "Route in Phase 1 with budget calls remote only and returns remote response",
+      "function": "route",
+      "category": "happy_path",
+      "setup_description": "Mock confidence_engine to return PHASE_1/0.2, budget available, sampling false, remote returns valid response",
+      "mock_dependencies": {
+        "confidence_engine": "returns PhaseContext(PHASE_1, 0.2)",
+        "budget_manager": "budget available, not exhausted",
+        "sampling_scheduler": "returns False",
+        "remote_model_backend": "returns ModelResponse with content='remote answer'",
+        "audit_logger": "accepts any entry",
+        "training_data_collector": "accepts any example"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.request_id == request.request_id",
+        "result.response.content is non-empty",
+        "result.intended_action == RoutingAction.REMOTE_ONLY",
+        "result.actual_action == RoutingAction.REMOTE_ONLY",
+        "result.is_fallback == False",
+        "result.phase == Phase.PHASE_1",
+        "budget_manager.record_spend was called",
+        "audit_logger was called once"
+      ]
+    },
+    {
+      "id": "hp_route_phase2_coaching",
+      "description": "Route in Phase 2 with coaching sample does dual-send and returns remote response",
+      "function": "route",
+      "category": "happy_path",
+      "setup_description": "Mock confidence_engine to return PHASE_2/0.6, budget available, sampling true, both backends succeed",
+      "mock_dependencies": {
+        "confidence_engine": "returns PhaseContext(PHASE_2, 0.6)",
+        "budget_manager": "budget available",
+        "sampling_scheduler": "returns True",
+        "local_model_backend": "returns ModelResponse",
+        "remote_model_backend": "returns ModelResponse",
+        "training_data_collector": "accepts",
+        "audit_logger": "accepts"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.intended_action == RoutingAction.BOTH_RETURN_REMOTE",
+        "result.response.content is non-empty",
+        "result.is_coaching_sample == True",
+        "training_data_collector received COACHING_EVALUATION_PAIR"
+      ]
+    },
+    {
+      "id": "hp_route_phase3_local_only",
+      "description": "Route in Phase 3 without coaching uses local only",
+      "function": "route",
+      "category": "happy_path",
+      "setup_description": "Mock confidence_engine to return PHASE_3/0.95, sampling false, local succeeds",
+      "mock_dependencies": {
+        "confidence_engine": "returns PhaseContext(PHASE_3, 0.95)",
+        "budget_manager": "budget available",
+        "sampling_scheduler": "returns False",
+        "local_model_backend": "returns ModelResponse with content='local answer'",
+        "audit_logger": "accepts"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.intended_action == RoutingAction.LOCAL_ONLY",
+        "result.actual_action == RoutingAction.LOCAL_ONLY",
+        "result.response.content is non-empty",
+        "remote_model_backend was NOT called"
+      ]
+    },
+    {
+      "id": "hp_route_phase3_coaching_dual",
+      "description": "Route in Phase 3 with coaching does dual-send and returns local response",
+      "function": "route",
+      "category": "happy_path",
+      "setup_description": "Phase 3, coaching sample, both backends succeed",
+      "mock_dependencies": {
+        "confidence_engine": "returns PhaseContext(PHASE_3, 0.92)",
+        "budget_manager": "budget available",
+        "sampling_scheduler": "returns True",
+        "local_model_backend": "returns ModelResponse",
+        "remote_model_backend": "returns ModelResponse",
+        "training_data_collector": "accepts",
+        "audit_logger": "accepts"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.intended_action == RoutingAction.BOTH_RETURN_LOCAL",
+        "result.response == local_response",
+        "training_data_collector received COACHING_EVALUATION_PAIR"
+      ]
+    },
+    {
+      "id": "err_invalid_request_empty_id",
+      "description": "Route with empty request_id raises invalid_request error",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "request_id": "",
+        "prompt": "test prompt",
+        "task_type": "summarize"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": [
+        "error type is invalid_request",
+        "audit entry logged with error detail"
+      ]
+    },
+    {
+      "id": "err_invalid_request_empty_prompt",
+      "description": "Route with empty prompt raises invalid_request error",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "request_id": "req-1",
+        "prompt": "",
+        "task_type": "summarize"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": [
+        "error type is invalid_request"
+      ]
+    },
+    {
+      "id": "err_invalid_request_empty_task_type",
+      "description": "Route with empty task_type raises invalid_request error",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "request_id": "req-1",
+        "prompt": "test",
+        "task_type": ""
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_request",
+      "assertions": [
+        "error type is invalid_request"
+      ]
+    },
+    {
+      "id": "err_budget_check_failed",
+      "description": "Route raises budget_check_failed when BudgetManager throws",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "Mock budget_manager.check_budget to raise RuntimeError",
+      "mock_dependencies": {
+        "budget_manager": "raises RuntimeError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "budget_check_failed",
+      "assertions": [
+        "error type is budget_check_failed",
+        "audit entry logged with error detail"
+      ]
+    },
+    {
+      "id": "err_confidence_engine_unavailable",
+      "description": "Route raises confidence_engine_unavailable when ConfidenceEngine fails",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "Mock confidence_engine.get_phase_context to raise",
+      "mock_dependencies": {
+        "confidence_engine": "raises RuntimeError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "confidence_engine_unavailable",
+      "assertions": [
+        "error type is confidence_engine_unavailable",
+        "audit entry logged"
+      ]
+    },
+    {
+      "id": "err_sampling_scheduler_unavailable",
+      "description": "Route raises sampling_scheduler_unavailable when SamplingScheduler fails",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "Mock sampling_scheduler.should_coach to raise",
+      "mock_dependencies": {
+        "sampling_scheduler": "raises RuntimeError"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "sampling_scheduler_unavailable",
+      "assertions": [
+        "error type is sampling_scheduler_unavailable",
+        "audit entry logged"
+      ]
+    },
+    {
+      "id": "err_both_backends_unavailable",
+      "description": "Route raises both_backends_unavailable when both backends fail",
+      "function": "route",
+      "category": "error_case",
+      "setup_description": "Phase 2 dual-send, both backends raise exceptions",
+      "mock_dependencies": {
+        "local_model_backend": "raises ConnectionError",
+        "remote_model_backend": "raises ConnectionError",
+        "confidence_engine": "returns PHASE_2",
+        "budget_manager": "available",
+        "sampling_scheduler": "returns True"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "both_backends_unavailable",
+      "assertions": [
+        "error type is both_backends_unavailable",
+        "audit entry logged with error detail"
+      ]
+    },
+    {
+      "id": "fb_local_fails_fallback_remote",
+      "description": "Local fails in LOCAL_ONLY, falls back to remote if budget allows",
+      "function": "route",
+      "category": "edge_case",
+      "setup_description": "Phase 3 local-only, local fails, budget available, remote succeeds",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_3/0.95",
+        "budget_manager": "budget available",
+        "sampling_scheduler": "returns False",
+        "local_model_backend": "raises Exception",
+        "remote_model_backend": "returns ModelResponse"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.is_fallback == True",
+        "result.actual_action == RoutingAction.LOCAL_FALLBACK_TO_REMOTE",
+        "result.intended_action == RoutingAction.LOCAL_ONLY",
+        "result.response.content is non-empty"
+      ]
+    },
+    {
+      "id": "fb_remote_fails_in_dual",
+      "description": "Remote fails in dual-send Phase 2, falls back to local response (degraded)",
+      "function": "route",
+      "category": "edge_case",
+      "setup_description": "Phase 2 dual-send, remote fails, local succeeds",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_2/0.6",
+        "budget_manager": "budget available",
+        "sampling_scheduler": "returns True",
+        "local_model_backend": "returns ModelResponse",
+        "remote_model_backend": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.is_degraded == True",
+        "result.response.content is non-empty"
+      ]
+    },
+    {
+      "id": "fb_budget_exhausted_local_only",
+      "description": "Budget exhausted forces LOCAL_ONLY, remote never called",
+      "function": "route",
+      "category": "edge_case",
+      "setup_description": "Phase 1 but budget exhausted, local succeeds",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_1/0.1",
+        "budget_manager": "budget exhausted",
+        "sampling_scheduler": "returns False",
+        "local_model_backend": "returns ModelResponse"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.intended_action == RoutingAction.LOCAL_ONLY",
+        "result.is_degraded == True",
+        "remote_model_backend was NOT called"
+      ]
+    },
+    {
+      "id": "hp_dual_send_both_succeed",
+      "description": "execute_dual_send with both backends succeeding returns BOTH_SUCCEEDED",
+      "function": "execute_dual_send",
+      "category": "happy_path",
+      "setup_description": "Both local and remote backends return valid responses",
+      "mock_dependencies": {
+        "local_model_backend": "returns ModelResponse",
+        "remote_model_backend": "returns ModelResponse"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "outcome == DualSendOutcome.BOTH_SUCCEEDED",
+        "local_response is not None",
+        "remote_response is not None"
+      ]
+    },
+    {
+      "id": "edge_dual_send_local_fails",
+      "description": "execute_dual_send with local failure returns LOCAL_FAILED_REMOTE_SUCCEEDED",
+      "function": "execute_dual_send",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_backend": "raises Exception",
+        "remote_model_backend": "returns ModelResponse"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "outcome == DualSendOutcome.LOCAL_FAILED_REMOTE_SUCCEEDED",
+        "local_response is None",
+        "remote_response is not None",
+        "local_error is non-empty"
+      ]
+    },
+    {
+      "id": "edge_dual_send_remote_fails",
+      "description": "execute_dual_send with remote failure returns LOCAL_SUCCEEDED_REMOTE_FAILED",
+      "function": "execute_dual_send",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_backend": "returns ModelResponse",
+        "remote_model_backend": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "outcome == DualSendOutcome.LOCAL_SUCCEEDED_REMOTE_FAILED",
+        "local_response is not None",
+        "remote_response is None",
+        "remote_error is non-empty"
+      ]
+    },
+    {
+      "id": "edge_dual_send_both_fail",
+      "description": "execute_dual_send with both failures returns BOTH_FAILED",
+      "function": "execute_dual_send",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {
+        "local_model_backend": "raises Exception",
+        "remote_model_backend": "raises Exception"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "outcome == DualSendOutcome.BOTH_FAILED",
+        "local_response is None",
+        "remote_response is None"
+      ]
+    },
+    {
+      "id": "hp_build_audit_entry",
+      "description": "build_audit_entry assembles all fields correctly from inputs",
+      "function": "build_audit_entry",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid request, decision, result with known values and empty error_detail",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "entry.request_id == request.request_id",
+        "entry.task_type == request.task_type",
+        "entry.phase == decision.phase_context.phase",
+        "entry.confidence == decision.phase_context.confidence",
+        "entry.intended_action == decision.intended_action",
+        "entry.actual_action == result.actual_action",
+        "entry.total_cost_usd == result.total_cost_usd",
+        "entry.error_detail == ''"
+      ]
+    },
+    {
+      "id": "edge_build_audit_entry_with_error",
+      "description": "build_audit_entry includes error_detail when provided",
+      "function": "build_audit_entry",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid inputs with error_detail='remote timeout'",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "entry.error_detail == 'remote timeout'",
+        "entry.request_id == request.request_id"
+      ]
+    },
+    {
+      "id": "inv_audit_always_logged",
+      "description": "Every route() call produces exactly one audit entry regardless of outcome",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "Run route with various outcomes (success, error, fallback)",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "audit_logger was called exactly once per route() call"
+      ]
+    },
+    {
+      "id": "inv_budget_never_exceeded",
+      "description": "When budget is exhausted, remote calls are never made",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "Budget exhausted for all phases",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remote_model_backend was never called when budget is exhausted"
+      ]
+    },
+    {
+      "id": "inv_training_collected_phase1_remote",
+      "description": "Training data collected for every remote response in Phase 1",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "Phase 1, budget available, remote succeeds",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_1",
+        "budget_manager": "available",
+        "remote_model_backend": "succeeds"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_data_collector received REMOTE_RESPONSE_EXAMPLE"
+      ]
+    },
+    {
+      "id": "inv_training_collected_phase2_remote",
+      "description": "Training data collected for every remote response in Phase 2",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "Phase 2, budget available, both succeed",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_2",
+        "budget_manager": "available",
+        "remote_model_backend": "succeeds"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_data_collector received REMOTE_RESPONSE_EXAMPLE"
+      ]
+    },
+    {
+      "id": "inv_coaching_pairs_collected",
+      "description": "Coaching evaluation pairs collected when dual-send and both succeed",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "Phase 2 coaching sample, both backends succeed",
+      "mock_dependencies": {
+        "confidence_engine": "returns PHASE_2",
+        "sampling_scheduler": "returns True",
+        "local_model_backend": "succeeds",
+        "remote_model_backend": "succeeds"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "training_data_collector received COACHING_EVALUATION_PAIR"
+      ]
+    },
+    {
+      "id": "inv_fallback_flag_consistency",
+      "description": "is_fallback is True iff actual_action != intended_action",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "(result.actual_action != result.intended_action) == result.is_fallback"
+      ]
+    },
+    {
+      "id": "inv_cost_accounting",
+      "description": "total_cost_usd equals sum of all model call costs",
+      "function": "route",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.total_cost_usd == sum of individual model response costs"
+      ]
+    },
+    {
+      "id": "edge_audit_logger_failure_ignored",
+      "description": "Audit logger failure does not block route() response",
+      "function": "route",
+      "category": "edge_case",
+      "setup_description": "Phase 1 happy path but audit_logger raises exception",
+      "mock_dependencies": {
+        "audit_logger": "raises RuntimeError",
+        "confidence_engine": "returns PHASE_1",
+        "budget_manager": "available",
+        "remote_model_backend": "succeeds"
+      },
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result is returned successfully",
+        "result.response.content is non-empty"
+      ]
+    },
+    {
+      "id": "hp_config_valid",
+      "description": "Valid RouterConfig is accepted at construction",
+      "function": "RouterConfig",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "max_concurrent_dual_sends": "10",
+        "remote_call_timeout_ms": "5000",
+        "local_call_timeout_ms": "2000",
+        "enable_training_collection": "True",
+        "enable_audit_logging": "True"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "config is created successfully",
+        "config.max_concurrent_dual_sends == 10"
+      ]
+    },
+    {
+      "id": "err_config_negative_timeout",
+      "description": "RouterConfig with negative timeout raises ValidationError",
+      "function": "RouterConfig",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "remote_call_timeout_ms": "-1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValidationError",
+      "assertions": [
+        "ValidationError is raised"
+      ]
+    },
+    {
+      "id": "err_config_zero_concurrent",
+      "description": "RouterConfig with zero max_concurrent_dual_sends raises ValidationError",
+      "function": "RouterConfig",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "max_concurrent_dual_sends": "0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "ValidationError",
+      "assertions": [
+        "ValidationError is raised"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract test suite for RequestRouter component.\nTests are organized into sections covering:\n  - compute_routing_action (exhaustive decision table)\n  - route() happy paths\n  - route() error paths\n  - route() fallback/degradation scenarios\n  - execute_dual_send\n  - build_audit_entry\n  - RouterConfig validation\n  - Invariants\n\nRun with: pytest contract_test.py -v\n\"\"\"\n\nimport asyncio\nimport pytest\nfrom unittest.mock import AsyncMock, MagicMock, patch, call\nfrom datetime import datetime, timezone\n\nfrom src.router import (\n    RequestRouter,\n    TaskRequest,\n    RoutingAction,\n    Phase,\n    ModelResponse,\n    BudgetSnapshot,\n    PhaseContext,\n    RoutingDecision,\n    RoutingResult,\n    RoutingAuditEntry,\n    DualSendOutcome,\n    TrainingExampleType,\n    TrainingExample,\n    RouterConfig,\n    compute_routing_action,\n    build_audit_entry,\n)\n\n\n# ============================================================================\n# Factory Helpers\n# ============================================================================\n\ndef make_task_request(**overrides):\n    \"\"\"Create a valid TaskRequest with sensible defaults.\"\"\"\n    defaults = {\n        \"request_id\": \"req-test-001\",\n        \"task_type\": \"summarize\",\n        \"prompt\": \"Summarize this document about AI routing.\",\n        \"metadata\": {\"source\": \"test\"},\n        \"timestamp_utc\": \"2024-01-15T10:30:00Z\",\n    }\n    defaults.update(overrides)\n    return TaskRequest(**defaults)\n\n\ndef make_budget_snapshot(exhausted=False, **overrides):\n    \"\"\"Create a BudgetSnapshot.\"\"\"\n    if exhausted:\n        defaults = {\n            \"total_budget_usd\": 100.0,\n            \"spent_usd\": 100.0,\n            \"remaining_usd\": 0.0,\n            \"is_exhausted\": True,\n        }\n    else:\n        defaults = {\n            \"total_budget_usd\": 100.0,\n            \"spent_usd\": 25.0,\n            \"remaining_usd\": 75.0,\n            \"is_exhausted\": False,\n        }\n    defaults.update(overrides)\n    return BudgetSnapshot(**defaults)\n\n\ndef make_phase_context(phase=Phase.PHASE_1, confidence=0.2):\n    return PhaseContext(phase=phase, confidence=confidence)\n\n\ndef make_model_response(content=\"Test response content\", model_id=\"test-model\",\n                        latency_ms=150.0, cost=0.01, token_count=50):\n    return ModelResponse(\n        content=content,\n        model_id=model_id,\n        latency_ms=latency_ms,\n        cost=cost,\n        token_count=token_count,\n    )\n\n\ndef make_local_response(**overrides):\n    defaults = {\"content\": \"Local model response\", \"model_id\": \"local-llama-7b\",\n                \"latency_ms\": 50.0, \"cost\": 0.0, \"token_count\": 40}\n    defaults.update(overrides)\n    return make_model_response(**defaults)\n\n\ndef make_remote_response(**overrides):\n    defaults = {\"content\": \"Remote model response\", \"model_id\": \"gpt-4\",\n                \"latency_ms\": 200.0, \"cost\": 0.03, \"token_count\": 60}\n    defaults.update(overrides)\n    return make_model_response(**defaults)\n\n\ndef make_router_config(**overrides):\n    defaults = {\n        \"max_concurrent_dual_sends\": 10,\n        \"remote_call_timeout_ms\": 5000,\n        \"local_call_timeout_ms\": 2000,\n        \"enable_training_collection\": True,\n        \"enable_audit_logging\": True,\n    }\n    defaults.update(overrides)\n    return RouterConfig(**defaults)\n\n\n# ============================================================================\n# Mock Dependency Fixtures\n# ============================================================================\n\n@pytest.fixture\ndef mock_budget_manager():\n    mgr = MagicMock()\n    mgr.check_budget = AsyncMock(return_value=make_budget_snapshot(exhausted=False))\n    mgr.record_spend = AsyncMock()\n    return mgr\n\n\n@pytest.fixture\ndef mock_budget_manager_exhausted():\n    mgr = MagicMock()\n    mgr.check_budget = AsyncMock(return_value=make_budget_snapshot(exhausted=True))\n    mgr.record_spend = AsyncMock()\n    return mgr\n\n\n@pytest.fixture\ndef mock_confidence_engine():\n    engine = MagicMock()\n    engine.get_phase_context = AsyncMock(\n        return_value=make_phase_context(Phase.PHASE_1, 0.2)\n    )\n    return engine\n\n\n@pytest.fixture\ndef mock_sampling_scheduler():\n    scheduler = MagicMock()\n    scheduler.should_coach = AsyncMock(return_value=False)\n    return scheduler\n\n\n@pytest.fixture\ndef mock_local_backend():\n    backend = MagicMock()\n    backend.call = AsyncMock(return_value=make_local_response())\n    return backend\n\n\n@pytest.fixture\ndef mock_remote_backend():\n    backend = MagicMock()\n    backend.call = AsyncMock(return_value=make_remote_response())\n    return backend\n\n\n@pytest.fixture\ndef mock_training_collector():\n    collector = MagicMock()\n    collector.collect = AsyncMock()\n    return collector\n\n\n@pytest.fixture\ndef mock_audit_logger():\n    logger = MagicMock()\n    logger.log = AsyncMock()\n    return logger\n\n\n@pytest.fixture\ndef make_router(mock_budget_manager, mock_confidence_engine, mock_sampling_scheduler,\n                mock_local_backend, mock_remote_backend, mock_training_collector,\n                mock_audit_logger):\n    \"\"\"Factory fixture that creates a RequestRouter with all mocks injected.\"\"\"\n    def _make(**overrides):\n        config = make_router_config()\n        deps = {\n            \"config\": config,\n            \"budget_manager\": mock_budget_manager,\n            \"confidence_engine\": mock_confidence_engine,\n            \"sampling_scheduler\": mock_sampling_scheduler,\n            \"local_model_backend\": mock_local_backend,\n            \"remote_model_backend\": mock_remote_backend,\n            \"training_data_collector\": mock_training_collector,\n            \"audit_logger\": mock_audit_logger,\n        }\n        deps.update(overrides)\n        return RequestRouter(**deps)\n    return _make\n\n\n# ============================================================================\n# 1. test_compute_routing_action — Exhaustive Decision Table\n# ============================================================================\n\nclass TestComputeRoutingAction:\n    \"\"\"Exhaustive tests for the pure decision matrix function.\"\"\"\n\n    @pytest.mark.parametrize(\n        \"phase, is_coaching, budget_avail, expected\",\n        [\n            # Phase 1: budget → REMOTE_ONLY; no budget → LOCAL_ONLY\n            (Phase.PHASE_1, False, True, RoutingAction.REMOTE_ONLY),\n            (Phase.PHASE_1, True, True, RoutingAction.REMOTE_ONLY),\n            (Phase.PHASE_1, False, False, RoutingAction.LOCAL_ONLY),\n            (Phase.PHASE_1, True, False, RoutingAction.LOCAL_ONLY),\n            # Phase 2: budget → BOTH_RETURN_REMOTE; no budget → LOCAL_ONLY\n            (Phase.PHASE_2, False, True, RoutingAction.BOTH_RETURN_REMOTE),\n            (Phase.PHASE_2, True, True, RoutingAction.BOTH_RETURN_REMOTE),\n            (Phase.PHASE_2, False, False, RoutingAction.LOCAL_ONLY),\n            (Phase.PHASE_2, True, False, RoutingAction.LOCAL_ONLY),\n            # Phase 3: coaching+budget → BOTH_RETURN_LOCAL; not coaching → LOCAL_ONLY\n            (Phase.PHASE_3, True, True, RoutingAction.BOTH_RETURN_LOCAL),\n            (Phase.PHASE_3, False, True, RoutingAction.LOCAL_ONLY),\n            (Phase.PHASE_3, True, False, RoutingAction.LOCAL_ONLY),\n            (Phase.PHASE_3, False, False, RoutingAction.LOCAL_ONLY),\n        ],\n        ids=[\n            \"P1-nocoach-budget\",\n            \"P1-coach-budget\",\n            \"P1-nocoach-nobudget\",\n            \"P1-coach-nobudget\",\n            \"P2-nocoach-budget\",\n            \"P2-coach-budget\",\n            \"P2-nocoach-nobudget\",\n            \"P2-coach-nobudget\",\n            \"P3-coach-budget\",\n            \"P3-nocoach-budget\",\n            \"P3-coach-nobudget\",\n            \"P3-nocoach-nobudget\",\n        ],\n    )\n    def test_decision_matrix(self, phase, is_coaching, budget_avail, expected):\n        \"\"\"Verify each cell of the phase × sampling × budget matrix.\"\"\"\n        result = compute_routing_action(phase, is_coaching, budget_avail)\n        assert result == expected, (\n            f\"compute_routing_action({phase}, {is_coaching}, {budget_avail}) \"\n            f\"returned {result}, expected {expected}\"\n        )\n\n    @pytest.mark.parametrize(\"phase\", [Phase.PHASE_1, Phase.PHASE_2, Phase.PHASE_3])\n    @pytest.mark.parametrize(\"is_coaching\", [True, False])\n    def test_no_budget_never_returns_remote_action(self, phase, is_coaching):\n        \"\"\"Invariant: When budget is exhausted, result never includes remote-primary actions.\"\"\"\n        result = compute_routing_action(phase, is_coaching, budget_available=False)\n        remote_actions = {\n            RoutingAction.REMOTE_ONLY,\n            RoutingAction.BOTH_RETURN_REMOTE,\n            RoutingAction.BOTH_RETURN_LOCAL,\n        }\n        assert result not in remote_actions, (\n            f\"Budget exhausted but got remote action {result} for \"\n            f\"phase={phase}, is_coaching={is_coaching}\"\n        )\n\n    def test_phase3_no_coaching_ignores_budget(self):\n        \"\"\"Phase 3 without coaching always returns LOCAL_ONLY regardless of budget.\"\"\"\n        result_with_budget = compute_routing_action(Phase.PHASE_3, False, True)\n        result_no_budget = compute_routing_action(Phase.PHASE_3, False, False)\n        assert result_with_budget == RoutingAction.LOCAL_ONLY\n        assert result_no_budget == RoutingAction.LOCAL_ONLY\n\n    def test_deterministic_same_inputs_same_output(self):\n        \"\"\"Same inputs always produce the same output.\"\"\"\n        for _ in range(10):\n            r1 = compute_routing_action(Phase.PHASE_2, True, True)\n            r2 = compute_routing_action(Phase.PHASE_2, True, True)\n            assert r1 == r2, \"compute_routing_action is not deterministic\"\n\n    def test_return_is_valid_routing_action(self):\n        \"\"\"Return value is always a valid RoutingAction enum member.\"\"\"\n        for phase in Phase:\n            for coaching in [True, False]:\n                for budget in [True, False]:\n                    result = compute_routing_action(phase, coaching, budget)\n                    assert isinstance(result, RoutingAction), (\n                        f\"Expected RoutingAction, got {type(result)}\"\n                    )\n\n\n# ============================================================================\n# 2. test_route — Happy Path Integration\n# ============================================================================\n\nclass TestRouteHappyPath:\n    \"\"\"Happy-path tests for route() across all major phases.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_phase1_remote_only(self, make_router, mock_confidence_engine,\n                                       mock_budget_manager, mock_remote_backend,\n                                       mock_audit_logger, mock_training_collector,\n                                       mock_sampling_scheduler, mock_local_backend):\n        \"\"\"Phase 1 with budget: calls remote only, returns remote response.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.15)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        remote_resp = make_remote_response(content=\"Remote phase1 answer\")\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        request = make_task_request()\n        result = await router.route(request)\n\n        assert result.request_id == request.request_id, \"request_id must match\"\n        assert result.response.content == \"Remote phase1 answer\", \"Should return remote content\"\n        assert result.intended_action == RoutingAction.REMOTE_ONLY\n        assert result.actual_action == RoutingAction.REMOTE_ONLY\n        assert result.is_fallback is False\n        assert result.is_degraded is False\n        assert result.phase == Phase.PHASE_1\n        assert result.confidence == 0.15\n        mock_budget_manager.record_spend.assert_called_once()\n        mock_audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_phase2_coaching_dual_send(self, make_router, mock_confidence_engine,\n                                              mock_budget_manager, mock_sampling_scheduler,\n                                              mock_local_backend, mock_remote_backend,\n                                              mock_training_collector, mock_audit_logger):\n        \"\"\"Phase 2 coaching sample: dual-send, returns remote response, collects pairs.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.6)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        local_resp = make_local_response(content=\"Local p2 answer\")\n        remote_resp = make_remote_response(content=\"Remote p2 answer\")\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        request = make_task_request()\n        result = await router.route(request)\n\n        assert result.request_id == request.request_id\n        assert result.response.content == \"Remote p2 answer\", (\n            \"Phase 2 BOTH_RETURN_REMOTE should return remote response\"\n        )\n        assert result.intended_action == RoutingAction.BOTH_RETURN_REMOTE\n        assert result.is_coaching_sample is True\n        assert result.phase == Phase.PHASE_2\n\n        # Verify training data collected: at least COACHING_EVALUATION_PAIR\n        assert mock_training_collector.collect.called, (\n            \"Training collector should be called for coaching dual-send\"\n        )\n        # Check that at least one call contains the coaching pair type\n        collect_calls = mock_training_collector.collect.call_args_list\n        collected_types = []\n        for c in collect_calls:\n            # The first positional arg or keyword arg should be a TrainingExample\n            arg = c[0][0] if c[0] else c[1].get(\"example\")\n            if hasattr(arg, \"example_type\"):\n                collected_types.append(arg.example_type)\n        assert TrainingExampleType.COACHING_EVALUATION_PAIR in collected_types, (\n            f\"Expected COACHING_EVALUATION_PAIR in {collected_types}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_phase3_local_only(self, make_router, mock_confidence_engine,\n                                      mock_budget_manager, mock_sampling_scheduler,\n                                      mock_local_backend, mock_remote_backend,\n                                      mock_audit_logger):\n        \"\"\"Phase 3 without coaching: local only, remote never called.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_3, 0.95)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        local_resp = make_local_response(content=\"Local autonomous answer\")\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n\n        router = make_router()\n        request = make_task_request()\n        result = await router.route(request)\n\n        assert result.request_id == request.request_id\n        assert result.response.content == \"Local autonomous answer\"\n        assert result.intended_action == RoutingAction.LOCAL_ONLY\n        assert result.actual_action == RoutingAction.LOCAL_ONLY\n        assert result.is_fallback is False\n        mock_remote_backend.call.assert_not_called(), (\n            \"Remote backend should NOT be called in Phase 3 local-only\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_phase3_coaching_dual_returns_local(self, make_router,\n                                                       mock_confidence_engine,\n                                                       mock_budget_manager,\n                                                       mock_sampling_scheduler,\n                                                       mock_local_backend,\n                                                       mock_remote_backend,\n                                                       mock_training_collector,\n                                                       mock_audit_logger):\n        \"\"\"Phase 3 coaching: dual-send, returns LOCAL response.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_3, 0.92)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        local_resp = make_local_response(content=\"Local p3 coaching\")\n        remote_resp = make_remote_response(content=\"Remote p3 coaching\")\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        request = make_task_request()\n        result = await router.route(request)\n\n        assert result.intended_action == RoutingAction.BOTH_RETURN_LOCAL\n        assert result.response.content == \"Local p3 coaching\", (\n            \"Phase 3 BOTH_RETURN_LOCAL should return LOCAL response\"\n        )\n        assert result.is_coaching_sample is True\n        assert mock_training_collector.collect.called\n\n    @pytest.mark.asyncio\n    async def test_route_response_has_nonempty_content(self, make_router,\n                                                        mock_confidence_engine,\n                                                        mock_remote_backend):\n        \"\"\"Postcondition: response always contains non-empty content.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_remote_backend.call = AsyncMock(\n            return_value=make_remote_response(content=\"valid content\")\n        )\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.response.content, \"Response content must be non-empty\"\n        assert len(result.response.content) > 0\n\n    @pytest.mark.asyncio\n    async def test_route_total_cost_equals_model_costs(self, make_router,\n                                                        mock_confidence_engine,\n                                                        mock_budget_manager,\n                                                        mock_sampling_scheduler,\n                                                        mock_local_backend,\n                                                        mock_remote_backend):\n        \"\"\"Postcondition: total_cost_usd == sum of all model call costs.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.55)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        local_resp = make_local_response(cost=0.0)\n        remote_resp = make_remote_response(cost=0.05)\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        expected_cost = local_resp.cost + remote_resp.cost\n        assert abs(result.total_cost_usd - expected_cost) < 1e-9, (\n            f\"total_cost_usd {result.total_cost_usd} != expected {expected_cost}\"\n        )\n\n\n# ============================================================================\n# 3. test_route_errors — All 5 Error Paths\n# ============================================================================\n\nclass TestRouteErrors:\n    \"\"\"Error-path tests for route().\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_invalid_request_empty_id(self, make_router, mock_audit_logger):\n        \"\"\"Empty request_id triggers invalid_request error.\"\"\"\n        router = make_router()\n        request = make_task_request(request_id=\"\")\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        assert \"invalid_request\" in str(exc_info.value).lower() or \\\n               \"invalid\" in str(type(exc_info.value).__name__).lower(), (\n            f\"Expected invalid_request error, got {exc_info.value}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_invalid_request_empty_prompt(self, make_router):\n        \"\"\"Empty prompt triggers invalid_request error.\"\"\"\n        router = make_router()\n        request = make_task_request(prompt=\"\")\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        assert \"invalid_request\" in str(exc_info.value).lower() or \\\n               \"invalid\" in str(type(exc_info.value).__name__).lower() or \\\n               \"prompt\" in str(exc_info.value).lower(), (\n            f\"Expected invalid_request error for empty prompt, got {exc_info.value}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_invalid_request_empty_task_type(self, make_router):\n        \"\"\"Empty task_type triggers invalid_request error.\"\"\"\n        router = make_router()\n        request = make_task_request(task_type=\"\")\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        assert \"invalid_request\" in str(exc_info.value).lower() or \\\n               \"invalid\" in str(type(exc_info.value).__name__).lower() or \\\n               \"task_type\" in str(exc_info.value).lower()\n\n    @pytest.mark.asyncio\n    async def test_budget_check_failed(self, make_router, mock_budget_manager,\n                                        mock_audit_logger):\n        \"\"\"BudgetManager failure raises budget_check_failed.\"\"\"\n        mock_budget_manager.check_budget = AsyncMock(\n            side_effect=RuntimeError(\"DB connection lost\")\n        )\n        router = make_router()\n        request = make_task_request()\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        error_str = str(exc_info.value).lower() + str(type(exc_info.value).__name__).lower()\n        assert \"budget\" in error_str, (\n            f\"Expected budget_check_failed error, got {exc_info.value}\"\n        )\n        # Audit should still be logged\n        mock_audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_confidence_engine_unavailable(self, make_router,\n                                                  mock_confidence_engine,\n                                                  mock_audit_logger):\n        \"\"\"ConfidenceEngine failure raises confidence_engine_unavailable.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            side_effect=RuntimeError(\"Engine down\")\n        )\n        router = make_router()\n        request = make_task_request()\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        error_str = str(exc_info.value).lower() + str(type(exc_info.value).__name__).lower()\n        assert \"confidence\" in error_str, (\n            f\"Expected confidence_engine_unavailable, got {exc_info.value}\"\n        )\n        mock_audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_sampling_scheduler_unavailable(self, make_router,\n                                                   mock_confidence_engine,\n                                                   mock_sampling_scheduler,\n                                                   mock_audit_logger):\n        \"\"\"SamplingScheduler failure raises sampling_scheduler_unavailable.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.5)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(\n            side_effect=RuntimeError(\"Scheduler crashed\")\n        )\n        router = make_router()\n        request = make_task_request()\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        error_str = str(exc_info.value).lower() + str(type(exc_info.value).__name__).lower()\n        assert \"sampling\" in error_str or \"scheduler\" in error_str, (\n            f\"Expected sampling_scheduler_unavailable, got {exc_info.value}\"\n        )\n        mock_audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_both_backends_unavailable(self, make_router, mock_confidence_engine,\n                                              mock_budget_manager, mock_sampling_scheduler,\n                                              mock_local_backend, mock_remote_backend,\n                                              mock_audit_logger):\n        \"\"\"Both backends failing raises both_backends_unavailable.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.5)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        mock_local_backend.call = AsyncMock(\n            side_effect=ConnectionError(\"Local down\")\n        )\n        mock_remote_backend.call = AsyncMock(\n            side_effect=ConnectionError(\"Remote down\")\n        )\n\n        router = make_router()\n        request = make_task_request()\n\n        with pytest.raises(Exception) as exc_info:\n            await router.route(request)\n\n        error_str = str(exc_info.value).lower() + str(type(exc_info.value).__name__).lower()\n        assert \"backend\" in error_str or \"unavailable\" in error_str or \"both\" in error_str, (\n            f\"Expected both_backends_unavailable, got {exc_info.value}\"\n        )\n        mock_audit_logger.log.assert_called_once()\n\n\n# ============================================================================\n# 4. test_route_fallbacks — Degradation Scenarios\n# ============================================================================\n\nclass TestRouteFallbacksAndDegradation:\n    \"\"\"Tests for fallback and degradation paths.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_local_fails_fallback_to_remote(self, make_router,\n                                                    mock_confidence_engine,\n                                                    mock_budget_manager,\n                                                    mock_sampling_scheduler,\n                                                    mock_local_backend,\n                                                    mock_remote_backend,\n                                                    mock_audit_logger):\n        \"\"\"Local fails in LOCAL_ONLY → falls back to remote if budget allows.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_3, 0.95)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        mock_local_backend.call = AsyncMock(\n            side_effect=RuntimeError(\"Local inference failed\")\n        )\n        remote_resp = make_remote_response(content=\"Remote fallback answer\")\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.is_fallback is True, \"Should be marked as fallback\"\n        assert result.actual_action == RoutingAction.LOCAL_FALLBACK_TO_REMOTE, (\n            f\"Expected LOCAL_FALLBACK_TO_REMOTE, got {result.actual_action}\"\n        )\n        assert result.intended_action == RoutingAction.LOCAL_ONLY, (\n            f\"Intended should be LOCAL_ONLY, got {result.intended_action}\"\n        )\n        assert result.response.content == \"Remote fallback answer\"\n\n    @pytest.mark.asyncio\n    async def test_remote_fails_in_dual_send_degraded(self, make_router,\n                                                       mock_confidence_engine,\n                                                       mock_budget_manager,\n                                                       mock_sampling_scheduler,\n                                                       mock_local_backend,\n                                                       mock_remote_backend,\n                                                       mock_audit_logger):\n        \"\"\"Remote fails during Phase 2 dual-send → falls back to local (degraded).\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.6)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        local_resp = make_local_response(content=\"Degraded local p2\")\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n        mock_remote_backend.call = AsyncMock(\n            side_effect=TimeoutError(\"Remote timed out\")\n        )\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.is_degraded is True, \"Should be marked as degraded\"\n        assert result.response.content, \"Should still have response content\"\n\n    @pytest.mark.asyncio\n    async def test_budget_exhausted_forces_local_only(self, make_router,\n                                                       mock_confidence_engine,\n                                                       mock_budget_manager,\n                                                       mock_sampling_scheduler,\n                                                       mock_local_backend,\n                                                       mock_remote_backend,\n                                                       mock_audit_logger):\n        \"\"\"Budget exhausted in Phase 1 → forced LOCAL_ONLY, remote never called.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_budget_manager.check_budget = AsyncMock(\n            return_value=make_budget_snapshot(exhausted=True)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        local_resp = make_local_response(content=\"Budget-constrained local\")\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.intended_action == RoutingAction.LOCAL_ONLY, (\n            \"Budget exhausted should compute LOCAL_ONLY\"\n        )\n        assert result.is_degraded is True, (\n            \"Phase 1 forced to local should be degraded\"\n        )\n        mock_remote_backend.call.assert_not_called(), (\n            \"Remote backend should NEVER be called when budget is exhausted\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_budget_exhausted_phase2_no_remote(self, make_router,\n                                                      mock_confidence_engine,\n                                                      mock_budget_manager,\n                                                      mock_sampling_scheduler,\n                                                      mock_local_backend,\n                                                      mock_remote_backend):\n        \"\"\"Budget exhausted in Phase 2 → LOCAL_ONLY, no remote call.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.55)\n        )\n        mock_budget_manager.check_budget = AsyncMock(\n            return_value=make_budget_snapshot(exhausted=True)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n        mock_local_backend.call = AsyncMock(return_value=make_local_response())\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.is_degraded is True\n        mock_remote_backend.call.assert_not_called()\n\n    @pytest.mark.asyncio\n    async def test_fallback_flag_consistency(self, make_router,\n                                              mock_confidence_engine,\n                                              mock_budget_manager,\n                                              mock_sampling_scheduler,\n                                              mock_local_backend,\n                                              mock_remote_backend):\n        \"\"\"is_fallback is True iff actual_action != intended_action.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_3, 0.95)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        mock_local_backend.call = AsyncMock(\n            side_effect=RuntimeError(\"Local failed\")\n        )\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        if result.actual_action != result.intended_action:\n            assert result.is_fallback is True, (\n                \"is_fallback must be True when actual != intended\"\n            )\n        if result.is_fallback:\n            assert result.actual_action != result.intended_action, (\n                \"When is_fallback is True, actual must differ from intended\"\n            )\n            assert result.actual_action == RoutingAction.LOCAL_FALLBACK_TO_REMOTE, (\n                \"Fallback actual_action must be LOCAL_FALLBACK_TO_REMOTE\"\n            )\n\n\n# ============================================================================\n# 5. test_execute_dual_send — Async Concurrency\n# ============================================================================\n\nclass TestExecuteDualSend:\n    \"\"\"Tests for execute_dual_send concurrent execution.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_both_succeed(self, make_router, mock_local_backend,\n                                 mock_remote_backend):\n        \"\"\"Both backends succeed → BOTH_SUCCEEDED with both responses.\"\"\"\n        local_resp = make_local_response()\n        remote_resp = make_remote_response()\n        mock_local_backend.call = AsyncMock(return_value=local_resp)\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        request = make_task_request()\n        dual_result = await router.execute_dual_send(request)\n\n        assert dual_result.outcome == DualSendOutcome.BOTH_SUCCEEDED\n        assert dual_result.local_response is not None, \"Local response should be present\"\n        assert dual_result.remote_response is not None, \"Remote response should be present\"\n\n    @pytest.mark.asyncio\n    async def test_local_fails_remote_succeeds(self, make_router,\n                                                mock_local_backend,\n                                                mock_remote_backend):\n        \"\"\"Local fails, remote succeeds → LOCAL_FAILED_REMOTE_SUCCEEDED.\"\"\"\n        mock_local_backend.call = AsyncMock(\n            side_effect=RuntimeError(\"Local OOM\")\n        )\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n        dual_result = await router.execute_dual_send(make_task_request())\n\n        assert dual_result.outcome == DualSendOutcome.LOCAL_FAILED_REMOTE_SUCCEEDED\n        assert dual_result.local_response is None, \"Local response should be None on failure\"\n        assert dual_result.remote_response is not None\n        assert dual_result.local_error, \"local_error should be non-empty\"\n\n    @pytest.mark.asyncio\n    async def test_local_succeeds_remote_fails(self, make_router,\n                                                mock_local_backend,\n                                                mock_remote_backend):\n        \"\"\"Local succeeds, remote fails → LOCAL_SUCCEEDED_REMOTE_FAILED.\"\"\"\n        mock_local_backend.call = AsyncMock(return_value=make_local_response())\n        mock_remote_backend.call = AsyncMock(\n            side_effect=TimeoutError(\"Remote timeout\")\n        )\n\n        router = make_router()\n        dual_result = await router.execute_dual_send(make_task_request())\n\n        assert dual_result.outcome == DualSendOutcome.LOCAL_SUCCEEDED_REMOTE_FAILED\n        assert dual_result.local_response is not None\n        assert dual_result.remote_response is None, \"Remote response should be None on failure\"\n        assert dual_result.remote_error, \"remote_error should be non-empty\"\n\n    @pytest.mark.asyncio\n    async def test_both_fail(self, make_router, mock_local_backend,\n                              mock_remote_backend):\n        \"\"\"Both backends fail → BOTH_FAILED with both None.\"\"\"\n        mock_local_backend.call = AsyncMock(\n            side_effect=ConnectionError(\"Local unreachable\")\n        )\n        mock_remote_backend.call = AsyncMock(\n            side_effect=ConnectionError(\"Remote unreachable\")\n        )\n\n        router = make_router()\n        dual_result = await router.execute_dual_send(make_task_request())\n\n        assert dual_result.outcome == DualSendOutcome.BOTH_FAILED\n        assert dual_result.local_response is None\n        assert dual_result.remote_response is None\n        assert dual_result.local_error, \"local_error should be non-empty\"\n        assert dual_result.remote_error, \"remote_error should be non-empty\"\n\n    @pytest.mark.asyncio\n    async def test_error_populated_only_on_failure(self, make_router,\n                                                    mock_local_backend,\n                                                    mock_remote_backend):\n        \"\"\"Error fields are non-empty iff the corresponding backend failed.\"\"\"\n        mock_local_backend.call = AsyncMock(return_value=make_local_response())\n        mock_remote_backend.call = AsyncMock(\n            side_effect=RuntimeError(\"Remote error\")\n        )\n\n        router = make_router()\n        dual_result = await router.execute_dual_send(make_task_request())\n\n        # Local succeeded → no error\n        assert not dual_result.local_error, (\n            \"local_error should be empty when local succeeded\"\n        )\n        # Remote failed → has error\n        assert dual_result.remote_error, (\n            \"remote_error should be non-empty when remote failed\"\n        )\n\n\n# ============================================================================\n# 6. test_build_audit_entry — Data Transformation\n# ============================================================================\n\nclass TestBuildAuditEntry:\n    \"\"\"Tests for the pure build_audit_entry function.\"\"\"\n\n    def _make_decision(self, phase=Phase.PHASE_1, confidence=0.2,\n                       action=RoutingAction.REMOTE_ONLY, coaching=False):\n        return RoutingDecision(\n            intended_action=action,\n            phase_context=PhaseContext(phase=phase, confidence=confidence),\n            is_coaching_sample=coaching,\n            budget_snapshot=make_budget_snapshot(),\n        )\n\n    def _make_result(self, request_id=\"req-test-001\",\n                     intended=RoutingAction.REMOTE_ONLY,\n                     actual=RoutingAction.REMOTE_ONLY,\n                     phase=Phase.PHASE_1, confidence=0.2,\n                     cost=0.03, latency=200.0):\n        return RoutingResult(\n            request_id=request_id,\n            response=make_remote_response(),\n            intended_action=intended,\n            actual_action=actual,\n            phase=phase,\n            confidence=confidence,\n            is_coaching_sample=False,\n            total_cost_usd=cost,\n            total_latency_ms=latency,\n            is_degraded=False,\n            is_fallback=False,\n            local_response=None,\n            remote_response=make_remote_response(),\n        )\n\n    def test_all_fields_populated(self):\n        \"\"\"All audit entry fields are populated from corresponding inputs.\"\"\"\n        request = make_task_request()\n        decision = self._make_decision()\n        result = self._make_result()\n\n        entry = build_audit_entry(request, decision, result, error_detail=\"\")\n\n        assert entry.request_id == request.request_id\n        assert entry.task_type == request.task_type\n        assert entry.phase == decision.phase_context.phase\n        assert entry.confidence == decision.phase_context.confidence\n        assert entry.intended_action == decision.intended_action\n        assert entry.actual_action == result.actual_action\n        assert entry.total_cost_usd == result.total_cost_usd\n        assert entry.total_latency_ms == result.total_latency_ms\n        assert entry.is_degraded == result.is_degraded\n        assert entry.is_fallback == result.is_fallback\n        assert entry.error_detail == \"\"\n\n    def test_error_detail_populated(self):\n        \"\"\"Error detail is preserved in audit entry.\"\"\"\n        request = make_task_request()\n        decision = self._make_decision()\n        result = self._make_result()\n\n        entry = build_audit_entry(request, decision, result,\n                                   error_detail=\"remote timeout after 5000ms\")\n\n        assert entry.error_detail == \"remote timeout after 5000ms\"\n        assert entry.request_id == request.request_id\n\n    def test_request_id_matches(self):\n        \"\"\"Output request_id always equals input request_id.\"\"\"\n        for rid in [\"req-1\", \"req-abc-123\", \"x\" * 100]:\n            request = make_task_request(request_id=rid)\n            decision = self._make_decision()\n            result = self._make_result(request_id=rid)\n            entry = build_audit_entry(request, decision, result, error_detail=\"\")\n            assert entry.request_id == rid\n\n    def test_timestamp_utc_is_set(self):\n        \"\"\"Audit entry has a non-empty timestamp_utc.\"\"\"\n        request = make_task_request()\n        decision = self._make_decision()\n        result = self._make_result()\n\n        entry = build_audit_entry(request, decision, result, error_detail=\"\")\n\n        assert entry.timestamp_utc, \"timestamp_utc must be set\"\n        assert len(entry.timestamp_utc) > 0\n\n    def test_cost_is_nonnegative(self):\n        \"\"\"Total cost in audit entry is non-negative.\"\"\"\n        request = make_task_request()\n        decision = self._make_decision()\n        result = self._make_result(cost=0.05)\n\n        entry = build_audit_entry(request, decision, result, error_detail=\"\")\n\n        assert entry.total_cost_usd >= 0, (\n            f\"Cost should be non-negative, got {entry.total_cost_usd}\"\n        )\n\n    def test_coaching_sample_preserved(self):\n        \"\"\"Coaching sample flag is correctly captured.\"\"\"\n        request = make_task_request()\n        decision = self._make_decision(coaching=True)\n        result = self._make_result()\n\n        entry = build_audit_entry(request, decision, result, error_detail=\"\")\n\n        assert entry.is_coaching_sample == True\n\n\n# ============================================================================\n# 7. test_router_config — Config Validation\n# ============================================================================\n\nclass TestRouterConfig:\n    \"\"\"Tests for RouterConfig validation at construction time.\"\"\"\n\n    def test_valid_config_accepted(self):\n        \"\"\"Valid config with sensible values is accepted.\"\"\"\n        config = make_router_config()\n        assert config.max_concurrent_dual_sends == 10\n        assert config.remote_call_timeout_ms == 5000\n        assert config.local_call_timeout_ms == 2000\n        assert config.enable_training_collection is True\n        assert config.enable_audit_logging is True\n\n    def test_negative_remote_timeout_rejected(self):\n        \"\"\"Negative remote_call_timeout_ms raises ValidationError.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            make_router_config(remote_call_timeout_ms=-1)\n        assert exc_info.value  # Some validation error raised\n\n    def test_negative_local_timeout_rejected(self):\n        \"\"\"Negative local_call_timeout_ms raises ValidationError.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            make_router_config(local_call_timeout_ms=-100)\n        assert exc_info.value\n\n    def test_zero_max_concurrent_rejected(self):\n        \"\"\"Zero max_concurrent_dual_sends raises ValidationError.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            make_router_config(max_concurrent_dual_sends=0)\n        assert exc_info.value\n\n    def test_negative_max_concurrent_rejected(self):\n        \"\"\"Negative max_concurrent_dual_sends raises ValidationError.\"\"\"\n        with pytest.raises(Exception) as exc_info:\n            make_router_config(max_concurrent_dual_sends=-5)\n        assert exc_info.value\n\n\n# ============================================================================\n# 8. Invariant Tests — Cross-Cutting Concerns\n# ============================================================================\n\nclass TestInvariants:\n    \"\"\"Tests for contract invariants that span multiple scenarios.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_audit_always_logged_on_success(self, make_router,\n                                                    mock_confidence_engine,\n                                                    mock_remote_backend,\n                                                    mock_audit_logger):\n        \"\"\"Every successful route() call produces exactly one audit entry.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n        await router.route(make_task_request())\n\n        assert mock_audit_logger.log.call_count == 1, (\n            f\"Expected 1 audit log call, got {mock_audit_logger.log.call_count}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_audit_logged_on_error(self, make_router,\n                                          mock_confidence_engine,\n                                          mock_audit_logger):\n        \"\"\"Audit entry is still logged even when route() raises an error.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            side_effect=RuntimeError(\"Engine down\")\n        )\n\n        router = make_router()\n        with pytest.raises(Exception):\n            await router.route(make_task_request())\n\n        mock_audit_logger.log.assert_called_once()\n\n    @pytest.mark.asyncio\n    async def test_audit_logger_failure_does_not_block(self, make_router,\n                                                        mock_confidence_engine,\n                                                        mock_remote_backend,\n                                                        mock_audit_logger):\n        \"\"\"Audit logger failure does not block or affect the route() response.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_remote_backend.call = AsyncMock(\n            return_value=make_remote_response(content=\"Still works\")\n        )\n        mock_audit_logger.log = AsyncMock(\n            side_effect=RuntimeError(\"Audit storage full\")\n        )\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        assert result.response.content == \"Still works\", (\n            \"Route should still return response even when audit logger fails\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_budget_never_exceeded_all_phases(self, make_router,\n                                                     mock_confidence_engine,\n                                                     mock_budget_manager,\n                                                     mock_sampling_scheduler,\n                                                     mock_local_backend,\n                                                     mock_remote_backend):\n        \"\"\"When budget is exhausted, remote is never called regardless of phase.\"\"\"\n        mock_budget_manager.check_budget = AsyncMock(\n            return_value=make_budget_snapshot(exhausted=True)\n        )\n        mock_local_backend.call = AsyncMock(return_value=make_local_response())\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=True)\n\n        for phase in [Phase.PHASE_1, Phase.PHASE_2, Phase.PHASE_3]:\n            mock_confidence_engine.get_phase_context = AsyncMock(\n                return_value=make_phase_context(phase, 0.5)\n            )\n            mock_remote_backend.call.reset_mock()\n\n            router = make_router()\n            result = await router.route(make_task_request())\n\n            mock_remote_backend.call.assert_not_called(), (\n                f\"Remote should not be called in {phase} with exhausted budget\"\n            )\n            assert result.is_degraded is True or result.intended_action == RoutingAction.LOCAL_ONLY\n\n    @pytest.mark.asyncio\n    async def test_training_collected_phase1_remote_response(self, make_router,\n                                                              mock_confidence_engine,\n                                                              mock_remote_backend,\n                                                              mock_training_collector,\n                                                              mock_sampling_scheduler):\n        \"\"\"Training data collected for remote response in Phase 1.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n        await router.route(make_task_request())\n\n        assert mock_training_collector.collect.called, (\n            \"Training collector should be called for Phase 1 remote response\"\n        )\n        # Verify REMOTE_RESPONSE_EXAMPLE was submitted\n        collect_calls = mock_training_collector.collect.call_args_list\n        found_remote_example = False\n        for c in collect_calls:\n            arg = c[0][0] if c[0] else c[1].get(\"example\")\n            if hasattr(arg, \"example_type\") and \\\n               arg.example_type == TrainingExampleType.REMOTE_RESPONSE_EXAMPLE:\n                found_remote_example = True\n                break\n        assert found_remote_example, (\n            \"Expected REMOTE_RESPONSE_EXAMPLE training example in Phase 1\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_training_collected_phase2_remote_response(self, make_router,\n                                                              mock_confidence_engine,\n                                                              mock_sampling_scheduler,\n                                                              mock_local_backend,\n                                                              mock_remote_backend,\n                                                              mock_training_collector):\n        \"\"\"Training data collected for remote response in Phase 2.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_2, 0.6)\n        )\n        mock_sampling_scheduler.should_coach = AsyncMock(return_value=False)\n        mock_local_backend.call = AsyncMock(return_value=make_local_response())\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n        await router.route(make_task_request())\n\n        assert mock_training_collector.collect.called, (\n            \"Training collector should be called for Phase 2 remote response\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_record_spend_called_with_correct_cost(self, make_router,\n                                                          mock_confidence_engine,\n                                                          mock_budget_manager,\n                                                          mock_remote_backend):\n        \"\"\"BudgetManager.record_spend() is called with total_cost_usd.\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        remote_resp = make_remote_response(cost=0.05)\n        mock_remote_backend.call = AsyncMock(return_value=remote_resp)\n\n        router = make_router()\n        result = await router.route(make_task_request())\n\n        mock_budget_manager.record_spend.assert_called_once()\n        # The cost passed should match total_cost_usd\n        spend_call_args = mock_budget_manager.record_spend.call_args\n        if spend_call_args[0]:\n            recorded_cost = spend_call_args[0][0]\n        else:\n            # Could be keyword arg\n            recorded_cost = list(spend_call_args[1].values())[0]\n        assert abs(recorded_cost - result.total_cost_usd) < 1e-9, (\n            f\"record_spend called with {recorded_cost}, \"\n            f\"but total_cost_usd is {result.total_cost_usd}\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_no_global_state_between_requests(self, make_router,\n                                                     mock_confidence_engine,\n                                                     mock_remote_backend,\n                                                     mock_budget_manager):\n        \"\"\"Consecutive calls produce independent results (no global state).\"\"\"\n        mock_confidence_engine.get_phase_context = AsyncMock(\n            return_value=make_phase_context(Phase.PHASE_1, 0.1)\n        )\n        mock_remote_backend.call = AsyncMock(return_value=make_remote_response())\n\n        router = make_router()\n\n        req1 = make_task_request(request_id=\"req-001\")\n        req2 = make_task_request(request_id=\"req-002\")\n\n        result1 = await router.route(req1)\n        result2 = await router.route(req2)\n\n        assert result1.request_id == \"req-001\"\n        assert result2.request_id == \"req-002\"\n        assert result1.request_id != result2.request_id\n"
+}

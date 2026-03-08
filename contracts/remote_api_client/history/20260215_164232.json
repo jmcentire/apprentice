@@ -1,0 +1,1297 @@
+{
+  "component_id": "remote_api_client",
+  "name": "Remote API Client",
+  "description": "Async abstraction over commercial AI APIs (Anthropic, OpenAI, Google). Implements a RemoteClient protocol/ABC with concrete implementations per provider. Handles: auth via env vars, httpx async requests, retry with exponential backoff (configurable max retries), error recovery (rate limits, transient failures, auth errors). Tracks per-request cost using provider-specific pricing tables (input/output token counts × price). Supports a primary provider for live serving/ground-truth and optional additional providers for training data diversity (same input sent to additional providers, responses stored but not used as ground truth). Reports cost per request back to caller for budget accounting. Returns structured TaskResponse or raises typed errors. Uses dual Protocol + ABC pattern: RemoteClient protocol for consumer type hints and lightweight test mocks, BaseRemoteClient ABC for shared retry/cost-tracking/logging logic, and concrete implementations (AnthropicClient, OpenAIClient, GoogleClient) extending the ABC with provider-specific request/response translation via httpx.",
+  "version": 1,
+  "types": [
+    {
+      "name": "ProviderName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "anthropic",
+        "openai",
+        "google"
+      ],
+      "inner_types": [],
+      "description": "Supported remote AI API providers."
+    },
+    {
+      "name": "TokenUsage",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "input_tokens",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of tokens in the prompt/input sent to the provider.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "input_tokens must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "output_tokens",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of tokens in the completion/output returned by the provider.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "output_tokens must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing token counts for a single API request/response pair."
+    },
+    {
+      "name": "TokenPricing",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "input_cost_per_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per input token.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "input_cost_per_token must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "output_cost_per_token",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Cost in USD per output token.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "output_cost_per_token must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing per-token pricing for a specific model. Prices are in USD."
+    },
+    {
+      "name": "PricingTable",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "entries",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Dict mapping model name (str) to TokenPricing. Keys are model identifiers as used by the provider API (e.g. 'claude-sonnet-4-20250514', 'gpt-4o'). Values are TokenPricing instances.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Mapping of model identifiers to their token pricing. Used per-provider to look up cost rates. Keys are model name strings, values are TokenPricing."
+    },
+    {
+      "name": "RetryConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_retries",
+          "type_ref": "int",
+          "required": true,
+          "default": "3",
+          "description": "Maximum number of retry attempts before raising an error. Does not count the initial attempt.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0 AND <=10",
+              "error_message": "max_retries must be between 0 and 10"
+            }
+          ]
+        },
+        {
+          "name": "base_delay_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "1.0",
+          "description": "Base delay in seconds for the first retry. Subsequent retries double this value (with jitter).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "base_delay_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "max_delay_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "60.0",
+          "description": "Maximum delay cap in seconds for any single retry wait.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "max_delay_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "respect_retry_after",
+          "type_ref": "bool",
+          "required": true,
+          "default": "true",
+          "description": "If true, when a Retry-After header is present in a 429 response, use that value instead of calculated backoff (capped at max_delay_seconds).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for exponential backoff retry behavior. Full-jitter strategy: delay = random(0, min(max_delay_seconds, base_delay_seconds * 2^attempt))."
+    },
+    {
+      "name": "TimeoutConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "connect_timeout_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "10.0",
+          "description": "Maximum time in seconds to wait for a TCP connection to be established.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "connect_timeout_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "read_timeout_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "120.0",
+          "description": "Maximum time in seconds to wait for data to be received after connection is established.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "read_timeout_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "total_timeout_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "180.0",
+          "description": "Maximum total time in seconds for the entire request (connect + send + read).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0",
+              "error_message": "total_timeout_seconds must be positive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Timeout settings for httpx async requests to the provider API."
+    },
+    {
+      "name": "RemoteClientConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "Which remote AI provider this client targets.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Model identifier as recognized by the provider API (e.g. 'claude-sonnet-4-20250514', 'gpt-4o', 'gemini-pro').",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "model must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "api_key_env_var",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the environment variable containing the API key (e.g. 'ANTHROPIC_API_KEY'). The key is read at construction time and stored as SecretStr. Fails fast if the env var is missing or empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "api_key_env_var must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "retry",
+          "type_ref": "RetryConfig",
+          "required": false,
+          "default": "RetryConfig()",
+          "description": "Retry/backoff configuration for this client.",
+          "validators": []
+        },
+        {
+          "name": "timeout",
+          "type_ref": "TimeoutConfig",
+          "required": false,
+          "default": "TimeoutConfig()",
+          "description": "Timeout settings for HTTP requests.",
+          "validators": []
+        },
+        {
+          "name": "pricing_overrides",
+          "type_ref": "PricingTable",
+          "required": false,
+          "default": "PricingTable(entries={})",
+          "description": "Optional pricing overrides. If provided, these take precedence over built-in default pricing tables for cost calculation. Allows config-driven pricing updates without code changes.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Configuration for a single remote API client instance. One config per provider. API key is stored as Pydantic SecretStr sourced from environment variables. Validated strictly at construction time — missing or empty API keys cause immediate failure."
+    },
+    {
+      "name": "TaskResponse",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The text content of the model's response/completion.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model identifier that actually generated this response (may differ from requested model if provider aliases).",
+          "validators": []
+        },
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "Which provider generated this response.",
+          "validators": []
+        },
+        {
+          "name": "usage",
+          "type_ref": "TokenUsage",
+          "required": true,
+          "default": "",
+          "description": "Token usage breakdown for this request/response.",
+          "validators": []
+        },
+        {
+          "name": "cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Computed cost in USD for this request: (input_tokens × input_cost_per_token) + (output_tokens × output_cost_per_token).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "cost_usd must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "latency_ms",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Wall-clock latency in milliseconds from request send to response received (excludes retry wait time, measures only the successful attempt).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "latency_ms must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for this request. Generated client-side (UUID4) for audit trail correlation.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "request_id must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Frozen Pydantic model representing a successful structured response from a remote AI provider. Returned to callers for both live serving and training data collection."
+    },
+    {
+      "name": "ErrorInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that produced this error.",
+          "validators": []
+        },
+        {
+          "name": "error_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The class name of the error (e.g. 'RateLimitError', 'RemoteUnavailableError').",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retry attempts made before this error was finalized.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "retries_attempted must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Structured error information returned in DiversityResult for secondary providers that failed. Captures error details without raising exceptions for non-primary providers."
+    },
+    {
+      "name": "SecondaryResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "TaskResponse",
+        "ErrorInfo"
+      ],
+      "description": "A single secondary provider's result: either a successful TaskResponse or an ErrorInfo for the failure. Used in DiversityResult.secondary list."
+    },
+    {
+      "name": "DiversityResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "primary",
+          "type_ref": "TaskResponse",
+          "required": true,
+          "default": "",
+          "description": "The response from the primary provider, used as ground-truth for serving and evaluation.",
+          "validators": []
+        },
+        {
+          "name": "secondary",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of SecondaryResult — one per secondary provider. Each is either a TaskResponse on success or ErrorInfo on failure. Order corresponds to the order of secondary clients provided.",
+          "validators": []
+        },
+        {
+          "name": "total_cost_usd",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Sum of cost_usd across primary and all successful secondary responses. Does not include cost for failed secondary requests (they incurred no billable completion).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0",
+              "error_message": "total_cost_usd must be non-negative"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of a multi-provider diversity request. Contains the primary provider's response (which is the ground-truth) and secondary responses (which may be successes or captured errors). Secondary failures do not cause the overall operation to fail."
+    },
+    {
+      "name": "RemoteClientError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that produced the error.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error description.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Client-generated request ID for correlation.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries attempted before this error was raised.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0",
+              "error_message": "retries_attempted must be non-negative"
+            }
+          ]
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "HTTP status code from the last failed attempt, or 0 if the failure was a connection/timeout error.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Base error type for all remote API client errors. All specific error types extend this conceptually. Contains structured metadata for logging and audit."
+    },
+    {
+      "name": "AuthError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that rejected auth.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Auth error details.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Client-generated request ID.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Always 0 for auth errors — they are not retried.",
+          "validators": []
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": true,
+          "default": "401",
+          "description": "HTTP status code, typically 401 or 403.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when authentication fails — invalid API key, expired key, or permission denied. Not retryable. Extends RemoteClientError conceptually."
+    },
+    {
+      "name": "RateLimitError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that rate-limited.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Rate limit error details.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Client-generated request ID.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries attempted before giving up.",
+          "validators": []
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": true,
+          "default": "429",
+          "description": "Always 429.",
+          "validators": []
+        },
+        {
+          "name": "retry_after_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "The Retry-After value from the last 429 response, or 0.0 if not provided by the server.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when the provider returns HTTP 429 and all retries (respecting Retry-After if configured) are exhausted. Extends RemoteClientError conceptually."
+    },
+    {
+      "name": "RemoteUnavailableError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that was unavailable.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unavailability error details.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Client-generated request ID.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of retries attempted.",
+          "validators": []
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Last HTTP status code (5xx) or 0 for connection/timeout failures.",
+          "validators": []
+        },
+        {
+          "name": "last_error_type",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "The class name of the underlying exception from the last attempt (e.g. 'ConnectTimeout', 'ReadTimeout', 'ConnectError').",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when the remote API is unreachable after all retries — covers connection errors, timeouts, HTTP 5xx responses. Extends RemoteClientError conceptually."
+    },
+    {
+      "name": "InvalidRequestError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The provider that rejected the request.",
+          "validators": []
+        },
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Validation/rejection error details.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Client-generated request ID.",
+          "validators": []
+        },
+        {
+          "name": "retries_attempted",
+          "type_ref": "int",
+          "required": true,
+          "default": "0",
+          "description": "Always 0 — invalid requests are not retried.",
+          "validators": []
+        },
+        {
+          "name": "status_code",
+          "type_ref": "int",
+          "required": true,
+          "default": "400",
+          "description": "HTTP status code, typically 400 or 422.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Raised when the provider rejects the request due to client-side issues — malformed input, unsupported model, content policy violation. Not retryable. HTTP 400/422. Extends RemoteClientError conceptually."
+    },
+    {
+      "name": "PromptMessage",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "role",
+          "type_ref": "MessageRole",
+          "required": true,
+          "default": "",
+          "description": "The role of this message in the conversation.",
+          "validators": []
+        },
+        {
+          "name": "content",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The text content of the message.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": ">=1",
+              "error_message": "Message content must not be empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single message in a prompt conversation. Used to construct multi-turn prompts for the remote API."
+    },
+    {
+      "name": "MessageRole",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "system",
+        "user",
+        "assistant"
+      ],
+      "inner_types": [],
+      "description": "Role of a message in a conversation prompt."
+    },
+    {
+      "name": "GenerationParams",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "max_tokens",
+          "type_ref": "int",
+          "required": false,
+          "default": "4096",
+          "description": "Maximum number of tokens to generate in the response.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=1",
+              "error_message": "max_tokens must be at least 1"
+            }
+          ]
+        },
+        {
+          "name": "temperature",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.0",
+          "description": "Sampling temperature. 0.0 = deterministic, higher = more random.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">=0.0 AND <=2.0",
+              "error_message": "temperature must be between 0.0 and 2.0"
+            }
+          ]
+        },
+        {
+          "name": "top_p",
+          "type_ref": "float",
+          "required": false,
+          "default": "1.0",
+          "description": "Nucleus sampling parameter. 1.0 = no filtering.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": ">0.0 AND <=1.0",
+              "error_message": "top_p must be in (0.0, 1.0]"
+            }
+          ]
+        },
+        {
+          "name": "stop_sequences",
+          "type_ref": "list",
+          "required": false,
+          "default": "[]",
+          "description": "Optional list of strings that, when generated, cause the model to stop. Empty list means no stop sequences.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Optional generation parameters that control the model's output behavior. Provider-specific translation is handled by concrete client implementations."
+    }
+  ],
+  "functions": [
+    {
+      "name": "create_remote_client",
+      "description": "Factory function that constructs a concrete RemoteClient implementation for the specified provider. Reads the API key from the environment variable specified in config, validates it is present and non-empty, constructs an httpx.AsyncClient with the configured timeout settings, and returns the provider-specific client instance. Fails fast on missing API key or invalid config. The returned client satisfies the RemoteClient protocol.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "RemoteClientConfig",
+          "required": true,
+          "default": "",
+          "description": "Configuration specifying provider, model, auth, retry, timeout, and pricing settings.",
+          "validators": []
+        },
+        {
+          "name": "http_client",
+          "type_ref": "any",
+          "required": false,
+          "default": "None",
+          "description": "Optional pre-configured httpx.AsyncClient instance for dependency injection. If None, a new client is created internally and the RemoteClient takes ownership (will close it on cleanup). Type is httpx.AsyncClient | None.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [
+        {
+          "name": "missing_api_key",
+          "condition": "The environment variable specified by config.api_key_env_var is not set or is empty",
+          "error_type": "AuthError",
+          "error_data": {
+            "status_code": "0",
+            "detail": "API key environment variable is missing or empty — fail fast at construction"
+          }
+        },
+        {
+          "name": "invalid_config",
+          "condition": "Config fails Pydantic validation (e.g. invalid model name, out-of-range retry values)",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Config validation failure with Pydantic error details"
+          }
+        },
+        {
+          "name": "unsupported_provider",
+          "condition": "Provider value does not match any implemented concrete client",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "No concrete implementation available for the specified provider"
+          }
+        }
+      ],
+      "preconditions": [
+        "config passes all Pydantic validation",
+        "If http_client is provided, it must be an open httpx.AsyncClient instance"
+      ],
+      "postconditions": [
+        "Returned object satisfies the RemoteClient protocol",
+        "API key has been read from the environment and stored as SecretStr",
+        "httpx.AsyncClient is configured with timeout settings from config",
+        "Pricing table is loaded (overrides merged with defaults)"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.remote_api_client",
+          "description": "Logs client creation with provider and model at INFO level (API key is NOT logged)"
+        },
+        {
+          "kind": "reads_file",
+          "target": "environment variables",
+          "description": "Reads the API key from the OS environment variable specified in config"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "send_request",
+      "description": "Send a prompt to the configured remote AI provider and return a structured TaskResponse. This is the primary interface method on the RemoteClient protocol. Internally dispatches through the ABC's _request_with_retry template method, which handles exponential backoff with full jitter. The concrete implementation translates the prompt into provider-specific API format, sends via httpx, parses the response, extracts token usage, computes cost from the pricing table, and measures latency. Generates a UUID4 request_id for audit correlation. Logs each attempt and final result as structured JSON.",
+      "inputs": [
+        {
+          "name": "messages",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of PromptMessage forming the conversation prompt. Must contain at least one message with role 'user'.",
+          "validators": []
+        },
+        {
+          "name": "params",
+          "type_ref": "GenerationParams",
+          "required": false,
+          "default": "GenerationParams()",
+          "description": "Generation parameters controlling model output behavior.",
+          "validators": []
+        }
+      ],
+      "output_type": "TaskResponse",
+      "error_cases": [
+        {
+          "name": "auth_failure",
+          "condition": "Provider returns HTTP 401 or 403 indicating invalid or expired API key",
+          "error_type": "AuthError",
+          "error_data": {
+            "retryable": "false",
+            "detail": "Authentication failed — not retried"
+          }
+        },
+        {
+          "name": "rate_limited",
+          "condition": "Provider returns HTTP 429 and all retries (with Retry-After respect) are exhausted",
+          "error_type": "RateLimitError",
+          "error_data": {
+            "retryable": "true",
+            "detail": "Rate limit exceeded after all retries exhausted"
+          }
+        },
+        {
+          "name": "remote_unavailable",
+          "condition": "Provider returns HTTP 5xx, or connection/timeout error occurs, and all retries are exhausted",
+          "error_type": "RemoteUnavailableError",
+          "error_data": {
+            "retryable": "true",
+            "detail": "Remote API unreachable after all retries exhausted"
+          }
+        },
+        {
+          "name": "invalid_request",
+          "condition": "Provider returns HTTP 400 or 422 indicating malformed request, unsupported model, or content policy violation",
+          "error_type": "InvalidRequestError",
+          "error_data": {
+            "retryable": "false",
+            "detail": "Request rejected by provider — not retried"
+          }
+        },
+        {
+          "name": "empty_messages",
+          "condition": "messages list is empty or contains no user message",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "messages must be non-empty and contain at least one user message"
+          }
+        }
+      ],
+      "preconditions": [
+        "Client has been successfully constructed via create_remote_client",
+        "messages list is non-empty",
+        "messages list contains at least one message with role 'user'",
+        "httpx.AsyncClient is open and not closed"
+      ],
+      "postconditions": [
+        "Returned TaskResponse.provider matches the client's configured provider",
+        "Returned TaskResponse.cost_usd == (usage.input_tokens * pricing.input_cost_per_token) + (usage.output_tokens * pricing.output_cost_per_token)",
+        "Returned TaskResponse.request_id is a valid UUID4 string",
+        "Returned TaskResponse.latency_ms reflects wall-clock time of the successful attempt only",
+        "Structured JSON log entry emitted with request_id, provider, model, token counts, cost, latency, and retry count"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Remote AI provider API (Anthropic/OpenAI/Google)",
+          "description": "Sends HTTP POST request to the provider's completion/chat endpoint via httpx.AsyncClient"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.remote_api_client",
+          "description": "Logs each retry attempt at WARNING level, successful responses at INFO level, and final failures at ERROR level. All logs include request_id, provider, model, attempt number, and structured metadata."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 30000,
+        "max_memory_mb": null,
+        "complexity": "O(max_retries)"
+      }
+    },
+    {
+      "name": "send_diversity_request",
+      "description": "Send the same prompt to a primary provider and zero or more secondary providers concurrently for training data diversity. The primary provider's response is the ground-truth used for serving. Secondary providers' responses are collected for training data diversity but are not used as ground truth. Uses asyncio.gather(return_exceptions=True) to fan out requests concurrently. If the primary provider fails, the entire operation fails with the primary's error. Secondary failures are captured as ErrorInfo in the result without failing the overall operation. Total cost is the sum of all successful responses' costs.",
+      "inputs": [
+        {
+          "name": "primary_client",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "The RemoteClient instance for the primary/ground-truth provider. Type is RemoteClient protocol.",
+          "validators": []
+        },
+        {
+          "name": "secondary_clients",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of RemoteClient instances for secondary/diversity providers. May be empty. Type is list[RemoteClient].",
+          "validators": []
+        },
+        {
+          "name": "messages",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of PromptMessage forming the conversation prompt. Same prompt is sent to all providers.",
+          "validators": []
+        },
+        {
+          "name": "params",
+          "type_ref": "GenerationParams",
+          "required": false,
+          "default": "GenerationParams()",
+          "description": "Generation parameters applied to all providers.",
+          "validators": []
+        }
+      ],
+      "output_type": "DiversityResult",
+      "error_cases": [
+        {
+          "name": "primary_auth_failure",
+          "condition": "Primary provider returns auth error",
+          "error_type": "AuthError",
+          "error_data": {
+            "detail": "Primary provider authentication failed — entire diversity request fails"
+          }
+        },
+        {
+          "name": "primary_rate_limited",
+          "condition": "Primary provider is rate limited after all retries",
+          "error_type": "RateLimitError",
+          "error_data": {
+            "detail": "Primary provider rate limited — entire diversity request fails"
+          }
+        },
+        {
+          "name": "primary_unavailable",
+          "condition": "Primary provider is unreachable after all retries",
+          "error_type": "RemoteUnavailableError",
+          "error_data": {
+            "detail": "Primary provider unavailable — entire diversity request fails"
+          }
+        },
+        {
+          "name": "primary_invalid_request",
+          "condition": "Primary provider rejects the request",
+          "error_type": "InvalidRequestError",
+          "error_data": {
+            "detail": "Primary provider rejected request — entire diversity request fails"
+          }
+        },
+        {
+          "name": "empty_messages",
+          "condition": "messages list is empty or contains no user message",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "messages must be non-empty and contain at least one user message"
+          }
+        }
+      ],
+      "preconditions": [
+        "primary_client satisfies RemoteClient protocol and has been constructed successfully",
+        "All clients in secondary_clients satisfy RemoteClient protocol and have been constructed successfully",
+        "messages list is non-empty and contains at least one user message"
+      ],
+      "postconditions": [
+        "DiversityResult.primary is a valid TaskResponse from the primary provider",
+        "DiversityResult.secondary has length equal to len(secondary_clients)",
+        "Each entry in DiversityResult.secondary is either TaskResponse or ErrorInfo",
+        "DiversityResult.total_cost_usd == primary.cost_usd + sum(s.cost_usd for s in secondary if isinstance(s, TaskResponse))",
+        "Structured JSON log entry emitted summarizing diversity results: primary success, per-secondary success/failure, total cost"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "network_call",
+          "target": "Multiple remote AI provider APIs concurrently",
+          "description": "Sends HTTP POST requests to primary and all secondary providers concurrently via asyncio.gather"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.remote_api_client",
+          "description": "Logs diversity request initiation, per-provider results, and aggregate summary with total cost"
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 45000,
+        "max_memory_mb": null,
+        "complexity": "O(max_retries × num_providers)"
+      }
+    },
+    {
+      "name": "compute_cost",
+      "description": "Pure function that computes the USD cost of a single API request given token usage and pricing. Used internally by clients and available publicly for cost estimation/forecasting without making actual API calls.",
+      "inputs": [
+        {
+          "name": "usage",
+          "type_ref": "TokenUsage",
+          "required": true,
+          "default": "",
+          "description": "Token counts for the request.",
+          "validators": []
+        },
+        {
+          "name": "pricing",
+          "type_ref": "TokenPricing",
+          "required": true,
+          "default": "",
+          "description": "Per-token pricing rates.",
+          "validators": []
+        }
+      ],
+      "output_type": "float",
+      "error_cases": [],
+      "preconditions": [
+        "usage.input_tokens >= 0",
+        "usage.output_tokens >= 0",
+        "pricing.input_cost_per_token >= 0.0",
+        "pricing.output_cost_per_token >= 0.0"
+      ],
+      "postconditions": [
+        "Return value == (usage.input_tokens * pricing.input_cost_per_token) + (usage.output_tokens * pricing.output_cost_per_token)",
+        "Return value >= 0.0"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": null,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "get_pricing",
+      "description": "Look up the TokenPricing for a given provider and model. Checks config-provided pricing overrides first, then falls back to built-in default pricing tables. Returns None if no pricing is found for the model (caller must handle missing pricing — typically log a warning and use zero-cost fallback).",
+      "inputs": [
+        {
+          "name": "provider",
+          "type_ref": "ProviderName",
+          "required": true,
+          "default": "",
+          "description": "The AI provider.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The model identifier to look up pricing for.",
+          "validators": []
+        },
+        {
+          "name": "pricing_overrides",
+          "type_ref": "PricingTable",
+          "required": false,
+          "default": "PricingTable(entries={})",
+          "description": "Config-provided pricing overrides that take precedence over defaults.",
+          "validators": []
+        }
+      ],
+      "output_type": "any",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "If model exists in pricing_overrides, return that TokenPricing",
+        "Else if model exists in built-in defaults for provider, return that TokenPricing",
+        "Else return None"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.remote_api_client",
+          "description": "Logs WARNING if no pricing found for the given provider/model combination"
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": null,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    },
+    {
+      "name": "close",
+      "description": "Async cleanup method on RemoteClient. Closes the underlying httpx.AsyncClient if this client owns it (i.e., it was not injected externally). If the httpx client was injected, this is a no-op — the caller retains ownership and responsibility for closing it. Safe to call multiple times.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "If client owns the httpx.AsyncClient, it is closed after this call",
+        "If client does not own the httpx.AsyncClient, no action is taken",
+        "Subsequent calls to send_request on a closed owned client will raise RuntimeError",
+        "Multiple calls to close are safe (idempotent)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.remote_api_client",
+          "description": "Logs client closure at DEBUG level"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All public functions and methods are fully type-annotated and return Pydantic models or primitive types",
+    "API keys are never logged, serialized, or exposed — stored only as Pydantic SecretStr",
+    "Auth validation happens at construction time — missing or empty API keys cause immediate AuthError, never deferred to first request",
+    "Retry logic uses full-jitter exponential backoff: delay = random(0, min(max_delay, base_delay * 2^attempt))",
+    "Auth errors (401/403) and invalid request errors (400/422) are never retried — only 429 and 5xx/connection/timeout errors are retried",
+    "If respect_retry_after is true and a 429 response includes a Retry-After header, that value is used instead of calculated backoff (capped at max_delay_seconds)",
+    "cost_usd on every TaskResponse is always computed as (input_tokens × input_cost_per_token) + (output_tokens × output_cost_per_token)",
+    "Every request generates a unique UUID4 request_id for audit trail correlation across logs",
+    "httpx.AsyncClient ownership is tracked: clients created internally are closed by close(), injected clients are left to their owner",
+    "All error types carry provider, message, request_id, retries_attempted, and status_code for structured logging and audit",
+    "DiversityResult.total_cost_usd == primary.cost_usd + sum of successful secondary cost_usd values",
+    "Secondary provider failures in diversity requests are captured as ErrorInfo, never raised as exceptions",
+    "Primary provider failure in diversity requests propagates as the corresponding typed error",
+    "No global state — all state (config, http client, pricing) flows through constructor parameters or method arguments",
+    "Structured JSON logging at all levels using Python stdlib logging with a JSON formatter",
+    "Each source file stays under 300 lines — module is split across protocol, ABC, concrete implementations, types, errors, pool, pricing, and factory"
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0",
+    "httpx"
+  ]
+}

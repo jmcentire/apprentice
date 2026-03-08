@@ -1,0 +1,643 @@
+{
+  "component_id": "audit_log",
+  "name": "Audit Log",
+  "description": "Structured JSON logging of every system decision. Each entry is an AuditEntry with timestamp, task_name, event_type, and details dict. Writes to a JSON-lines file (configurable path) in append-only mode — entries are never modified or deleted. Provides query methods for report generation: entries_by_task, entries_by_type, entries_in_range. Uses Python stdlib logging module configured with a custom JSON formatter for the dedicated 'apprentice.audit' logger. All datetimes are UTC. Sync log() method leverages stdlib logging's thread-safety. Query methods stream-read the JSONL file with per-line error handling, skipping corrupted lines with warnings.",
+  "version": 1,
+  "types": [
+    {
+      "name": "EventType",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "request_routed",
+        "training_example_stored",
+        "fine_tune_started",
+        "fine_tune_completed",
+        "model_validated",
+        "model_promoted",
+        "phase_transition",
+        "budget_warning",
+        "confidence_alert"
+      ],
+      "inner_types": [],
+      "description": "Closed enumeration of the 9 auditable system event types. StrEnum — each variant's value is its snake_case name. No catch-all variant; unrecognized event strings must be rejected at validation time (fail-fast)."
+    },
+    {
+      "name": "AuditEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": false,
+          "default": "datetime.now(UTC)",
+          "description": "ISO 8601 UTC datetime string of when the event occurred. Serialized from datetime via default_factory=lambda: datetime.now(UTC). Stored as ISO 8601 string in JSON. Internal representation is datetime; type_ref is str for the serialized contract boundary.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "Timestamp must be a valid ISO 8601 UTC datetime string with +00:00 timezone suffix"
+            }
+          ]
+        },
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task this event pertains to. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_name must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "event_type",
+          "type_ref": "EventType",
+          "required": true,
+          "default": "",
+          "description": "The category of system event. Must be one of the 9 defined EventType variants.",
+          "validators": []
+        },
+        {
+          "name": "details",
+          "type_ref": "dict",
+          "required": false,
+          "default": "{}",
+          "description": "Arbitrary key-value map of event-specific metadata. Common keys include: model_used (str), routing_reason (str), confidence_score (float), cost (float), phase_from (str), phase_to (str), budget_remaining (float), error_message (str). Values are JSON-serializable (str, int, float, bool, None, list, dict).",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic v2 BaseModel representing a single auditable system decision. ConfigDict(frozen=True). The timestamp defaults to datetime.now(UTC) via default_factory. Provides .to_json_line() -> str for JSONL serialization (compact JSON, no trailing newline)."
+    },
+    {
+      "name": "AuditConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the JSONL audit log file. Parent directory must exist and be writable at config validation time. The file itself will be created if it does not exist. Relative paths are resolved from the working directory.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "log_path must be a non-empty string"
+            },
+            {
+              "kind": "custom",
+              "expression": "Path(log_path).parent.exists() and os.access(Path(log_path).parent, os.W_OK)",
+              "error_message": "log_path parent directory must exist and be writable"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic v2 BaseModel for audit logger configuration. Validated at startup — fail fast on invalid config. Typically loaded from the YAML config file's 'audit' section."
+    },
+    {
+      "name": "AuditLogger",
+      "kind": "struct",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Protocol (typing.Protocol) defining the abstract audit logging interface. All audit consumers depend on this protocol, not the concrete implementation. Four methods: log, entries_by_task, entries_by_type, entries_in_range. No delete/update/clear methods — append-only by design."
+    },
+    {
+      "name": "JsonLinesAuditLogger",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config",
+          "type_ref": "AuditConfig",
+          "required": true,
+          "default": "",
+          "description": "Injected audit configuration. Validated and used to set up the file handler on construction.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Concrete implementation of AuditLogger. Uses stdlib logging module with a custom JSON formatter attached to a dedicated 'apprentice.audit' named logger. File handler opened in append mode. Accepts AuditConfig via constructor (dependency injection). Validates log_path on init. Query methods stream-read the JSONL file, deserializing each line into AuditEntry, skipping corrupted lines with a warning logged to the application logger. Thread-safe via stdlib logging internals."
+    },
+    {
+      "name": "AuditEntryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "AuditEntry",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of AuditEntry objects returned by query methods."
+    }
+  ],
+  "functions": [
+    {
+      "name": "AuditEntry.to_json_line",
+      "description": "Serialize this AuditEntry to a single-line compact JSON string suitable for appending to a JSONL file. Uses Pydantic's model_dump_json() with no indentation. Does not include a trailing newline character. The output is deterministic for a given entry (sorted keys).",
+      "inputs": [],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "serialization_failure",
+          "condition": "The details dict contains a value that is not JSON-serializable (should not occur if entry was properly constructed, but possible with Any type)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Details dict contains non-JSON-serializable value"
+          }
+        }
+      ],
+      "preconditions": [
+        "The AuditEntry instance is valid (all fields passed Pydantic validation)"
+      ],
+      "postconditions": [
+        "Returned string is valid JSON",
+        "Returned string contains no newline characters",
+        "json.loads(result) produces a dict with keys: timestamp, task_name, event_type, details",
+        "Returned string is non-empty"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": ""
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.__init__",
+      "description": "Construct a JsonLinesAuditLogger from an AuditConfig. Validates that log_path's parent directory exists and is writable. Creates the log file if it does not exist. Configures a dedicated stdlib logging.Logger named 'apprentice.audit' with a FileHandler in append mode and a custom JSON formatter. The logger is isolated — propagate=False, so audit entries do not leak to root or application loggers.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "AuditConfig",
+          "required": true,
+          "default": "",
+          "description": "Audit configuration specifying the JSONL log file path. Must have passed AuditConfig validation.",
+          "validators": []
+        }
+      ],
+      "output_type": "JsonLinesAuditLogger",
+      "error_cases": [
+        {
+          "name": "parent_directory_not_found",
+          "condition": "The parent directory of config.log_path does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Parent directory does not exist: {parent_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The parent directory of config.log_path is not writable, or the file exists but is not writable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot write to audit log path: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_config",
+          "condition": "config is not a valid AuditConfig (e.g., log_path is empty)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid AuditConfig: {validation_errors}"
+          }
+        }
+      ],
+      "preconditions": [
+        "config is a valid AuditConfig instance",
+        "config.log_path parent directory exists",
+        "config.log_path parent directory is writable by the current process"
+      ],
+      "postconditions": [
+        "A FileHandler is opened in append mode on config.log_path",
+        "The 'apprentice.audit' logger is configured with the JSON formatter and file handler",
+        "The logger has propagate=False",
+        "If the log file did not exist, it has been created (possibly empty)",
+        "No existing log file content has been modified or truncated"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Creates the JSONL log file if it does not exist",
+        "Registers a FileHandler on the 'apprentice.audit' stdlib logger"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "config.log_path",
+          "description": "Creates the audit JSONL file if it does not exist; opens in append mode"
+        },
+        {
+          "kind": "mutates_state",
+          "target": "logging.getLogger('apprentice.audit')",
+          "description": "Configures the dedicated audit logger with a FileHandler and JSON formatter"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.log",
+      "description": "Append a single AuditEntry to the audit log. Serializes the entry via to_json_line() and emits it through the stdlib 'apprentice.audit' logger, which writes to the configured JSONL file handler. Synchronous — blocks until the entry is flushed. Thread-safe via stdlib logging internals. This is the only write path; all mutations go through this method.",
+      "inputs": [
+        {
+          "name": "entry",
+          "type_ref": "AuditEntry",
+          "required": true,
+          "default": "",
+          "description": "The audit entry to append. Must be a valid, fully-constructed AuditEntry.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "io_error",
+          "condition": "The log file has become inaccessible (e.g., disk full, file deleted, permissions changed) after initialization",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Failed to write audit entry: {os_error_detail}"
+          }
+        },
+        {
+          "name": "serialization_failure",
+          "condition": "The entry's details dict contains a non-JSON-serializable value",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Cannot serialize audit entry: {serialization_error}"
+          }
+        }
+      ],
+      "preconditions": [
+        "entry is a valid AuditEntry instance",
+        "The JsonLinesAuditLogger has been successfully initialized (file handler is active)"
+      ],
+      "postconditions": [
+        "The JSONL file contains one additional line at the end",
+        "The new line is the JSON serialization of the entry",
+        "All previously existing lines in the file are unchanged",
+        "The entry is flushed to disk before the method returns"
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Appends one JSON line to the audit log file"
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "config.log_path",
+          "description": "Appends a single JSON line to the JSONL audit file"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.audit",
+          "description": "Emits the entry through the stdlib audit logger"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_by_task",
+      "description": "Query the audit log for all entries matching the given task_name. Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by task_name equality (case-sensitive exact match). Corrupted or unparseable lines are skipped with a warning logged to the application logger (not the audit logger). Returns entries in chronological order (file order).",
+      "inputs": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task name to filter by. Case-sensitive exact match. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_name must be non-empty"
+            }
+          ]
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "empty_task_name",
+          "condition": "task_name is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_name must be non-empty"
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "task_name is a non-empty string"
+      ],
+      "postconditions": [
+        "All returned entries have entry.task_name == task_name",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file matching task_name are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit file line by line"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.audit_query",
+          "description": "Logs warnings for corrupted/unparseable lines encountered during read"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_by_type",
+      "description": "Query the audit log for all entries matching the given event_type. Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by event_type equality. Corrupted or unparseable lines are skipped with a warning logged to the application logger. Returns entries in chronological order (file order).",
+      "inputs": [
+        {
+          "name": "event_type",
+          "type_ref": "EventType",
+          "required": true,
+          "default": "",
+          "description": "The event type to filter by. Must be a valid EventType variant.",
+          "validators": []
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_event_type",
+          "condition": "event_type is not a valid EventType variant",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid event type: {event_type}. Must be one of the 9 defined EventType variants."
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "event_type is a valid EventType variant"
+      ],
+      "postconditions": [
+        "All returned entries have entry.event_type == event_type",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file matching event_type are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit file line by line"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.audit_query",
+          "description": "Logs warnings for corrupted/unparseable lines encountered during read"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "JsonLinesAuditLogger.entries_in_range",
+      "description": "Query the audit log for all entries with timestamps in the range [start, end] (inclusive on both bounds). Stream-reads the JSONL file line by line, deserializing each into an AuditEntry and filtering by timestamp comparison. Both start and end must be timezone-aware UTC datetimes. Corrupted or unparseable lines are skipped with a warning logged to the application logger. Returns entries in chronological order (file order).",
+      "inputs": [
+        {
+          "name": "start",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Inclusive lower bound of the time range as ISO 8601 UTC datetime string. Must be timezone-aware UTC.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "start must be a valid ISO 8601 UTC datetime string with +00:00 timezone suffix"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Inclusive upper bound of the time range as ISO 8601 UTC datetime string. Must be timezone-aware UTC.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?\\+00:00$",
+              "error_message": "end must be a valid ISO 8601 UTC datetime string with +00:00 timezone suffix"
+            }
+          ]
+        }
+      ],
+      "output_type": "AuditEntryList",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The JSONL log file has been deleted or moved since initialization",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Audit log file not found: {log_path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The JSONL log file is no longer readable",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read audit log file: {log_path}"
+          }
+        },
+        {
+          "name": "invalid_start",
+          "condition": "start is not a valid ISO 8601 UTC datetime string or is not timezone-aware",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "start must be a timezone-aware UTC datetime in ISO 8601 format"
+          }
+        },
+        {
+          "name": "invalid_end",
+          "condition": "end is not a valid ISO 8601 UTC datetime string or is not timezone-aware",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "end must be a timezone-aware UTC datetime in ISO 8601 format"
+          }
+        },
+        {
+          "name": "start_after_end",
+          "condition": "start datetime is strictly after end datetime",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "start must be <= end; got start={start}, end={end}"
+          }
+        }
+      ],
+      "preconditions": [
+        "The JsonLinesAuditLogger has been successfully initialized",
+        "start is a valid timezone-aware UTC datetime",
+        "end is a valid timezone-aware UTC datetime",
+        "start <= end"
+      ],
+      "postconditions": [
+        "All returned entries have start <= entry.timestamp <= end",
+        "Returned entries are in chronological order (order of appearance in the file)",
+        "No entries in the file within the range are omitted (unless the line was corrupted)",
+        "The audit log file is not modified by this operation",
+        "If start > end, returns an empty list"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "config.log_path",
+          "description": "Stream-reads the JSONL audit file line by line"
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.audit_query",
+          "description": "Logs warnings for corrupted/unparseable lines encountered during read"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "AuditConfig.__init__",
+      "description": "Construct and validate an AuditConfig. Pydantic v2 validation runs on construction. Fails fast if log_path is empty, if the parent directory does not exist, or if the parent directory is not writable. This is consistent with the project's fail-fast config philosophy.",
+      "inputs": [
+        {
+          "name": "log_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the JSONL audit log file. Parent directory must exist and be writable.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "log_path must be a non-empty string"
+            },
+            {
+              "kind": "custom",
+              "expression": "Path(log_path).parent.exists() and os.access(Path(log_path).parent, os.W_OK)",
+              "error_message": "log_path parent directory must exist and be writable"
+            }
+          ]
+        }
+      ],
+      "output_type": "AuditConfig",
+      "error_cases": [
+        {
+          "name": "empty_log_path",
+          "condition": "log_path is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "log_path must be a non-empty string"
+          }
+        },
+        {
+          "name": "parent_not_exists",
+          "condition": "The parent directory of log_path does not exist on the filesystem",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Parent directory does not exist: {parent_path}"
+          }
+        },
+        {
+          "name": "parent_not_writable",
+          "condition": "The parent directory of log_path exists but is not writable by the current process",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Parent directory is not writable: {parent_path}"
+          }
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "Returned AuditConfig has a valid, non-empty log_path",
+        "The parent directory of log_path exists and is writable"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "log_path parent directory",
+          "description": "Checks existence and write permissions of the parent directory during validation"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "The audit log file is append-only: no entry, once written, is ever modified or deleted",
+    "All timestamps in audit entries are timezone-aware UTC datetimes",
+    "Every AuditEntry has a valid EventType from the closed 9-variant enum; no catch-all or unknown variant exists",
+    "The AuditEntry model is frozen (immutable) after construction",
+    "The 'apprentice.audit' logger is isolated (propagate=False) and does not emit to root or application loggers",
+    "Query methods never modify the audit log file",
+    "Corrupted lines in the JSONL file are skipped during queries with a warning — they do not cause query failures",
+    "The details dict accepts dict[str, Any] values but all values must be JSON-serializable",
+    "Config validation occurs at construction time (fail-fast), never deferred to runtime",
+    "No global state: all state is held in the JsonLinesAuditLogger instance and its injected AuditConfig"
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0",
+    "pyyaml"
+  ]
+}

@@ -1,0 +1,847 @@
+{
+  "component_id": "rolling_window",
+  "name": "Rolling Comparison Window",
+  "description": "Maintains a fixed-size deque of ComparisonPair samples per task type. Each pair includes: timestamp, input, local response, remote response, evaluation score. Supports: adding new pairs, computing aggregate correlation (mean of evaluation scores), computing trend (slope of scores over recent N pairs), checking staleness (is oldest pair older than max_window_age). Persists to disk (JSON) for survival across restarts. Thread-safe via threading.Lock. One instance per task type; parent component manages the task_type-to-window mapping.",
+  "version": 1,
+  "types": [
+    {
+      "name": "ComparisonPair",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 formatted UTC-aware datetime of when the comparison was captured. Must include timezone info (UTC). Represented as str for serialization; parsed/validated as UTC-aware datetime internally.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
+              "error_message": "timestamp must be an ISO-8601 UTC-aware datetime string"
+            }
+          ]
+        },
+        {
+          "name": "input_data",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The input (prompt/query) that was sent to both local and remote models.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "input_data must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "local_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the local model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "remote_response",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The response produced by the remote model for the given input.",
+          "validators": []
+        },
+        {
+          "name": "evaluation_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Evaluation score comparing local vs remote response quality. 0.0 = no match/correlation, 1.0 = perfect match/correlation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=0.0,le=1.0",
+              "error_message": "evaluation_score must be between 0.0 and 1.0 inclusive"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Immutable (frozen) Pydantic v2 value object representing a single comparison sample between local and remote model responses, with an evaluation score. All datetimes must be UTC-aware."
+    },
+    {
+      "name": "TrendDirection",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "improving",
+        "stable",
+        "degrading"
+      ],
+      "inner_types": [],
+      "description": "Direction of the evaluation score trend over recent comparison pairs."
+    },
+    {
+      "name": "TrendResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "slope",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Slope of linear regression over evaluation_scores ordered by time. Positive = improving, negative = degrading. Units: score change per sample index.",
+          "validators": []
+        },
+        {
+          "name": "direction",
+          "type_ref": "TrendDirection",
+          "required": true,
+          "default": "",
+          "description": "Categorized trend direction derived from slope magnitude and sign.",
+          "validators": []
+        },
+        {
+          "name": "sample_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of comparison pairs used in the trend computation.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=2",
+              "error_message": "sample_count must be at least 2 for trend computation"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of trend computation over recent comparison pairs. Contains the linear regression slope, a categorized direction, and the number of samples used in the computation."
+    },
+    {
+      "name": "WindowSnapshot",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "schema_version",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Schema version for forward-compatible migration. Current version is 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=1",
+              "error_message": "schema_version must be a positive integer"
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier this window tracks.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "pairs",
+          "type_ref": "ComparisonPairList",
+          "required": true,
+          "default": "",
+          "description": "Ordered list of ComparisonPair objects in the window, oldest first.",
+          "validators": []
+        },
+        {
+          "name": "window_size",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "The configured maximum window size (deque maxlen) so it can be restored.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=1",
+              "error_message": "window_size must be a positive integer"
+            }
+          ]
+        },
+        {
+          "name": "max_window_age_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "The configured max_window_age as total seconds, for serialization of timedelta.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "gt=0.0",
+              "error_message": "max_window_age_seconds must be positive"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO-8601 formatted UTC-aware datetime of when this snapshot was created.",
+          "validators": [
+            {
+              "kind": "regex",
+              "expression": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
+              "error_message": "created_at must be an ISO-8601 UTC-aware datetime string"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Serialization envelope for persisting a RollingComparisonWindow to disk as JSON. Contains a schema_version for forward-compatible migration, the task type identifier, all current pairs, and a creation timestamp."
+    },
+    {
+      "name": "ComparisonPairList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "ComparisonPair",
+      "variants": [],
+      "inner_types": [],
+      "description": "Ordered list of ComparisonPair objects."
+    },
+    {
+      "name": "OptionalFloat",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "float"
+      ],
+      "description": "Optional float — None indicates no data available (empty window)."
+    },
+    {
+      "name": "OptionalTrendResult",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "TrendResult"
+      ],
+      "description": "Optional TrendResult — None indicates insufficient data for trend computation (fewer than 2 pairs)."
+    },
+    {
+      "name": "OptionalBool",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "bool"
+      ],
+      "description": "Optional bool — None indicates no data available to determine staleness (empty window)."
+    },
+    {
+      "name": "OptionalInt",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "int"
+      ],
+      "description": "Optional int for the recent_n parameter in get_trend."
+    },
+    {
+      "name": "OptionalStr",
+      "kind": "optional",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "str"
+      ],
+      "description": "Optional string for the as_of datetime parameter (ISO-8601 UTC)."
+    }
+  ],
+  "functions": [
+    {
+      "name": "__init__",
+      "description": "Constructs a new RollingComparisonWindow for a given task type. Initializes an empty collections.deque with maxlen=window_size and a threading.Lock. Performs NO file I/O. The window starts empty and must be populated via add_pair() or from_snapshot()/load().",
+      "inputs": [
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Identifier for the task type this window tracks. Must be non-empty.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "task_type must be a non-empty string"
+            }
+          ]
+        },
+        {
+          "name": "window_size",
+          "type_ref": "int",
+          "required": false,
+          "default": "100",
+          "description": "Maximum number of ComparisonPair entries to retain. When full, oldest pair is evicted on add.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "ge=1,le=10000",
+              "error_message": "window_size must be between 1 and 10000"
+            }
+          ]
+        },
+        {
+          "name": "max_window_age_seconds",
+          "type_ref": "float",
+          "required": false,
+          "default": "259200.0",
+          "description": "Maximum age in seconds for the oldest pair before the window is considered stale. Default is 72 hours (259200 seconds). Internally stored as timedelta.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "gt=0.0",
+              "error_message": "max_window_age_seconds must be positive"
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "empty_task_type",
+          "condition": "task_type is an empty string",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "task_type must be a non-empty string"
+          }
+        },
+        {
+          "name": "invalid_window_size",
+          "condition": "window_size < 1 or window_size > 10000",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "window_size must be between 1 and 10000"
+          }
+        },
+        {
+          "name": "invalid_max_window_age",
+          "condition": "max_window_age_seconds <= 0",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "max_window_age_seconds must be positive"
+          }
+        }
+      ],
+      "preconditions": [
+        "task_type is a non-empty string",
+        "window_size is a positive integer between 1 and 10000",
+        "max_window_age_seconds is a positive float"
+      ],
+      "postconditions": [
+        "Window is initialized with zero pairs",
+        "Internal deque has maxlen set to window_size",
+        "Threading lock is initialized",
+        "No file I/O has been performed"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure initialization, no I/O or external effects"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "add_pair",
+      "description": "Appends a ComparisonPair to the rolling window. If the deque is at capacity (window_size), the oldest pair is automatically evicted. Thread-safe: acquires the internal lock for the duration of the mutation.",
+      "inputs": [
+        {
+          "name": "pair",
+          "type_ref": "ComparisonPair",
+          "required": true,
+          "default": "",
+          "description": "The comparison pair to add. Must be a valid ComparisonPair with UTC-aware timestamp.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_pair_type",
+          "condition": "pair is not a valid ComparisonPair instance",
+          "error_type": "TypeError",
+          "error_data": {
+            "message": "pair must be a ComparisonPair instance"
+          }
+        },
+        {
+          "name": "naive_timestamp",
+          "condition": "pair.timestamp is a naive datetime (no timezone info)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "pair.timestamp must be UTC-aware"
+          }
+        }
+      ],
+      "preconditions": [
+        "pair is a valid ComparisonPair instance",
+        "pair.timestamp is a UTC-aware datetime",
+        "pair.evaluation_score is between 0.0 and 1.0 inclusive"
+      ],
+      "postconditions": [
+        "Window contains the new pair as the most recent entry",
+        "len(window) <= window_size",
+        "If window was at capacity before add, the oldest pair has been evicted",
+        "If window was not at capacity, len(window) has increased by 1"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "internal deque of ComparisonPair entries",
+          "description": "Appends pair to deque; may evict oldest if at capacity"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_aggregate_score",
+      "description": "Computes and returns the arithmetic mean of evaluation_scores across all pairs currently in the window. Returns None if the window is empty, to distinguish 'no data' from 'score is 0.0'. Thread-safe: acquires the internal lock for the duration of the read.",
+      "inputs": [],
+      "output_type": "OptionalFloat",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "If window is empty, returns None",
+        "If window is non-empty, returns mean of all evaluation_scores",
+        "Return value, when not None, is in range [0.0, 1.0]"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read operation, no state mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "get_trend",
+      "description": "Computes the linear regression slope of evaluation_scores over the most recent N pairs (ordered by insertion time). Uses statistics.linear_regression from the Python 3.12+ stdlib. Returns a TrendResult with slope, categorized direction, and sample count. Returns None if fewer than 2 pairs are available for computation. Thread-safe: acquires the internal lock for the duration of the read. Direction categorization: slope > 0.001 => 'improving', slope < -0.001 => 'degrading', otherwise 'stable'.",
+      "inputs": [
+        {
+          "name": "recent_n",
+          "type_ref": "OptionalInt",
+          "required": false,
+          "default": "None",
+          "description": "Number of most-recent pairs to use for trend computation. If None, uses all pairs in the window. If provided, must be >= 2. Clamped to window length if larger than current window size.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "recent_n is None or recent_n >= 2",
+              "error_message": "recent_n must be None or at least 2"
+            }
+          ]
+        }
+      ],
+      "output_type": "OptionalTrendResult",
+      "error_cases": [
+        {
+          "name": "invalid_recent_n",
+          "condition": "recent_n is not None and recent_n < 2",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "recent_n must be at least 2 if provided"
+          }
+        }
+      ],
+      "preconditions": [
+        "recent_n is None or recent_n >= 2"
+      ],
+      "postconditions": [
+        "If window has fewer than 2 pairs (or recent_n results in fewer than 2), returns None",
+        "If result is not None, result.sample_count >= 2",
+        "If result is not None, result.direction is one of 'improving', 'stable', 'degrading'",
+        "If result is not None, result.slope reflects the linear regression slope of scores vs sample index"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure computation, no state mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "is_stale",
+      "description": "Checks whether the oldest pair in the window is older than max_window_age. Returns True if stale (oldest pair timestamp + max_window_age < as_of), False if not stale, None if the window is empty. Thread-safe. The as_of parameter defaults to datetime.now(timezone.utc) but is injectable for deterministic testing.",
+      "inputs": [
+        {
+          "name": "as_of",
+          "type_ref": "OptionalStr",
+          "required": false,
+          "default": "None",
+          "description": "ISO-8601 UTC-aware datetime to use as 'now' for the staleness check. If None, uses datetime.now(timezone.utc). Must be UTC-aware if provided.",
+          "validators": []
+        }
+      ],
+      "output_type": "OptionalBool",
+      "error_cases": [
+        {
+          "name": "naive_as_of",
+          "condition": "as_of is provided but is not UTC-aware",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "as_of must be a UTC-aware datetime string"
+          }
+        },
+        {
+          "name": "invalid_as_of_format",
+          "condition": "as_of is provided but cannot be parsed as ISO-8601",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "as_of must be a valid ISO-8601 datetime string"
+          }
+        }
+      ],
+      "preconditions": [
+        "as_of is None or is a valid ISO-8601 UTC-aware datetime string"
+      ],
+      "postconditions": [
+        "If window is empty, returns None",
+        "If window is non-empty and oldest pair is older than max_window_age relative to as_of, returns True",
+        "If window is non-empty and oldest pair is within max_window_age relative to as_of, returns False"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure computation, no state mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "__len__",
+      "description": "Returns the number of ComparisonPair entries currently in the window. Thread-safe.",
+      "inputs": [],
+      "output_type": "int",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "Return value >= 0",
+        "Return value <= window_size"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure read, no state mutation"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "to_snapshot",
+      "description": "Serializes the current window state into a WindowSnapshot for persistence or transfer. No I/O is performed; the caller is responsible for writing the snapshot to disk via persist(). Thread-safe: acquires the internal lock for the duration of the read. The created_at field is set to datetime.now(timezone.utc).",
+      "inputs": [],
+      "output_type": "WindowSnapshot",
+      "error_cases": [],
+      "preconditions": [],
+      "postconditions": [
+        "Returned snapshot.schema_version == 1",
+        "Returned snapshot.task_type == self.task_type",
+        "Returned snapshot.pairs contains all current pairs in insertion order",
+        "len(snapshot.pairs) == len(self)",
+        "Returned snapshot.window_size == self.window_size",
+        "Returned snapshot.max_window_age_seconds == self.max_window_age as total seconds",
+        "Returned snapshot.created_at is a UTC-aware ISO-8601 datetime string"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure serialization, no I/O"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "from_snapshot",
+      "description": "Class method. Deserializes a WindowSnapshot into a new RollingComparisonWindow instance. Validates all data in the snapshot (pair scores, timestamps, schema version). This is the inverse of to_snapshot(). No I/O is performed.",
+      "inputs": [
+        {
+          "name": "snapshot",
+          "type_ref": "WindowSnapshot",
+          "required": true,
+          "default": "",
+          "description": "The WindowSnapshot to deserialize into a RollingComparisonWindow.",
+          "validators": []
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "unsupported_schema_version",
+          "condition": "snapshot.schema_version is not a recognized version (currently only 1)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Unsupported schema version: {version}. Only version 1 is supported."
+          }
+        },
+        {
+          "name": "invalid_snapshot_data",
+          "condition": "snapshot contains invalid pair data that fails Pydantic validation",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Snapshot contains invalid ComparisonPair data"
+          }
+        },
+        {
+          "name": "invalid_snapshot_type",
+          "condition": "snapshot is not a valid WindowSnapshot instance",
+          "error_type": "TypeError",
+          "error_data": {
+            "message": "snapshot must be a WindowSnapshot instance"
+          }
+        }
+      ],
+      "preconditions": [
+        "snapshot is a valid WindowSnapshot instance",
+        "snapshot.schema_version == 1",
+        "All pairs in snapshot.pairs are valid ComparisonPair instances"
+      ],
+      "postconditions": [
+        "Returned window has task_type == snapshot.task_type",
+        "Returned window has window_size == snapshot.window_size",
+        "Returned window has max_window_age == timedelta(seconds=snapshot.max_window_age_seconds)",
+        "len(returned_window) == len(snapshot.pairs), clamped to window_size",
+        "Pairs are in the same order as snapshot.pairs (if len(pairs) <= window_size, the most recent window_size pairs are retained)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure deserialization, no I/O"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "persist",
+      "description": "Atomically writes the current window state to disk as JSON. Uses to_snapshot() internally, then writes to a temporary file and performs os.replace() for atomic swap. This ensures no partial writes on crash. Thread-safe: acquires the internal lock for the snapshot read, then releases before I/O (I/O is on the immutable snapshot). Creates parent directories if they do not exist.",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File system path (as string) where the JSON snapshot will be written. Parent directories are created if needed.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "path must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "permission_denied",
+          "condition": "Process lacks write permissions to path or its parent directory",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot write to path: permission denied"
+          }
+        },
+        {
+          "name": "disk_full",
+          "condition": "Insufficient disk space to write the snapshot",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Failed to write snapshot: disk full or I/O error"
+          }
+        },
+        {
+          "name": "invalid_path",
+          "condition": "path is not a valid filesystem path",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Invalid file path provided"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is a non-empty string representing a valid file system path",
+        "Parent directory of path is writable (or can be created)"
+      ],
+      "postconditions": [
+        "File at path contains valid JSON representing a WindowSnapshot",
+        "File write was atomic (via temp file + os.replace)",
+        "No temporary files remain on success",
+        "Parent directories exist"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "path (JSON snapshot file)",
+          "description": "Atomic write of window state as JSON via temp file + os.replace"
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "load",
+      "description": "Class method. Loads a RollingComparisonWindow from a JSON file previously written by persist(). Reads the file, parses as WindowSnapshot, validates all data, and constructs a new window via from_snapshot(). Thread-safe (constructs a new instance).",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "File system path (as string) of the JSON snapshot file to load.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "path must be a non-empty string"
+            }
+          ]
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "No file exists at the specified path",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Snapshot file not found at path"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "Process lacks read permissions on the file",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Cannot read snapshot file: permission denied"
+          }
+        },
+        {
+          "name": "invalid_json",
+          "condition": "File contents are not valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Snapshot file contains invalid JSON"
+          }
+        },
+        {
+          "name": "invalid_snapshot_schema",
+          "condition": "JSON is valid but does not conform to WindowSnapshot schema",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Snapshot file does not conform to WindowSnapshot schema"
+          }
+        },
+        {
+          "name": "unsupported_schema_version",
+          "condition": "Snapshot has a schema_version that is not supported",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Unsupported schema version in snapshot file"
+          }
+        },
+        {
+          "name": "corrupted_data",
+          "condition": "Snapshot data is structurally valid but contains invalid ComparisonPair values",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Snapshot contains corrupted or invalid comparison pair data"
+          }
+        }
+      ],
+      "preconditions": [
+        "File at path exists and is readable",
+        "File contains valid JSON conforming to WindowSnapshot schema"
+      ],
+      "postconditions": [
+        "Returned window is a fully valid RollingComparisonWindow",
+        "Returned window state matches the persisted snapshot",
+        "Returned window.task_type matches the task_type in the file",
+        "Returned window.window_size matches the window_size in the file"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "path (JSON snapshot file)",
+          "description": "Reads and parses JSON snapshot file from disk"
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "len(window) <= window_size at all times",
+    "All pairs in the window have evaluation_score in [0.0, 1.0]",
+    "All pairs in the window have UTC-aware timestamps",
+    "Pairs are stored in insertion order (oldest at index 0, newest at end)",
+    "The internal deque maxlen equals window_size and never changes after construction",
+    "One RollingComparisonWindow instance corresponds to exactly one task_type",
+    "All public method calls are thread-safe via internal threading.Lock",
+    "Empty window methods return None (not 0.0 or False) to distinguish no-data from bad-data",
+    "Persistence is explicit and caller-controlled; no automatic writes on add_pair",
+    "Persisted JSON always includes schema_version for forward-compatible migration",
+    "Atomic file writes ensure no partial/corrupt state on disk",
+    "No global state; all state is instance-scoped and injected via constructor parameters"
+  ],
+  "requires": [
+    "python >= 3.12",
+    "pydantic >= 2.0"
+  ]
+}

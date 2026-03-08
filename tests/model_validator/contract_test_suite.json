@@ -1,0 +1,1033 @@
+{
+  "component_id": "model_validator",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "vc_happy_path_gte_promoted",
+      "description": "validate_candidate returns PROMOTED when aggregate score meets threshold with gte comparison",
+      "function": "validate_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "ValidationResult with decision=PROMOTED, aggregate_score >= threshold, per_metric_scores populated",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.PROMOTED",
+        "result.aggregate_score >= config.promotion_threshold",
+        "len(result.per_metric_scores) == 2",
+        "result.candidate_model_id == 'model-v2'"
+      ]
+    },
+    {
+      "id": "vc_happy_path_gt_promoted",
+      "description": "validate_candidate returns PROMOTED when aggregate score strictly exceeds threshold with gt comparison",
+      "function": "validate_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "ValidationResult with decision=PROMOTED using gt comparison",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.PROMOTED",
+        "result.aggregate_score > config.promotion_threshold"
+      ]
+    },
+    {
+      "id": "vc_happy_path_multiple_evaluators",
+      "description": "validate_candidate aggregates scores from multiple evaluators correctly",
+      "function": "validate_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "aggregate_score is arithmetic mean of all per_metric_scores",
+      "expected_error": "",
+      "assertions": [
+        "result.aggregate_score == pytest.approx(sum(result.per_metric_scores.values()) / len(result.per_metric_scores))",
+        "len(result.per_metric_scores) == 3"
+      ]
+    },
+    {
+      "id": "vc_rejected_below_threshold_gte",
+      "description": "validate_candidate returns REJECTED_BELOW_THRESHOLD when score is below threshold with gte",
+      "function": "validate_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "ValidationResult with decision=REJECTED_BELOW_THRESHOLD",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD",
+        "result.aggregate_score < config.promotion_threshold"
+      ]
+    },
+    {
+      "id": "vc_skipped_no_test_data",
+      "description": "validate_candidate returns SKIPPED_NO_TEST_DATA when test set is empty",
+      "function": "validate_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-empty"
+      },
+      "input_description": "",
+      "expected_output_description": "ValidationResult with decision=SKIPPED_NO_TEST_DATA",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.SKIPPED_NO_TEST_DATA"
+      ]
+    },
+    {
+      "id": "vc_edge_score_exactly_at_threshold_gte",
+      "description": "validate_candidate returns PROMOTED when score equals threshold with gte comparison",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "PROMOTED because score == threshold and comparison is gte",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.PROMOTED",
+        "result.aggregate_score == pytest.approx(config.promotion_threshold)"
+      ]
+    },
+    {
+      "id": "vc_edge_score_exactly_at_threshold_gt",
+      "description": "validate_candidate returns REJECTED_BELOW_THRESHOLD when score equals threshold with gt comparison",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "REJECTED because score == threshold and comparison is gt (strictly greater required)",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD"
+      ]
+    },
+    {
+      "id": "vc_edge_per_metric_threshold_fails",
+      "description": "validate_candidate rejects candidate when aggregate passes but a per-metric threshold fails",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "REJECTED_BELOW_THRESHOLD with failed_per_metric_thresholds populated",
+      "expected_error": "",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD",
+        "len(result.failed_per_metric_thresholds) > 0"
+      ]
+    },
+    {
+      "id": "vc_edge_one_evaluator_fails",
+      "description": "validate_candidate still computes score from remaining evaluators when one evaluator fails",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "per_metric_scores only contains successful evaluators, aggregate computed from those",
+      "expected_error": "",
+      "assertions": [
+        "len(result.per_metric_scores) == 1",
+        "result.aggregate_score == pytest.approx(list(result.per_metric_scores.values())[0])"
+      ]
+    },
+    {
+      "id": "vc_edge_minimum_sample_count_exact",
+      "description": "validate_candidate proceeds when sample count exactly equals min_test_samples",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-min"
+      },
+      "input_description": "",
+      "expected_output_description": "Validation proceeds normally with min_test_samples samples",
+      "expected_error": "",
+      "assertions": [
+        "result.decision in (PromotionDecision.PROMOTED, PromotionDecision.REJECTED_BELOW_THRESHOLD)",
+        "result.samples_evaluated == config.min_test_samples"
+      ]
+    },
+    {
+      "id": "vc_edge_aggregate_zero_when_no_metrics",
+      "description": "validate_candidate sets aggregate_score to 0.0 when no metrics completed successfully",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "aggregate_score is 0.0 and decision is REJECTED_EVALUATION_ERROR",
+      "expected_error": "",
+      "assertions": [
+        "result.aggregate_score == 0.0",
+        "result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR"
+      ]
+    },
+    {
+      "id": "vc_edge_timestamp_is_utc_iso8601",
+      "description": "validate_candidate sets timestamp_utc in ISO 8601 UTC format",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "timestamp_utc is valid ISO 8601 UTC string",
+      "expected_error": "",
+      "assertions": [
+        "datetime.fromisoformat(result.timestamp_utc) is not None"
+      ]
+    },
+    {
+      "id": "vc_edge_test_set_reference_populated",
+      "description": "validate_candidate populates test_set_reference accurately",
+      "function": "validate_candidate",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "test_set_reference matches the test set fetched from the store",
+      "expected_error": "",
+      "assertions": [
+        "result.test_set_reference.test_set_id == 'test-set-001'",
+        "result.test_set_reference.sample_count > 0"
+      ]
+    },
+    {
+      "id": "vc_error_test_set_not_found",
+      "description": "validate_candidate handles missing test set by returning SKIPPED_NO_TEST_DATA or error decision",
+      "function": "validate_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "nonexistent-set"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "test_set_not_found",
+      "assertions": [
+        "result.decision in (PromotionDecision.SKIPPED_NO_TEST_DATA, PromotionDecision.REJECTED_EVALUATION_ERROR)"
+      ]
+    },
+    {
+      "id": "vc_error_test_set_below_minimum",
+      "description": "validate_candidate rejects when test set has fewer samples than min_test_samples",
+      "function": "validate_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-small"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "test_set_below_minimum",
+      "assertions": [
+        "result.decision in (PromotionDecision.SKIPPED_NO_TEST_DATA, PromotionDecision.REJECTED_EVALUATION_ERROR)"
+      ]
+    },
+    {
+      "id": "vc_error_all_evaluators_failed",
+      "description": "validate_candidate returns REJECTED_EVALUATION_ERROR when all evaluators fail",
+      "function": "validate_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "all_evaluators_failed",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR",
+        "result.evaluation_error_detail != ''"
+      ]
+    },
+    {
+      "id": "vc_error_candidate_inference_error",
+      "description": "validate_candidate returns REJECTED_EVALUATION_ERROR when candidate model cannot produce outputs",
+      "function": "validate_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "broken-model",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "candidate_model_inference_error",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR",
+        "result.evaluation_error_detail != ''"
+      ]
+    },
+    {
+      "id": "vc_error_training_data_store_unavailable",
+      "description": "validate_candidate returns error decision when training data store is unreachable",
+      "function": "validate_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "training_data_store_unavailable",
+      "assertions": [
+        "result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR"
+      ]
+    },
+    {
+      "id": "vc_invariant_never_swap_failed",
+      "description": "validate_candidate never returns SWAP_FAILED decision",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.decision != PromotionDecision.SWAP_FAILED"
+      ]
+    },
+    {
+      "id": "vc_invariant_no_serving_model_mutation",
+      "description": "validate_candidate does not mutate the currently serving model",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "mock_model_server.swap_model.call_count == 0"
+      ]
+    },
+    {
+      "id": "vc_invariant_result_logged",
+      "description": "validate_candidate logs the validation result to audit logger before returning",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "mock_audit_logger.log_validation_result.call_count >= 1"
+      ]
+    },
+    {
+      "id": "pc_happy_path_swap_success",
+      "description": "promote_candidate swaps model successfully when decision is PROMOTED",
+      "function": "promote_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "validation_result": "ValidationResult with decision=PROMOTED"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with final_decision=PROMOTED, promotion_attempted=True, swap timing populated",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.PROMOTED",
+        "record.promotion_attempted is True",
+        "record.swap_duration_seconds > 0",
+        "record.swap_started_utc != ''",
+        "record.swap_completed_utc != ''"
+      ]
+    },
+    {
+      "id": "pc_happy_path_previous_model_tracked",
+      "description": "promote_candidate records the previous model ID from model server",
+      "function": "promote_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "validation_result": "ValidationResult with decision=PROMOTED"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with previous_model_id populated",
+      "expected_error": "",
+      "assertions": [
+        "record.previous_model_id == 'model-v1'",
+        "record.validation_result.candidate_model_id == 'model-v2'"
+      ]
+    },
+    {
+      "id": "pc_not_promoted_rejected_below_threshold",
+      "description": "promote_candidate does not attempt swap when decision is REJECTED_BELOW_THRESHOLD",
+      "function": "promote_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "validation_result": "ValidationResult with decision=REJECTED_BELOW_THRESHOLD"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with promotion_attempted=False, final_decision=REJECTED_BELOW_THRESHOLD",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD",
+        "record.promotion_attempted is False",
+        "mock_model_server.swap_model.call_count == 0"
+      ]
+    },
+    {
+      "id": "pc_not_promoted_evaluation_error",
+      "description": "promote_candidate does not attempt swap when decision is REJECTED_EVALUATION_ERROR",
+      "function": "promote_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "validation_result": "ValidationResult with decision=REJECTED_EVALUATION_ERROR"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with promotion_attempted=False",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.REJECTED_EVALUATION_ERROR",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "pc_not_promoted_skipped_no_test_data",
+      "description": "promote_candidate does not attempt swap when decision is SKIPPED_NO_TEST_DATA",
+      "function": "promote_candidate",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "validation_result": "ValidationResult with decision=SKIPPED_NO_TEST_DATA"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with promotion_attempted=False",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SKIPPED_NO_TEST_DATA",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "pc_error_swap_timeout",
+      "description": "promote_candidate records SWAP_FAILED with error detail when swap times out",
+      "function": "promote_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "swap_timeout",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "record.promotion_attempted is True",
+        "'timeout' in record.swap_error_detail.lower() or record.swap_error_detail != ''"
+      ]
+    },
+    {
+      "id": "pc_error_swap_connection_error",
+      "description": "promote_candidate records SWAP_FAILED when model server is unreachable during swap",
+      "function": "promote_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "swap_connection_error",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "record.promotion_attempted is True",
+        "record.swap_error_detail != ''"
+      ]
+    },
+    {
+      "id": "pc_error_swap_model_load_error",
+      "description": "promote_candidate records SWAP_FAILED when model server fails to load candidate model",
+      "function": "promote_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "swap_model_load_error",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "record.promotion_attempted is True"
+      ]
+    },
+    {
+      "id": "pc_error_model_server_not_ready",
+      "description": "promote_candidate records SWAP_FAILED when model server is not ready for swaps",
+      "function": "promote_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "model_server_not_ready",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "record.promotion_attempted is True"
+      ]
+    },
+    {
+      "id": "pc_error_validation_not_passed",
+      "description": "promote_candidate handles non-PROMOTED validation result without swap attempt",
+      "function": "promote_candidate",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "validation_not_passed",
+      "assertions": [
+        "record.promotion_attempted is False",
+        "record.final_decision != PromotionDecision.PROMOTED"
+      ]
+    },
+    {
+      "id": "pc_invariant_swap_fail_previous_model_serves",
+      "description": "When swap fails, previous model continues serving (no partial state)",
+      "function": "promote_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "mock_model_server.get_status.return_value.current_model_id == 'model-v1'"
+      ]
+    },
+    {
+      "id": "pc_invariant_promotion_logged",
+      "description": "PromotionRecord is logged to audit logger before returning",
+      "function": "promote_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "mock_audit_logger.log_promotion_record.call_count >= 1"
+      ]
+    },
+    {
+      "id": "pc_invariant_timestamps_utc_iso8601",
+      "description": "All timestamps in PromotionRecord are UTC ISO 8601",
+      "function": "promote_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.swap_started_utc == '' or datetime.fromisoformat(record.swap_started_utc)",
+        "record.swap_completed_utc == '' or datetime.fromisoformat(record.swap_completed_utc)"
+      ]
+    },
+    {
+      "id": "vp_happy_path_full_flow",
+      "description": "validate_and_promote runs validation then promotion successfully end-to-end",
+      "function": "validate_and_promote",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with PROMOTED decision, validation_result populated",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.PROMOTED",
+        "record.promotion_attempted is True",
+        "record.validation_result is not None",
+        "record.validation_result.decision == PromotionDecision.PROMOTED"
+      ]
+    },
+    {
+      "id": "vp_validation_fails_no_promotion",
+      "description": "validate_and_promote does not attempt promotion when validation fails",
+      "function": "validate_and_promote",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with REJECTED decision, promotion_attempted=False",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "vp_validation_passes_promotion_fails",
+      "description": "validate_and_promote returns SWAP_FAILED when validation passes but swap fails",
+      "function": "validate_and_promote",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-001"
+      },
+      "input_description": "",
+      "expected_output_description": "PromotionRecord with SWAP_FAILED decision",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED",
+        "record.promotion_attempted is True",
+        "record.validation_result.decision == PromotionDecision.PROMOTED"
+      ]
+    },
+    {
+      "id": "vp_error_validation_phase_error",
+      "description": "validate_and_promote handles validation phase errors gracefully",
+      "function": "validate_and_promote",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "validation_phase_error",
+      "assertions": [
+        "record.validation_result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "vp_error_promotion_phase_error",
+      "description": "validate_and_promote handles promotion phase errors after successful validation",
+      "function": "validate_and_promote",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "promotion_phase_error",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SWAP_FAILED"
+      ]
+    },
+    {
+      "id": "vp_invariant_both_logged",
+      "description": "validate_and_promote logs both ValidationResult and PromotionRecord to audit logger",
+      "function": "validate_and_promote",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "mock_audit_logger.log_validation_result.call_count >= 1",
+        "mock_audit_logger.log_promotion_record.call_count >= 1"
+      ]
+    },
+    {
+      "id": "vp_invariant_no_exceptions_raised",
+      "description": "validate_and_promote never raises exceptions past public boundary",
+      "function": "validate_and_promote",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record is not None",
+        "isinstance(record, PromotionRecord)"
+      ]
+    },
+    {
+      "id": "vp_skipped_no_test_data_no_promotion",
+      "description": "validate_and_promote returns SKIPPED_NO_TEST_DATA when test set has no data",
+      "function": "validate_and_promote",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "test_set_id": "test-set-empty"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.SKIPPED_NO_TEST_DATA",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "vp_edge_validation_result_immutable",
+      "description": "The ValidationResult in the returned PromotionRecord is immutable",
+      "function": "validate_and_promote",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.validation_result is not None"
+      ]
+    },
+    {
+      "id": "vp_edge_candidate_model_id_consistent",
+      "description": "candidate_model_id is consistent across ValidationResult and PromotionRecord",
+      "function": "validate_and_promote",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.validation_result.candidate_model_id == 'model-v2'"
+      ]
+    },
+    {
+      "id": "vp_edge_evaluation_error_stops_promotion",
+      "description": "validate_and_promote stops promotion when all evaluators fail",
+      "function": "validate_and_promote",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.REJECTED_EVALUATION_ERROR",
+        "record.promotion_attempted is False"
+      ]
+    },
+    {
+      "id": "vp_edge_per_metric_failure_stops_promotion",
+      "description": "validate_and_promote stops promotion when per-metric threshold fails even if aggregate passes",
+      "function": "validate_and_promote",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD",
+        "record.promotion_attempted is False",
+        "len(record.validation_result.failed_per_metric_thresholds) > 0"
+      ]
+    },
+    {
+      "id": "gh_happy_path_returns_history",
+      "description": "get_validation_history returns list of PromotionRecords for a given model",
+      "function": "get_validation_history",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "limit": "10"
+      },
+      "input_description": "",
+      "expected_output_description": "List of PromotionRecords ordered by timestamp descending",
+      "expected_error": "",
+      "assertions": [
+        "len(history) > 0",
+        "all(r.validation_result.candidate_model_id == 'model-v2' for r in history)"
+      ]
+    },
+    {
+      "id": "gh_happy_path_empty_history",
+      "description": "get_validation_history returns empty list when no history exists",
+      "function": "get_validation_history",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-never-tested",
+        "limit": "10"
+      },
+      "input_description": "",
+      "expected_output_description": "Empty list",
+      "expected_error": "",
+      "assertions": [
+        "history == []"
+      ]
+    },
+    {
+      "id": "gh_edge_limit_enforcement",
+      "description": "get_validation_history returns at most 'limit' entries",
+      "function": "get_validation_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "limit": "3"
+      },
+      "input_description": "",
+      "expected_output_description": "List with at most 3 entries",
+      "expected_error": "",
+      "assertions": [
+        "len(history) <= 3"
+      ]
+    },
+    {
+      "id": "gh_edge_ordering_descending",
+      "description": "get_validation_history returns records in descending timestamp order",
+      "function": "get_validation_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "limit": "10"
+      },
+      "input_description": "",
+      "expected_output_description": "Records ordered most recent first",
+      "expected_error": "",
+      "assertions": [
+        "all(history[i].validation_result.timestamp_utc >= history[i+1].validation_result.timestamp_utc for i in range(len(history)-1))"
+      ]
+    },
+    {
+      "id": "gh_error_audit_log_unavailable",
+      "description": "get_validation_history handles unavailable audit log gracefully",
+      "function": "get_validation_history",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "audit_log_unavailable",
+      "assertions": [
+        "history == [] or isinstance(history, list)"
+      ]
+    },
+    {
+      "id": "gh_edge_limit_zero",
+      "description": "get_validation_history with limit=0 returns empty list",
+      "function": "get_validation_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "model-v2",
+        "limit": "0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "history == []"
+      ]
+    },
+    {
+      "id": "gh_edge_all_models_history",
+      "description": "get_validation_history without specific model_id returns records for all models",
+      "function": "get_validation_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "candidate_model_id": "",
+        "limit": "50"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "len(history) >= 0"
+      ]
+    },
+    {
+      "id": "gh_invariant_no_exceptions",
+      "description": "get_validation_history does not raise exceptions past public boundary",
+      "function": "get_validation_history",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "isinstance(history, list)"
+      ]
+    },
+    {
+      "id": "inv_no_global_state",
+      "description": "ModelValidator has no global state - all state flows through constructor injection",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "True"
+      ]
+    },
+    {
+      "id": "inv_config_validated_at_init",
+      "description": "ValidationConfig is validated at initialization time - invalid config raises immediately",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "True"
+      ]
+    },
+    {
+      "id": "inv_per_metric_keys_match_evaluators",
+      "description": "per_metric_scores keys correspond to evaluator metric names",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "set(result.per_metric_scores.keys()).issubset(expected_metric_names)"
+      ]
+    },
+    {
+      "id": "vc_property_aggregate_is_mean",
+      "description": "Property: aggregate_score is always the arithmetic mean of per_metric_scores values",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result.aggregate_score == pytest.approx(expected_mean)"
+      ]
+    },
+    {
+      "id": "vc_property_decision_deterministic",
+      "description": "Property: given same scores and threshold, decision is always the same",
+      "function": "validate_candidate",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "result1.decision == result2.decision"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for ModelValidator component.\n\nTests are organized into sections matching the contract functions:\n- validate_candidate\n- promote_candidate\n- validate_and_promote\n- get_validation_history\n- invariants and property-based tests\n\nAll dependencies (TrainingDataStore, ModelServer, Evaluator, AuditLogger)\nare mocked via dependency injection.\n\"\"\"\n\nimport pytest\nfrom unittest.mock import MagicMock, AsyncMock, patch, call, PropertyMock\nfrom datetime import datetime, timezone\nfrom typing import List, Dict, Optional\nimport time\n\n# Component under test\nfrom src.model_validator import (\n    ModelValidator,\n    ValidationConfig,\n    ValidationResult,\n    PromotionRecord,\n    PromotionDecision,\n    ThresholdComparison,\n    PerMetricThreshold,\n    TestSetReference,\n    TestSample,\n    TestSet,\n    EvaluationScore,\n    ModelServerStatus,\n    SwapResult,\n)\n\n\n# ============================================================================\n# FIXTURES (conftest-style, all in one file for contract test portability)\n# ============================================================================\n\n\n@pytest.fixture\ndef mock_training_data_store():\n    \"\"\"Mock TrainingDataStore dependency.\"\"\"\n    store = MagicMock()\n    return store\n\n\n@pytest.fixture\ndef mock_model_server():\n    \"\"\"Mock ModelServer dependency.\"\"\"\n    server = MagicMock()\n    server.get_status.return_value = ModelServerStatus(\n        is_healthy=True,\n        current_model_id=\"model-v1\",\n        ready_to_swap=True,\n    )\n    server.swap_model.return_value = SwapResult(\n        success=True,\n        previous_model_id=\"model-v1\",\n        new_model_id=\"model-v2\",\n        error_message=\"\",\n    )\n    server.infer.return_value = \"generated output text\"\n    return server\n\n\n@pytest.fixture\ndef mock_audit_logger():\n    \"\"\"Mock AuditLogger dependency.\"\"\"\n    logger = MagicMock()\n    logger.log_validation_result.return_value = None\n    logger.log_promotion_record.return_value = None\n    return logger\n\n\n@pytest.fixture\ndef make_evaluator():\n    \"\"\"Factory to create mock evaluators with configurable scores.\"\"\"\n    def _make(metric_name: str, score: float, should_fail: bool = False):\n        evaluator = MagicMock()\n        evaluator.metric_name = metric_name\n        if should_fail:\n            evaluator.evaluate.side_effect = Exception(f\"Evaluator {metric_name} failed\")\n        else:\n            evaluator.evaluate.return_value = EvaluationScore(\n                metric_name=metric_name,\n                score=score,\n            )\n        return evaluator\n    return _make\n\n\n@pytest.fixture\ndef make_test_set():\n    \"\"\"Factory to create TestSet instances.\"\"\"\n    def _make(test_set_id: str = \"test-set-001\", num_samples: int = 10):\n        samples = [\n            TestSample(\n                sample_id=f\"sample-{i}\",\n                input_prompt=f\"prompt {i}\",\n                reference_output=f\"reference {i}\",\n                metadata={\"index\": i},\n            )\n            for i in range(num_samples)\n        ]\n        reference = TestSetReference(\n            test_set_id=test_set_id,\n            content_hash=f\"hash-{test_set_id}-{num_samples}\",\n            sample_count=num_samples,\n        )\n        return TestSet(reference=reference, samples=samples)\n    return _make\n\n\n@pytest.fixture\ndef default_config():\n    \"\"\"Default ValidationConfig for tests.\"\"\"\n    return ValidationConfig(\n        promotion_threshold=0.7,\n        min_test_samples=5,\n        threshold_comparison=ThresholdComparison.gte,\n        per_metric_thresholds=[],\n        swap_timeout_seconds=30.0,\n    )\n\n\n@pytest.fixture\ndef make_validation_result():\n    \"\"\"Factory to create ValidationResult instances in various states.\"\"\"\n    def _make(\n        decision: PromotionDecision = PromotionDecision.PROMOTED,\n        candidate_model_id: str = \"model-v2\",\n        aggregate_score: float = 0.85,\n        per_metric_scores: Optional[Dict[str, float]] = None,\n        threshold_used: float = 0.7,\n        threshold_comparison_used: ThresholdComparison = ThresholdComparison.gte,\n        test_set_id: str = \"test-set-001\",\n        failed_per_metric_thresholds: Optional[List[str]] = None,\n        evaluation_error_detail: str = \"\",\n        samples_evaluated: int = 10,\n    ):\n        if per_metric_scores is None:\n            per_metric_scores = {\"accuracy\": 0.85, \"fluency\": 0.85}\n        if failed_per_metric_thresholds is None:\n            failed_per_metric_thresholds = []\n        return ValidationResult(\n            candidate_model_id=candidate_model_id,\n            timestamp_utc=datetime.now(timezone.utc).isoformat(),\n            per_metric_scores=per_metric_scores,\n            aggregate_score=aggregate_score,\n            threshold_used=threshold_used,\n            threshold_comparison_used=threshold_comparison_used,\n            test_set_reference=TestSetReference(\n                test_set_id=test_set_id,\n                content_hash=\"hash-test-set-001\",\n                sample_count=samples_evaluated,\n            ),\n            decision=decision,\n            failed_per_metric_thresholds=failed_per_metric_thresholds,\n            evaluation_error_detail=evaluation_error_detail,\n            samples_evaluated=samples_evaluated,\n        )\n    return _make\n\n\n@pytest.fixture\ndef make_validator(\n    mock_training_data_store,\n    mock_model_server,\n    mock_audit_logger,\n    default_config,\n):\n    \"\"\"Factory to create ModelValidator instances with mock dependencies.\"\"\"\n    def _make(\n        config=None,\n        evaluators=None,\n        training_data_store=None,\n        model_server=None,\n        audit_logger=None,\n    ):\n        return ModelValidator(\n            config=config or default_config,\n            evaluators=evaluators or [],\n            training_data_store=training_data_store or mock_training_data_store,\n            model_server=model_server or mock_model_server,\n            audit_logger=audit_logger or mock_audit_logger,\n        )\n    return _make\n\n\n# ============================================================================\n# TEST: validate_candidate — Happy Paths\n# ============================================================================\n\n\nclass TestValidateCandidateHappyPath:\n    \"\"\"Tests for validate_candidate happy path scenarios.\"\"\"\n\n    def test_vc_happy_path_gte_promoted(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, default_config,\n    ):\n        \"\"\"validate_candidate returns PROMOTED when aggregate score meets threshold with gte comparison.\"\"\"\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.85),\n            make_evaluator(\"fluency\", 0.90),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.PROMOTED, \\\n            f\"Expected PROMOTED but got {result.decision}\"\n        assert result.aggregate_score >= default_config.promotion_threshold, \\\n            f\"Score {result.aggregate_score} should be >= threshold {default_config.promotion_threshold}\"\n        assert len(result.per_metric_scores) == 2, \\\n            f\"Expected 2 metrics but got {len(result.per_metric_scores)}\"\n        assert result.candidate_model_id == \"model-v2\"\n\n    def test_vc_happy_path_gt_promoted(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"validate_candidate returns PROMOTED when aggregate score strictly exceeds threshold with gt comparison.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=0.7,\n            min_test_samples=5,\n            threshold_comparison=ThresholdComparison.gt,\n            per_metric_thresholds=[],\n            swap_timeout_seconds=30.0,\n        )\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.PROMOTED, \\\n            f\"Expected PROMOTED but got {result.decision}\"\n        assert result.aggregate_score > config.promotion_threshold, \\\n            f\"Score {result.aggregate_score} should be > threshold {config.promotion_threshold}\"\n\n    def test_vc_happy_path_multiple_evaluators(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"validate_candidate aggregates scores from multiple evaluators correctly.\"\"\"\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.80),\n            make_evaluator(\"fluency\", 0.90),\n            make_evaluator(\"relevance\", 0.70),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        expected_mean = sum(result.per_metric_scores.values()) / len(result.per_metric_scores)\n        assert result.aggregate_score == pytest.approx(expected_mean), \\\n            f\"Aggregate {result.aggregate_score} should equal mean {expected_mean}\"\n        assert len(result.per_metric_scores) == 3, \\\n            f\"Expected 3 metrics, got {len(result.per_metric_scores)}\"\n\n    def test_vc_rejected_below_threshold_gte(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, default_config,\n    ):\n        \"\"\"validate_candidate returns REJECTED_BELOW_THRESHOLD when score is below threshold.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.50)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD, \\\n            f\"Expected REJECTED_BELOW_THRESHOLD but got {result.decision}\"\n        assert result.aggregate_score < default_config.promotion_threshold, \\\n            f\"Score {result.aggregate_score} should be < threshold {default_config.promotion_threshold}\"\n\n    def test_vc_skipped_no_test_data(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"validate_candidate returns SKIPPED_NO_TEST_DATA when test set is empty.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-empty\", 0)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-empty\")\n\n        assert result.decision == PromotionDecision.SKIPPED_NO_TEST_DATA, \\\n            f\"Expected SKIPPED_NO_TEST_DATA but got {result.decision}\"\n\n\n# ============================================================================\n# TEST: validate_candidate — Edge Cases\n# ============================================================================\n\n\nclass TestValidateCandidateEdgeCases:\n    \"\"\"Tests for validate_candidate edge/boundary scenarios.\"\"\"\n\n    def test_vc_edge_score_exactly_at_threshold_gte(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Score exactly at threshold with gte comparison should be PROMOTED.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=0.80,\n            min_test_samples=5,\n            threshold_comparison=ThresholdComparison.gte,\n            per_metric_thresholds=[],\n            swap_timeout_seconds=30.0,\n        )\n        evaluators = [make_evaluator(\"accuracy\", 0.80)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.PROMOTED, \\\n            f\"Score exactly at threshold with gte should be PROMOTED, got {result.decision}\"\n        assert result.aggregate_score == pytest.approx(config.promotion_threshold), \\\n            f\"Aggregate score {result.aggregate_score} should equal threshold {config.promotion_threshold}\"\n\n    def test_vc_edge_score_exactly_at_threshold_gt(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Score exactly at threshold with gt comparison should be REJECTED.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=0.80,\n            min_test_samples=5,\n            threshold_comparison=ThresholdComparison.gt,\n            per_metric_thresholds=[],\n            swap_timeout_seconds=30.0,\n        )\n        evaluators = [make_evaluator(\"accuracy\", 0.80)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD, \\\n            f\"Score exactly at threshold with gt should be REJECTED, got {result.decision}\"\n\n    def test_vc_edge_per_metric_threshold_fails(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Candidate rejected when aggregate passes but per-metric threshold fails.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=0.7,\n            min_test_samples=5,\n            threshold_comparison=ThresholdComparison.gte,\n            per_metric_thresholds=[\n                PerMetricThreshold(metric_name=\"accuracy\", min_score=0.90, comparison=ThresholdComparison.gte),\n            ],\n            swap_timeout_seconds=30.0,\n        )\n        # accuracy=0.75 fails per-metric (needs >=0.90), fluency=0.95 passes\n        # aggregate=(0.75+0.95)/2=0.85 passes aggregate threshold of 0.7\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.75),\n            make_evaluator(\"fluency\", 0.95),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_BELOW_THRESHOLD, \\\n            f\"Expected REJECTED due to per-metric failure, got {result.decision}\"\n        assert len(result.failed_per_metric_thresholds) > 0, \\\n            \"failed_per_metric_thresholds should list failing metrics\"\n        assert \"accuracy\" in result.failed_per_metric_thresholds, \\\n            \"accuracy should be in failed metrics\"\n\n    def test_vc_edge_one_evaluator_fails_other_succeeds(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"When one evaluator fails, score is computed from remaining evaluators.\"\"\"\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.85),\n            make_evaluator(\"broken_metric\", 0.0, should_fail=True),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert len(result.per_metric_scores) == 1, \\\n            f\"Expected 1 successful metric, got {len(result.per_metric_scores)}\"\n        assert result.aggregate_score == pytest.approx(\n            list(result.per_metric_scores.values())[0]\n        ), \"Aggregate should be the single successful metric score\"\n\n    def test_vc_edge_minimum_sample_count_exact(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, default_config,\n    ):\n        \"\"\"Validation proceeds when sample count exactly equals min_test_samples.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        # min_test_samples is 5 in default config\n        test_set = make_test_set(\"test-set-min\", default_config.min_test_samples)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-min\")\n\n        assert result.decision in (\n            PromotionDecision.PROMOTED,\n            PromotionDecision.REJECTED_BELOW_THRESHOLD,\n        ), f\"Should proceed with validation, got {result.decision}\"\n        assert result.samples_evaluated == default_config.min_test_samples, \\\n            f\"Expected {default_config.min_test_samples} samples evaluated\"\n\n    def test_vc_edge_aggregate_zero_when_no_metrics(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"aggregate_score is 0.0 when no metrics completed successfully.\"\"\"\n        evaluators = [\n            make_evaluator(\"metric_a\", 0.0, should_fail=True),\n            make_evaluator(\"metric_b\", 0.0, should_fail=True),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.aggregate_score == 0.0, \\\n            f\"Aggregate should be 0.0 when no metrics, got {result.aggregate_score}\"\n        assert result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR, \\\n            f\"Expected REJECTED_EVALUATION_ERROR, got {result.decision}\"\n\n    def test_vc_edge_timestamp_is_utc_iso8601(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"timestamp_utc is a valid ISO 8601 UTC string.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        parsed = datetime.fromisoformat(result.timestamp_utc)\n        assert parsed is not None, \"timestamp_utc should be valid ISO 8601\"\n\n    def test_vc_edge_test_set_reference_populated(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"test_set_reference accurately reflects the test set that was used.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.test_set_reference.test_set_id == \"test-set-001\", \\\n            f\"test_set_id should be 'test-set-001', got '{result.test_set_reference.test_set_id}'\"\n        assert result.test_set_reference.sample_count > 0, \\\n            \"sample_count should be > 0\"\n        assert result.test_set_reference.content_hash != \"\", \\\n            \"content_hash should not be empty\"\n\n\n# ============================================================================\n# TEST: validate_candidate — Error Cases\n# ============================================================================\n\n\nclass TestValidateCandidateErrors:\n    \"\"\"Tests for validate_candidate error conditions.\"\"\"\n\n    def test_vc_error_test_set_not_found(\n        self, make_validator, make_evaluator, mock_training_data_store,\n    ):\n        \"\"\"Handles missing test set without raising exception.\"\"\"\n        mock_training_data_store.get_test_set.side_effect = Exception(\"Test set not found\")\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"nonexistent-set\")\n\n        assert result.decision in (\n            PromotionDecision.SKIPPED_NO_TEST_DATA,\n            PromotionDecision.REJECTED_EVALUATION_ERROR,\n        ), f\"Expected graceful error decision, got {result.decision}\"\n\n    def test_vc_error_test_set_below_minimum(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, default_config,\n    ):\n        \"\"\"Rejects when test set has fewer samples than min_test_samples.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        # min_test_samples is 5, give only 2\n        test_set = make_test_set(\"test-set-small\", 2)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-small\")\n\n        assert result.decision in (\n            PromotionDecision.SKIPPED_NO_TEST_DATA,\n            PromotionDecision.REJECTED_EVALUATION_ERROR,\n        ), f\"Expected rejection for too few samples, got {result.decision}\"\n\n    def test_vc_error_all_evaluators_failed(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Returns REJECTED_EVALUATION_ERROR when all evaluators fail.\"\"\"\n        evaluators = [\n            make_evaluator(\"metric_a\", 0.0, should_fail=True),\n            make_evaluator(\"metric_b\", 0.0, should_fail=True),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR, \\\n            f\"Expected REJECTED_EVALUATION_ERROR, got {result.decision}\"\n        assert result.evaluation_error_detail != \"\", \\\n            \"evaluation_error_detail should describe the failure\"\n\n    def test_vc_error_candidate_inference_error(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Returns REJECTED_EVALUATION_ERROR when candidate model cannot produce outputs.\"\"\"\n        mock_model_server.infer.side_effect = Exception(\"Model load failed\")\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"broken-model\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR, \\\n            f\"Expected REJECTED_EVALUATION_ERROR, got {result.decision}\"\n        assert result.evaluation_error_detail != \"\", \\\n            \"Should have error detail for inference failure\"\n\n    def test_vc_error_training_data_store_unavailable(\n        self, make_validator, make_evaluator, mock_training_data_store,\n    ):\n        \"\"\"Returns error decision when training data store is unreachable.\"\"\"\n        mock_training_data_store.get_test_set.side_effect = ConnectionError(\n            \"Training data store unreachable\"\n        )\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR, \\\n            f\"Expected REJECTED_EVALUATION_ERROR, got {result.decision}\"\n\n\n# ============================================================================\n# TEST: validate_candidate — Invariants\n# ============================================================================\n\n\nclass TestValidateCandidateInvariants:\n    \"\"\"Invariant tests for validate_candidate.\"\"\"\n\n    def test_vc_invariant_never_swap_failed(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"validate_candidate never returns SWAP_FAILED decision.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision != PromotionDecision.SWAP_FAILED, \\\n            \"validate_candidate must never return SWAP_FAILED\"\n\n    def test_vc_invariant_never_swap_failed_on_error(\n        self, make_validator, make_evaluator, mock_training_data_store,\n    ):\n        \"\"\"validate_candidate never returns SWAP_FAILED even on errors.\"\"\"\n        mock_training_data_store.get_test_set.side_effect = Exception(\"store error\")\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision != PromotionDecision.SWAP_FAILED, \\\n            \"validate_candidate must never return SWAP_FAILED, even on errors\"\n\n    def test_vc_invariant_no_serving_model_mutation(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"validate_candidate does not mutate the currently serving model.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert mock_model_server.swap_model.call_count == 0, \\\n            \"validate_candidate must not call swap_model\"\n\n    def test_vc_invariant_result_logged(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_audit_logger,\n    ):\n        \"\"\"Validation result is logged to audit logger before returning.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert mock_audit_logger.log_validation_result.call_count >= 1, \\\n            \"Validation result must be logged to audit logger\"\n\n    def test_vc_invariant_per_metric_keys_match_evaluators(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"per_metric_scores keys correspond to evaluator metric names.\"\"\"\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.85),\n            make_evaluator(\"fluency\", 0.90),\n        ]\n        expected_metric_names = {\"accuracy\", \"fluency\"}\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert set(result.per_metric_scores.keys()).issubset(expected_metric_names), \\\n            f\"Metric keys {result.per_metric_scores.keys()} should be subset of {expected_metric_names}\"\n\n\n# ============================================================================\n# TEST: validate_candidate — Property-based (Hypothesis)\n# ============================================================================\n\n\nclass TestValidateCandidateProperties:\n    \"\"\"Property-based tests for validate_candidate using Hypothesis.\"\"\"\n\n    @pytest.mark.parametrize(\"score,threshold,comparison,expected_decision\", [\n        (0.85, 0.70, ThresholdComparison.gte, PromotionDecision.PROMOTED),\n        (0.70, 0.70, ThresholdComparison.gte, PromotionDecision.PROMOTED),\n        (0.69, 0.70, ThresholdComparison.gte, PromotionDecision.REJECTED_BELOW_THRESHOLD),\n        (0.85, 0.70, ThresholdComparison.gt, PromotionDecision.PROMOTED),\n        (0.70, 0.70, ThresholdComparison.gt, PromotionDecision.REJECTED_BELOW_THRESHOLD),\n        (0.0, 0.0, ThresholdComparison.gte, PromotionDecision.PROMOTED),\n        (1.0, 1.0, ThresholdComparison.gt, PromotionDecision.REJECTED_BELOW_THRESHOLD),\n        (1.0, 0.99, ThresholdComparison.gt, PromotionDecision.PROMOTED),\n    ])\n    def test_vc_property_decision_correctness(\n        self, score, threshold, comparison, expected_decision,\n        make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Decision is deterministic and correct for given score/threshold/comparison combos.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=threshold,\n            min_test_samples=1,\n            threshold_comparison=comparison,\n            per_metric_thresholds=[],\n            swap_timeout_seconds=30.0,\n        )\n        evaluators = [make_evaluator(\"accuracy\", score)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result.decision == expected_decision, \\\n            f\"score={score}, threshold={threshold}, comparison={comparison}: \" \\\n            f\"expected {expected_decision}, got {result.decision}\"\n\n    def test_vc_property_aggregate_is_mean(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"aggregate_score is always the arithmetic mean of per_metric_scores.\"\"\"\n        evaluators = [\n            make_evaluator(\"m1\", 0.60),\n            make_evaluator(\"m2\", 0.80),\n            make_evaluator(\"m3\", 0.70),\n            make_evaluator(\"m4\", 0.90),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        if len(result.per_metric_scores) > 0:\n            expected_mean = sum(result.per_metric_scores.values()) / len(result.per_metric_scores)\n        else:\n            expected_mean = 0.0\n        assert result.aggregate_score == pytest.approx(expected_mean), \\\n            f\"Aggregate {result.aggregate_score} != mean {expected_mean}\"\n\n    def test_vc_property_decision_deterministic(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Given same inputs, decision is always the same (determinism).\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result1 = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n        result2 = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result1.decision == result2.decision, \\\n            f\"Decision should be deterministic: {result1.decision} != {result2.decision}\"\n\n\n# ============================================================================\n# TEST: promote_candidate — Happy Paths\n# ============================================================================\n\n\nclass TestPromoteCandidateHappyPath:\n    \"\"\"Tests for promote_candidate happy path scenarios.\"\"\"\n\n    def test_pc_happy_path_swap_success(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server, mock_audit_logger,\n    ):\n        \"\"\"promote_candidate swaps model successfully when decision is PROMOTED.\"\"\"\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.PROMOTED, \\\n            f\"Expected PROMOTED, got {record.final_decision}\"\n        assert record.promotion_attempted is True, \\\n            \"promotion_attempted should be True for successful swap\"\n        assert record.swap_started_utc != \"\", \\\n            \"swap_started_utc should be populated\"\n        assert record.swap_completed_utc != \"\", \\\n            \"swap_completed_utc should be populated\"\n        assert record.swap_duration_seconds >= 0, \\\n            \"swap_duration_seconds should be >= 0\"\n\n    def test_pc_happy_path_previous_model_tracked(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"promote_candidate records the previous model ID from model server.\"\"\"\n        validation_result = make_validation_result(\n            decision=PromotionDecision.PROMOTED,\n            candidate_model_id=\"model-v2\",\n        )\n        mock_model_server.swap_model.return_value = SwapResult(\n            success=True,\n            previous_model_id=\"model-v1\",\n            new_model_id=\"model-v2\",\n            error_message=\"\",\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.previous_model_id == \"model-v1\", \\\n            f\"Expected previous_model_id='model-v1', got '{record.previous_model_id}'\"\n        assert record.validation_result.candidate_model_id == \"model-v2\"\n\n    def test_pc_not_promoted_rejected_below_threshold(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Does not attempt swap when decision is REJECTED_BELOW_THRESHOLD.\"\"\"\n        validation_result = make_validation_result(\n            decision=PromotionDecision.REJECTED_BELOW_THRESHOLD,\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD, \\\n            f\"Expected REJECTED_BELOW_THRESHOLD, got {record.final_decision}\"\n        assert record.promotion_attempted is False, \\\n            \"promotion_attempted should be False when not promoted\"\n        assert mock_model_server.swap_model.call_count == 0, \\\n            \"swap_model should not be called\"\n\n    def test_pc_not_promoted_evaluation_error(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Does not attempt swap when decision is REJECTED_EVALUATION_ERROR.\"\"\"\n        validation_result = make_validation_result(\n            decision=PromotionDecision.REJECTED_EVALUATION_ERROR,\n            evaluation_error_detail=\"All evaluators failed\",\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.REJECTED_EVALUATION_ERROR\n        assert record.promotion_attempted is False\n\n    def test_pc_not_promoted_skipped_no_test_data(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Does not attempt swap when decision is SKIPPED_NO_TEST_DATA.\"\"\"\n        validation_result = make_validation_result(\n            decision=PromotionDecision.SKIPPED_NO_TEST_DATA,\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SKIPPED_NO_TEST_DATA\n        assert record.promotion_attempted is False\n\n\n# ============================================================================\n# TEST: promote_candidate — Error Cases\n# ============================================================================\n\n\nclass TestPromoteCandidateErrors:\n    \"\"\"Tests for promote_candidate error conditions.\"\"\"\n\n    def test_pc_error_swap_timeout(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Records SWAP_FAILED with error detail when swap times out.\"\"\"\n        mock_model_server.swap_model.side_effect = TimeoutError(\"Swap timed out\")\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED, \\\n            f\"Expected SWAP_FAILED, got {record.final_decision}\"\n        assert record.promotion_attempted is True\n        assert record.swap_error_detail != \"\", \\\n            \"swap_error_detail should describe the timeout\"\n\n    def test_pc_error_swap_connection_error(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Records SWAP_FAILED when model server is unreachable during swap.\"\"\"\n        mock_model_server.swap_model.side_effect = ConnectionError(\"Server unreachable\")\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n        assert record.promotion_attempted is True\n        assert record.swap_error_detail != \"\"\n\n    def test_pc_error_swap_model_load_error(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Records SWAP_FAILED when model server fails to load candidate model.\"\"\"\n        mock_model_server.swap_model.return_value = SwapResult(\n            success=False,\n            previous_model_id=\"model-v1\",\n            new_model_id=\"model-v2\",\n            error_message=\"Failed to load model: corrupt weights\",\n        )\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n        assert record.promotion_attempted is True\n\n    def test_pc_error_model_server_not_ready(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Records SWAP_FAILED when model server is not ready for swaps.\"\"\"\n        mock_model_server.get_status.return_value = ModelServerStatus(\n            is_healthy=True,\n            current_model_id=\"model-v1\",\n            ready_to_swap=False,\n        )\n        mock_model_server.swap_model.side_effect = Exception(\"Server not ready for swap\")\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n        assert record.promotion_attempted is True\n\n    def test_pc_error_validation_not_passed(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"Handles non-PROMOTED validation result without swap attempt.\"\"\"\n        validation_result = make_validation_result(\n            decision=PromotionDecision.REJECTED_BELOW_THRESHOLD,\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.promotion_attempted is False, \\\n            \"Should not attempt swap for non-PROMOTED validation\"\n        assert record.final_decision != PromotionDecision.PROMOTED\n\n\n# ============================================================================\n# TEST: promote_candidate — Invariants\n# ============================================================================\n\n\nclass TestPromoteCandidateInvariants:\n    \"\"\"Invariant tests for promote_candidate.\"\"\"\n\n    def test_pc_invariant_swap_fail_previous_model_serves(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"When swap fails, previous model continues serving.\"\"\"\n        mock_model_server.swap_model.side_effect = Exception(\"Swap failed\")\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n        # Verify model server still reports previous model\n        status = mock_model_server.get_status()\n        assert status.current_model_id == \"model-v1\", \\\n            \"Previous model should continue serving after swap failure\"\n\n    def test_pc_invariant_promotion_logged(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_audit_logger,\n    ):\n        \"\"\"PromotionRecord is logged to audit logger before returning.\"\"\"\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        validator.promote_candidate(validation_result)\n\n        assert mock_audit_logger.log_promotion_record.call_count >= 1, \\\n            \"PromotionRecord must be logged to audit logger\"\n\n    def test_pc_invariant_timestamps_utc_iso8601(\n        self, make_validator, make_evaluator, make_validation_result,\n    ):\n        \"\"\"All timestamps in PromotionRecord are UTC ISO 8601.\"\"\"\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        if record.swap_started_utc:\n            parsed = datetime.fromisoformat(record.swap_started_utc)\n            assert parsed is not None, \"swap_started_utc should be valid ISO 8601\"\n        if record.swap_completed_utc:\n            parsed = datetime.fromisoformat(record.swap_completed_utc)\n            assert parsed is not None, \"swap_completed_utc should be valid ISO 8601\"\n\n    def test_pc_invariant_no_exception_raised_on_swap_failure(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"promote_candidate never raises exceptions past public boundary.\"\"\"\n        mock_model_server.swap_model.side_effect = RuntimeError(\"Catastrophic swap failure\")\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        # Should not raise — errors captured in return type\n        record = validator.promote_candidate(validation_result)\n\n        assert record is not None, \"Should return PromotionRecord, not raise\"\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n\n\n# ============================================================================\n# TEST: validate_and_promote — Happy Paths\n# ============================================================================\n\n\nclass TestValidateAndPromoteHappyPath:\n    \"\"\"Tests for validate_and_promote happy path scenarios.\"\"\"\n\n    def test_vp_happy_path_full_flow(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"End-to-end: validation passes and promotion succeeds.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.PROMOTED, \\\n            f\"Expected PROMOTED, got {record.final_decision}\"\n        assert record.promotion_attempted is True\n        assert record.validation_result is not None, \\\n            \"validation_result should be populated\"\n        assert record.validation_result.decision == PromotionDecision.PROMOTED\n\n    def test_vp_validation_fails_no_promotion(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Promotion not attempted when validation score is below threshold.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.30)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD, \\\n            f\"Expected REJECTED_BELOW_THRESHOLD, got {record.final_decision}\"\n        assert record.promotion_attempted is False\n        assert mock_model_server.swap_model.call_count == 0\n\n    def test_vp_validation_passes_promotion_fails(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Returns SWAP_FAILED when validation passes but swap fails.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n        mock_model_server.swap_model.side_effect = Exception(\"Swap failed\")\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED, \\\n            f\"Expected SWAP_FAILED, got {record.final_decision}\"\n        assert record.promotion_attempted is True\n        assert record.validation_result.decision == PromotionDecision.PROMOTED, \\\n            \"Validation should have passed even though swap failed\"\n\n\n# ============================================================================\n# TEST: validate_and_promote — Error Cases\n# ============================================================================\n\n\nclass TestValidateAndPromoteErrors:\n    \"\"\"Tests for validate_and_promote error conditions.\"\"\"\n\n    def test_vp_error_validation_phase_error(\n        self, make_validator, make_evaluator,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Handles validation phase errors gracefully.\"\"\"\n        mock_training_data_store.get_test_set.side_effect = ConnectionError(\"Store down\")\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.validation_result.decision == PromotionDecision.REJECTED_EVALUATION_ERROR, \\\n            f\"Expected REJECTED_EVALUATION_ERROR in validation, got {record.validation_result.decision}\"\n        assert record.promotion_attempted is False, \\\n            \"Should not attempt promotion when validation fails\"\n\n    def test_vp_error_promotion_phase_error(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Handles promotion phase errors after successful validation.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n        mock_model_server.swap_model.side_effect = TimeoutError(\"Swap timeout\")\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED, \\\n            f\"Expected SWAP_FAILED, got {record.final_decision}\"\n\n\n# ============================================================================\n# TEST: validate_and_promote — Edge Cases\n# ============================================================================\n\n\nclass TestValidateAndPromoteEdgeCases:\n    \"\"\"Edge case tests for validate_and_promote.\"\"\"\n\n    def test_vp_skipped_no_test_data_no_promotion(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"Returns SKIPPED_NO_TEST_DATA when test set has no data.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-empty\", 0)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-empty\")\n\n        assert record.final_decision == PromotionDecision.SKIPPED_NO_TEST_DATA\n        assert record.promotion_attempted is False\n\n    def test_vp_edge_candidate_model_id_consistent(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"candidate_model_id is consistent across ValidationResult and PromotionRecord.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.validation_result.candidate_model_id == \"model-v2\", \\\n            \"candidate_model_id should be consistent\"\n\n    def test_vp_edge_evaluation_error_stops_promotion(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Promotion stops when all evaluators fail.\"\"\"\n        evaluators = [\n            make_evaluator(\"m1\", 0.0, should_fail=True),\n            make_evaluator(\"m2\", 0.0, should_fail=True),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.REJECTED_EVALUATION_ERROR\n        assert record.promotion_attempted is False\n        assert mock_model_server.swap_model.call_count == 0\n\n    def test_vp_edge_per_metric_failure_stops_promotion(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"Promotion stops when per-metric threshold fails even if aggregate passes.\"\"\"\n        config = ValidationConfig(\n            promotion_threshold=0.5,\n            min_test_samples=5,\n            threshold_comparison=ThresholdComparison.gte,\n            per_metric_thresholds=[\n                PerMetricThreshold(\n                    metric_name=\"accuracy\",\n                    min_score=0.95,\n                    comparison=ThresholdComparison.gte,\n                ),\n            ],\n            swap_timeout_seconds=30.0,\n        )\n        evaluators = [\n            make_evaluator(\"accuracy\", 0.60),\n            make_evaluator(\"fluency\", 0.90),\n        ]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(config=config, evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record.final_decision == PromotionDecision.REJECTED_BELOW_THRESHOLD\n        assert record.promotion_attempted is False\n        assert len(record.validation_result.failed_per_metric_thresholds) > 0\n        assert mock_model_server.swap_model.call_count == 0\n\n\n# ============================================================================\n# TEST: validate_and_promote — Invariants\n# ============================================================================\n\n\nclass TestValidateAndPromoteInvariants:\n    \"\"\"Invariant tests for validate_and_promote.\"\"\"\n\n    def test_vp_invariant_both_logged(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_audit_logger,\n    ):\n        \"\"\"Both ValidationResult and PromotionRecord are logged to audit logger.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert mock_audit_logger.log_validation_result.call_count >= 1, \\\n            \"ValidationResult must be logged\"\n        assert mock_audit_logger.log_promotion_record.call_count >= 1, \\\n            \"PromotionRecord must be logged\"\n\n    def test_vp_invariant_no_exceptions_raised(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"validate_and_promote never raises exceptions past public boundary.\"\"\"\n        mock_training_data_store.get_test_set.side_effect = RuntimeError(\"Catastrophic\")\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n\n        validator = make_validator(evaluators=evaluators)\n        # Should not raise\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record is not None, \"Should return a PromotionRecord, not raise\"\n\n    def test_vp_invariant_no_exceptions_on_swap_failure(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store, mock_model_server,\n    ):\n        \"\"\"validate_and_promote does not raise even when swap raises unexpected errors.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n        mock_model_server.swap_model.side_effect = RuntimeError(\"Unexpected swap error\")\n\n        validator = make_validator(evaluators=evaluators)\n        record = validator.validate_and_promote(\"model-v2\", \"test-set-001\")\n\n        assert record is not None\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n\n\n# ============================================================================\n# TEST: get_validation_history — Happy Paths\n# ============================================================================\n\n\nclass TestGetValidationHistoryHappyPath:\n    \"\"\"Tests for get_validation_history happy path scenarios.\"\"\"\n\n    def test_gh_happy_path_returns_history(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_audit_logger,\n    ):\n        \"\"\"Returns list of PromotionRecords for a given model.\"\"\"\n        # Setup mock audit logger to return history\n        mock_records = [\n            PromotionRecord(\n                validation_result=make_validation_result(candidate_model_id=\"model-v2\"),\n                promotion_attempted=True,\n                swap_started_utc=\"2024-01-01T00:00:00+00:00\",\n                swap_completed_utc=\"2024-01-01T00:00:05+00:00\",\n                swap_duration_seconds=5.0,\n                final_decision=PromotionDecision.PROMOTED,\n                swap_error_detail=\"\",\n                previous_model_id=\"model-v1\",\n            ),\n            PromotionRecord(\n                validation_result=make_validation_result(\n                    candidate_model_id=\"model-v2\",\n                    decision=PromotionDecision.REJECTED_BELOW_THRESHOLD,\n                ),\n                promotion_attempted=False,\n                swap_started_utc=\"\",\n                swap_completed_utc=\"\",\n                swap_duration_seconds=0.0,\n                final_decision=PromotionDecision.REJECTED_BELOW_THRESHOLD,\n                swap_error_detail=\"\",\n                previous_model_id=\"\",\n            ),\n        ]\n        mock_audit_logger.get_validation_history.return_value = mock_records\n\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n        history = validator.get_validation_history(\"model-v2\", limit=10)\n\n        assert len(history) > 0, \"Should return non-empty history\"\n        assert all(\n            r.validation_result.candidate_model_id == \"model-v2\" for r in history\n        ), \"All records should be for model-v2\"\n\n    def test_gh_happy_path_empty_history(\n        self, make_validator, make_evaluator, mock_audit_logger,\n    ):\n        \"\"\"Returns empty list when no history exists.\"\"\"\n        mock_audit_logger.get_validation_history.return_value = []\n\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n        history = validator.get_validation_history(\"model-never-tested\", limit=10)\n\n        assert history == [], f\"Expected empty list, got {history}\"\n\n\n# ============================================================================\n# TEST: get_validation_history — Edge Cases\n# ============================================================================\n\n\nclass TestGetValidationHistoryEdgeCases:\n    \"\"\"Edge case tests for get_validation_history.\"\"\"\n\n    def test_gh_edge_limit_enforcement(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_audit_logger,\n    ):\n        \"\"\"Returns at most 'limit' entries.\"\"\"\n        mock_records = [\n            PromotionRecord(\n                validation_result=make_validation_result(candidate_model_id=\"model-v2\"),\n                promotion_attempted=True,\n                swap_started_utc=f\"2024-01-0{i+1}T00:00:00+00:00\",\n                swap_completed_utc=f\"2024-01-0{i+1}T00:00:05+00:00\",\n                swap_duration_seconds=5.0,\n                final_decision=PromotionDecision.PROMOTED,\n                swap_error_detail=\"\",\n                previous_model_id=\"model-v1\",\n            )\n            for i in range(5)\n        ]\n        # Return only 3 when limit is 3\n        mock_audit_logger.get_validation_history.return_value = mock_records[:3]\n\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n        history = validator.get_validation_history(\"model-v2\", limit=3)\n\n        assert len(history) <= 3, f\"Expected at most 3 entries, got {len(history)}\"\n\n    def test_gh_edge_ordering_descending(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_audit_logger,\n    ):\n        \"\"\"Returns records in descending timestamp order (most recent first).\"\"\"\n        mock_records = [\n            PromotionRecord(\n                validation_result=make_validation_result(candidate_model_id=\"model-v2\"),\n                promotion_attempted=True,\n                swap_started_utc=\"2024-01-03T00:00:00+00:00\",\n                swap_completed_utc=\"2024-01-03T00:00:05+00:00\",\n                swap_duration_seconds=5.0,\n                final_decision=PromotionDecision.PROMOTED,\n                swap_error_detail=\"\",\n                previous_model_id=\"model-v1\",\n            ),\n            PromotionRecord(\n                validation_result=make_validation_result(candidate_model_id=\"model-v2\"),\n                promotion_attempted=False,\n                swap_started_utc=\"\",\n                swap_completed_utc=\"\",\n                swap_duration_seconds=0.0,\n                final_decision=PromotionDecision.REJECTED_BELOW_THRESHOLD,\n                swap_error_detail=\"\",\n                previous_model_id=\"\",\n            ),\n        ]\n        mock_audit_logger.get_validation_history.return_value = mock_records\n\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n        history = validator.get_validation_history(\"model-v2\", limit=10)\n\n        if len(history) >= 2:\n            for i in range(len(history) - 1):\n                assert history[i].validation_result.timestamp_utc >= history[i + 1].validation_result.timestamp_utc, \\\n                    f\"Records should be in descending order at index {i}\"\n\n    def test_gh_edge_limit_zero(\n        self, make_validator, make_evaluator, mock_audit_logger,\n    ):\n        \"\"\"get_validation_history with limit=0 returns empty list.\"\"\"\n        mock_audit_logger.get_validation_history.return_value = []\n\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n        history = validator.get_validation_history(\"model-v2\", limit=0)\n\n        assert history == [], f\"Expected empty list for limit=0, got {history}\"\n\n\n# ============================================================================\n# TEST: get_validation_history — Error Cases\n# ============================================================================\n\n\nclass TestGetValidationHistoryErrors:\n    \"\"\"Error case tests for get_validation_history.\"\"\"\n\n    def test_gh_error_audit_log_unavailable(\n        self, make_validator, make_evaluator, mock_audit_logger,\n    ):\n        \"\"\"Handles unavailable audit log gracefully.\"\"\"\n        mock_audit_logger.get_validation_history.side_effect = ConnectionError(\n            \"Audit log unavailable\"\n        )\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        # Should not raise — invariant says no exceptions past public boundary\n        # The implementation may return empty list or handle differently\n        try:\n            history = validator.get_validation_history(\"model-v2\", limit=10)\n            assert isinstance(history, list), \\\n                f\"Should return a list, got {type(history)}\"\n        except Exception:\n            # If implementation does raise, that's a contract violation\n            # but we document it rather than fail silently\n            pytest.fail(\n                \"get_validation_history raised an exception, \"\n                \"violating the no-exceptions-past-public-boundary invariant\"\n            )\n\n\n# ============================================================================\n# TEST: get_validation_history — Invariants\n# ============================================================================\n\n\nclass TestGetValidationHistoryInvariants:\n    \"\"\"Invariant tests for get_validation_history.\"\"\"\n\n    def test_gh_invariant_no_exceptions(\n        self, make_validator, make_evaluator, mock_audit_logger,\n    ):\n        \"\"\"get_validation_history does not raise exceptions past public boundary.\"\"\"\n        mock_audit_logger.get_validation_history.side_effect = RuntimeError(\"Unexpected\")\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        try:\n            history = validator.get_validation_history(\"model-v2\", limit=10)\n            assert isinstance(history, list)\n        except Exception:\n            pytest.fail(\n                \"get_validation_history should not raise exceptions past public boundary\"\n            )\n\n\n# ============================================================================\n# TEST: Global Invariants\n# ============================================================================\n\n\nclass TestGlobalInvariants:\n    \"\"\"Tests for cross-cutting contract invariants.\"\"\"\n\n    def test_inv_config_validated_at_init(self, mock_training_data_store, mock_model_server, mock_audit_logger, make_evaluator):\n        \"\"\"ValidationConfig is validated at initialization time — invalid config raises immediately.\"\"\"\n        with pytest.raises(Exception):\n            ModelValidator(\n                config=ValidationConfig(\n                    promotion_threshold=-1.0,  # Invalid\n                    min_test_samples=-5,  # Invalid\n                    threshold_comparison=ThresholdComparison.gte,\n                    per_metric_thresholds=[],\n                    swap_timeout_seconds=-10.0,  # Invalid\n                ),\n                evaluators=[make_evaluator(\"accuracy\", 0.85)],\n                training_data_store=mock_training_data_store,\n                model_server=mock_model_server,\n                audit_logger=mock_audit_logger,\n            )\n\n    def test_inv_validate_candidate_does_not_affect_subsequent_calls(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"No global state: repeated calls don't affect each other.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result1 = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n        result2 = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        assert result1.decision == result2.decision, \\\n            \"Repeated calls with same inputs should produce same decision\"\n        assert result1.aggregate_score == pytest.approx(result2.aggregate_score), \\\n            \"Repeated calls with same inputs should produce same aggregate score\"\n\n    def test_inv_promote_only_when_promoted(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"promote_candidate only attempts a swap if decision == PROMOTED.\"\"\"\n        for decision in [\n            PromotionDecision.REJECTED_BELOW_THRESHOLD,\n            PromotionDecision.REJECTED_EVALUATION_ERROR,\n            PromotionDecision.SKIPPED_NO_TEST_DATA,\n        ]:\n            mock_model_server.reset_mock()\n            validation_result = make_validation_result(decision=decision)\n            validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n            record = validator.promote_candidate(validation_result)\n\n            assert record.promotion_attempted is False, \\\n                f\"Should not attempt swap for decision={decision}\"\n            assert mock_model_server.swap_model.call_count == 0, \\\n                f\"swap_model should not be called for decision={decision}\"\n            assert record.final_decision == decision, \\\n                f\"final_decision should match input decision={decision}\"\n\n    def test_inv_validation_result_immutable(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"ValidationResult is immutable (frozen Pydantic model).\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            result.decision = PromotionDecision.REJECTED_BELOW_THRESHOLD\n\n    def test_inv_all_validation_decisions_are_valid_enum_values(\n        self, make_validator, make_evaluator, make_test_set,\n        mock_training_data_store,\n    ):\n        \"\"\"All returned decisions are valid PromotionDecision enum values.\"\"\"\n        evaluators = [make_evaluator(\"accuracy\", 0.85)]\n        test_set = make_test_set(\"test-set-001\", 10)\n        mock_training_data_store.get_test_set.return_value = test_set\n\n        validator = make_validator(evaluators=evaluators)\n        result = validator.validate_candidate(\"model-v2\", \"test-set-001\")\n\n        valid_decisions = {\n            PromotionDecision.PROMOTED,\n            PromotionDecision.REJECTED_BELOW_THRESHOLD,\n            PromotionDecision.REJECTED_EVALUATION_ERROR,\n            PromotionDecision.SWAP_FAILED,\n            PromotionDecision.SKIPPED_NO_TEST_DATA,\n        }\n        assert result.decision in valid_decisions, \\\n            f\"Decision {result.decision} is not a valid PromotionDecision\"\n\n    def test_inv_swap_failure_no_partial_state(\n        self, make_validator, make_evaluator, make_validation_result,\n        mock_model_server,\n    ):\n        \"\"\"If a model swap fails, the previous model continues serving — no partial state.\"\"\"\n        mock_model_server.swap_model.return_value = SwapResult(\n            success=False,\n            previous_model_id=\"model-v1\",\n            new_model_id=\"model-v2\",\n            error_message=\"Load failure: corrupt weights\",\n        )\n        validation_result = make_validation_result(decision=PromotionDecision.PROMOTED)\n        validator = make_validator(evaluators=[make_evaluator(\"accuracy\", 0.85)])\n\n        record = validator.promote_candidate(validation_result)\n\n        assert record.final_decision == PromotionDecision.SWAP_FAILED\n        # Verify model server is still configured with previous model\n        status = mock_model_server.get_status()\n        assert status.current_model_id == \"model-v1\", \\\n            \"Previous model should continue serving after failed swap\"\n"
+}

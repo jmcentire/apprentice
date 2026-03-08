@@ -1,0 +1,1222 @@
+{
+  "component_id": "budget_manager",
+  "name": "Budget Manager",
+  "description": "Enforces hard spending limits on remote API usage. Tracks actual spend per request (reported by Remote API Client after each call). Maintains running totals for configurable periods: daily, weekly, monthly. Persists budget state to disk (JSON) for survival across restarts. On budget check (called before every remote request): returns allowed/denied. When budget exhausted in Phase 1 (no local model): raises BudgetExhaustedError — honest failure, no silent degradation. When budget exhausted in Phase 2/3: forces local-only mode with logged warning (accepts quality risk). Tracks estimated savings (requests served locally × estimated remote cost). Reports cost trajectory showing convergence toward lower spend. Budget resets on period boundaries (midnight for daily, etc.). Never exceeds limits — check-then-spend with no race conditions (single-threaded). Implements BudgetManagerProtocol (typing.Protocol). All monetary values use Decimal (serialized as strings). Dependency injection of state file path and clock function for testability.",
+  "version": 1,
+  "types": [
+    {
+      "name": "BudgetPeriod",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "inner_types": [],
+      "description": "Configurable budget tracking periods. StrEnum with values used as keys in limits and running totals."
+    },
+    {
+      "name": "Money",
+      "kind": "primitive",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Type alias: Annotated[Decimal, Field(ge=Decimal('0'), decimal_places=6)]. All monetary values in the budget system use this type. Serialized as strings in JSON to preserve precision. Represents non-negative currency amounts with up to 6 decimal places."
+    },
+    {
+      "name": "PeriodLimit",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period this limit applies to.",
+          "validators": []
+        },
+        {
+          "name": "limit",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Maximum allowed spend for this period. Must be > 0.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "Period limit must be strictly positive."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A spending limit for a single budget period. Parsed from YAML config."
+    },
+    {
+      "name": "BudgetConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_limits",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of spending limits per period. At least one period must be configured. No duplicate periods allowed.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "At least one period limit must be configured."
+            },
+            {
+              "kind": "custom",
+              "expression": "no_duplicate_periods(value)",
+              "error_message": "Duplicate budget periods are not allowed."
+            }
+          ]
+        },
+        {
+          "name": "timezone",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "IANA timezone string (e.g. 'America/New_York') for computing period boundaries. Internally all timestamps are UTC; this timezone determines when daily/weekly/monthly periods reset.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "valid_iana_timezone(value)",
+              "error_message": "Must be a valid IANA timezone string recognized by zoneinfo.ZoneInfo."
+            }
+          ]
+        },
+        {
+          "name": "estimated_remote_cost_per_request",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Default estimated cost of a single remote API request. Used for savings tracking when serving locally and as default estimated_cost in check_budget if caller does not provide a specific estimate.",
+          "validators": [
+            {
+              "kind": "custom",
+              "expression": "value > Decimal('0')",
+              "error_message": "Estimated remote cost per request must be strictly positive."
+            }
+          ]
+        },
+        {
+          "name": "state_file_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path (as string) for persisting BudgetState as JSON. Parent directory must exist. Atomic writes (write-temp-then-rename) ensure no corruption.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "State file path must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "warn_threshold_fraction",
+          "type_ref": "float",
+          "required": false,
+          "default": "0.8",
+          "description": "Fraction of period limit (0.0–1.0) at which to emit a warning log. E.g. 0.8 means warn at 80% spend.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 < value <= 1.0",
+              "error_message": "Warn threshold fraction must be in (0.0, 1.0]."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Budget configuration parsed from YAML. Strict validation — fails fast on invalid config at startup, never silently defaults. Immutable after construction."
+    },
+    {
+      "name": "PeriodRunningTotal",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period.",
+          "validators": []
+        },
+        {
+          "name": "total_spend",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Total spend accumulated in the current period window.",
+          "validators": []
+        },
+        {
+          "name": "period_start_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp marking the start of the current period window.",
+          "validators": []
+        },
+        {
+          "name": "period_end_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp marking the end of the current period window (exclusive). When current time >= this value, the period resets.",
+          "validators": []
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of remote API requests made in this period.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Request count must be non-negative."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Running total of spend for a single budget period. Part of persisted BudgetState."
+    },
+    {
+      "name": "SpendHistoryEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the spend was recorded.",
+          "validators": []
+        },
+        {
+          "name": "actual_cost",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "The actual cost of the remote API call.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The remote model identifier used for this request.",
+          "validators": []
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier for this request.",
+          "validators": []
+        },
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the request, for audit trail correlation.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single historical spend entry. Stored in BudgetState for cost trajectory analysis and audit."
+    },
+    {
+      "name": "BudgetState",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "schema_version",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Schema version for forward-compatible migration. Current version: 1.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 1",
+              "error_message": "Schema version must be >= 1."
+            }
+          ]
+        },
+        {
+          "name": "running_totals",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Running totals for each configured budget period.",
+          "validators": []
+        },
+        {
+          "name": "spend_history",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Chronologically ordered list of individual spend entries within the current retention window. Used for cost trajectory computation.",
+          "validators": []
+        },
+        {
+          "name": "total_estimated_savings",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Cumulative estimated savings from requests served locally instead of remotely. Calculated as local_request_count × estimated_remote_cost_per_request.",
+          "validators": []
+        },
+        {
+          "name": "total_local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Cumulative count of requests served by the local model (used for savings calculation).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0",
+              "error_message": "Total local requests must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "last_updated_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the last state mutation.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Full persisted budget state. Written atomically to JSON after every record_spend(). Decimal values serialized as strings. Loaded on startup to survive restarts."
+    },
+    {
+      "name": "BudgetVerdict",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "allowed",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if the estimated cost fits within all period limits. False if any period would be exceeded.",
+          "validators": []
+        },
+        {
+          "name": "remaining_by_period",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping of BudgetPeriod value (str) -> remaining Money (str-serialized Decimal). Shows headroom for each configured period.",
+          "validators": []
+        },
+        {
+          "name": "denial_reasons",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Human-readable reasons for denial, one per exceeded period. Empty list if allowed=True.",
+          "validators": []
+        },
+        {
+          "name": "denied_periods",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "List of periods that would be exceeded by this request. Empty if allowed=True.",
+          "validators": []
+        },
+        {
+          "name": "nearest_reset_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the nearest period reset among denied periods. Empty string if allowed=True. Useful for communicating when budget becomes available again.",
+          "validators": []
+        },
+        {
+          "name": "checked_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this check was performed.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Result of a budget check. Returned by check_budget() before every remote request. The Router uses this to decide whether to proceed with remote call, fall back to local, or raise BudgetExhaustedError (Phase 1)."
+    },
+    {
+      "name": "SpendRecord",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "request_id",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Unique identifier for the request. Must be non-empty. Used for audit trail correlation.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "Request ID must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "actual_cost",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "The actual cost of the remote API call as reported by the client.",
+          "validators": []
+        },
+        {
+          "name": "model",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The remote model identifier (e.g. 'claude-3-sonnet', 'gpt-4o').",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "Model identifier must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "task_type",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "The task type identifier for this request.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "min=1",
+              "error_message": "Task type must not be empty."
+            }
+          ]
+        },
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when the remote API call completed. If empty, the budget manager uses its injected clock.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Input to record_spend(). Reported by the Remote API Client after each successful remote call with the actual cost incurred."
+    },
+    {
+      "name": "CostTrajectoryPoint",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "timestamp_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp for this data point.",
+          "validators": []
+        },
+        {
+          "name": "cumulative_remote_spend",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Total remote API spend up to this point.",
+          "validators": []
+        },
+        {
+          "name": "cumulative_estimated_savings",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Total estimated savings from local serving up to this point.",
+          "validators": []
+        },
+        {
+          "name": "remote_request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Cumulative remote request count at this point.",
+          "validators": []
+        },
+        {
+          "name": "local_request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Cumulative local request count at this point.",
+          "validators": []
+        },
+        {
+          "name": "local_fraction",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Fraction of total requests served locally (0.0–1.0). Shows convergence toward local-only serving.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Local fraction must be between 0.0 and 1.0."
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "A single data point in the cost trajectory, showing spend rate over time to visualize convergence toward lower spend as the local model improves."
+    },
+    {
+      "name": "PeriodSpendSummary",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period.",
+          "validators": []
+        },
+        {
+          "name": "limit",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "The configured limit for this period.",
+          "validators": []
+        },
+        {
+          "name": "current_spend",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Current spend in this period.",
+          "validators": []
+        },
+        {
+          "name": "remaining",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Remaining budget in this period (limit - current_spend).",
+          "validators": []
+        },
+        {
+          "name": "utilization_fraction",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Fraction of the period limit currently used (0.0–1.0+). Can exceed 1.0 if a single request pushed spend over limit (allowed since check passed pre-spend).",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Utilization fraction must be non-negative."
+            }
+          ]
+        },
+        {
+          "name": "request_count",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Number of remote requests in this period.",
+          "validators": []
+        },
+        {
+          "name": "period_start_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the current period window start.",
+          "validators": []
+        },
+        {
+          "name": "period_end_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the current period window end.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Spend summary for a single budget period, included in BudgetReport."
+    },
+    {
+      "name": "BudgetReport",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "period_summaries",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Spend summary for each configured budget period.",
+          "validators": []
+        },
+        {
+          "name": "total_estimated_savings",
+          "type_ref": "Money",
+          "required": true,
+          "default": "",
+          "description": "Cumulative estimated savings from requests served locally.",
+          "validators": []
+        },
+        {
+          "name": "total_local_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of requests served locally.",
+          "validators": []
+        },
+        {
+          "name": "total_remote_requests",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Total number of remote requests across all time (sum of all period request counts may differ due to period resets; this is the true total from spend history).",
+          "validators": []
+        },
+        {
+          "name": "cost_trajectory",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Chronological data points showing spend trajectory over time. Used for convergence visualization.",
+          "validators": []
+        },
+        {
+          "name": "generated_at_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of when this report was generated.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Comprehensive budget report returned by get_report(). Includes per-period summaries, estimated savings, and cost trajectory data."
+    },
+    {
+      "name": "BudgetExhaustedError",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "message",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable error message.",
+          "validators": []
+        },
+        {
+          "name": "denied_periods",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Which budget periods are exhausted.",
+          "validators": []
+        },
+        {
+          "name": "period_details",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Mapping of period (str) -> dict with keys 'limit' (str), 'current_spend' (str), 'resets_at_utc' (str). All monetary values as string-serialized Decimals.",
+          "validators": []
+        },
+        {
+          "name": "nearest_reset_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC timestamp of the soonest period reset among denied periods.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Rich error raised when budget is exhausted and the system cannot degrade gracefully (Phase 1: no local model available). Extends ApprenticeError. Contains full context about which period(s) are exhausted, current spend, limits, and when budget resets."
+    }
+  ],
+  "functions": [
+    {
+      "name": "check_budget",
+      "description": "Checks whether a remote API request with the given estimated cost is allowed under all configured period limits. Called by the Router before every remote API request. Performs period boundary resets if current time has passed any period's end timestamp. Single-threaded check-then-spend: no race conditions. Does NOT mutate spend totals — only reads current state and returns a verdict. If estimated_cost is not provided, uses the configured estimated_remote_cost_per_request.",
+      "inputs": [
+        {
+          "name": "estimated_cost",
+          "type_ref": "Money",
+          "required": false,
+          "default": "",
+          "description": "Estimated cost of the upcoming remote API request. If not provided (default), uses BudgetConfig.estimated_remote_cost_per_request.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetVerdict",
+      "error_cases": [
+        {
+          "name": "invalid_estimated_cost",
+          "condition": "estimated_cost is provided and is negative.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "estimated_cost must be non-negative."
+          }
+        },
+        {
+          "name": "state_load_failure",
+          "condition": "Persisted state file exists but cannot be read or parsed.",
+          "error_type": "BudgetStateCorruptedError",
+          "error_data": {
+            "detail": "Budget state file is corrupted or has an incompatible schema version."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager has been initialized with a valid BudgetConfig.",
+        "If estimated_cost is provided, it must be >= 0."
+      ],
+      "postconditions": [
+        "Returned BudgetVerdict.allowed is True if and only if (current_spend + estimated_cost) <= limit for ALL configured periods.",
+        "Returned BudgetVerdict.remaining_by_period contains an entry for every configured period.",
+        "Returned BudgetVerdict.denied_periods is empty if and only if allowed is True.",
+        "If any period boundary has passed, that period's running total has been reset to zero before the check.",
+        "No spend totals are modified by this call."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Reads persisted budget state if not yet loaded into memory."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs budget check at DEBUG level; logs warning if spend exceeds warn_threshold_fraction."
+        },
+        {
+          "kind": "writes_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "If a period boundary reset occurred, the updated state is persisted atomically."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 5,
+        "max_memory_mb": null,
+        "complexity": "O(p) where p = number of configured periods (max 3)"
+      }
+    },
+    {
+      "name": "record_spend",
+      "description": "Records actual spend from a completed remote API request. Called by the Remote API Client after each successful call. Updates running totals for all applicable periods. Appends to spend history. Persists updated state atomically to disk (write-temp-then-rename). Single-threaded: no race conditions.",
+      "inputs": [
+        {
+          "name": "record",
+          "type_ref": "SpendRecord",
+          "required": true,
+          "default": "",
+          "description": "The spend record from the completed remote API call. Contains actual cost, model, task type, request ID, and timestamp.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_spend_record",
+          "condition": "SpendRecord fails Pydantic validation (e.g. empty request_id, negative cost).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "SpendRecord validation failed."
+          }
+        },
+        {
+          "name": "state_persistence_failure",
+          "condition": "Atomic write to state file fails (disk full, permission denied, etc.).",
+          "error_type": "BudgetPersistenceError",
+          "error_data": {
+            "detail": "Failed to persist budget state to disk. In-memory state is still updated."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager has been initialized with a valid BudgetConfig.",
+        "record.actual_cost >= 0.",
+        "record.request_id is non-empty.",
+        "A corresponding check_budget() call returned allowed=True before this spend occurred (enforced by convention, not runtime check)."
+      ],
+      "postconditions": [
+        "All period running totals that contain record.timestamp_utc have been incremented by record.actual_cost.",
+        "record.request_count for each applicable period has been incremented by 1.",
+        "A SpendHistoryEntry has been appended to BudgetState.spend_history.",
+        "BudgetState.last_updated_utc has been set to the current clock time.",
+        "Updated BudgetState has been atomically persisted to the configured state_file_path.",
+        "If any period's spend now exceeds warn_threshold_fraction of its limit, a WARNING-level log has been emitted."
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates in-memory budget state (running totals, spend history).",
+        "Writes updated BudgetState to disk atomically."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.running_totals",
+          "description": "Increments spend totals and request counts for all applicable periods."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.spend_history",
+          "description": "Appends a new SpendHistoryEntry."
+        },
+        {
+          "kind": "writes_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Atomically persists updated BudgetState as JSON (write-temp-then-rename)."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs spend recording at INFO level. Logs WARNING if spend crosses warn_threshold_fraction for any period."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 50,
+        "max_memory_mb": null,
+        "complexity": "O(p) where p = number of configured periods (max 3), plus O(1) amortized file I/O"
+      }
+    },
+    {
+      "name": "record_local_request",
+      "description": "Records that a request was served locally (not via remote API). Increments the local request counter and adds the configured estimated_remote_cost_per_request to the cumulative estimated savings. Used for savings tracking and cost trajectory reporting. Persists updated state atomically.",
+      "inputs": [],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "state_persistence_failure",
+          "condition": "Atomic write to state file fails.",
+          "error_type": "BudgetPersistenceError",
+          "error_data": {
+            "detail": "Failed to persist budget state to disk. In-memory state is still updated."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager has been initialized with a valid BudgetConfig."
+      ],
+      "postconditions": [
+        "BudgetState.total_local_requests has been incremented by 1.",
+        "BudgetState.total_estimated_savings has been incremented by BudgetConfig.estimated_remote_cost_per_request.",
+        "BudgetState.last_updated_utc has been set to the current clock time.",
+        "Updated BudgetState has been atomically persisted to the configured state_file_path."
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Mutates in-memory budget state (local request count, estimated savings).",
+        "Writes updated BudgetState to disk atomically."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.total_local_requests",
+          "description": "Increments local request counter by 1."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "BudgetState.total_estimated_savings",
+          "description": "Adds estimated_remote_cost_per_request to cumulative savings."
+        },
+        {
+          "kind": "writes_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Atomically persists updated BudgetState as JSON."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs local request recording at DEBUG level."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 50,
+        "max_memory_mb": null,
+        "complexity": "O(1) plus O(1) amortized file I/O"
+      }
+    },
+    {
+      "name": "get_report",
+      "description": "Generates a comprehensive budget report with per-period spend summaries, estimated savings, and cost trajectory data points. Read-only operation. Performs period boundary resets if needed before generating the report. Used by the audit/observability system and CLI status commands.",
+      "inputs": [],
+      "output_type": "BudgetReport",
+      "error_cases": [
+        {
+          "name": "state_load_failure",
+          "condition": "Persisted state file exists but cannot be read or parsed.",
+          "error_type": "BudgetStateCorruptedError",
+          "error_data": {
+            "detail": "Budget state file is corrupted or has an incompatible schema version."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager has been initialized with a valid BudgetConfig."
+      ],
+      "postconditions": [
+        "Returned BudgetReport.period_summaries contains exactly one entry per configured period.",
+        "Returned BudgetReport.cost_trajectory is chronologically ordered.",
+        "Returned BudgetReport reflects any period boundary resets that occurred.",
+        "No spend totals are modified by this call (aside from period resets)."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Reads persisted budget state if not yet loaded into memory."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs report generation at DEBUG level."
+        },
+        {
+          "kind": "writes_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "If a period boundary reset occurred, the updated state is persisted atomically."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 20,
+        "max_memory_mb": null,
+        "complexity": "O(p + h) where p = number of periods, h = size of spend_history"
+      }
+    },
+    {
+      "name": "get_verdict_for_phase",
+      "description": "Convenience method that combines check_budget() with phase-aware error handling. For Phase 1 (no local model), raises BudgetExhaustedError if budget is denied. For Phase 2/3 (local model available), returns the BudgetVerdict without raising — the Router uses the verdict to decide routing. This encapsulates the design decision: Phase 1 = hard failure, Phase 2/3 = graceful degradation.",
+      "inputs": [
+        {
+          "name": "phase",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Current operational phase (1, 2, or 3). Phase 1 = no local model, Phase 2 = local+remote, Phase 3 = primarily local.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "1 <= value <= 3",
+              "error_message": "Phase must be 1, 2, or 3."
+            }
+          ]
+        },
+        {
+          "name": "estimated_cost",
+          "type_ref": "Money",
+          "required": false,
+          "default": "",
+          "description": "Estimated cost of the upcoming remote API request. If not provided, uses BudgetConfig.estimated_remote_cost_per_request.",
+          "validators": []
+        }
+      ],
+      "output_type": "BudgetVerdict",
+      "error_cases": [
+        {
+          "name": "budget_exhausted_phase_1",
+          "condition": "phase == 1 and budget check returns allowed=False.",
+          "error_type": "BudgetExhaustedError",
+          "error_data": {
+            "detail": "Budget exhausted in Phase 1 with no local model available. Honest failure — no silent degradation.",
+            "denied_periods": "list of exhausted period names",
+            "nearest_reset_utc": "ISO 8601 UTC timestamp of soonest reset"
+          }
+        },
+        {
+          "name": "invalid_phase",
+          "condition": "phase is not 1, 2, or 3.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Phase must be 1, 2, or 3."
+          }
+        },
+        {
+          "name": "invalid_estimated_cost",
+          "condition": "estimated_cost is provided and is negative.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "estimated_cost must be non-negative."
+          }
+        }
+      ],
+      "preconditions": [
+        "BudgetManager has been initialized with a valid BudgetConfig.",
+        "phase is 1, 2, or 3."
+      ],
+      "postconditions": [
+        "If phase == 1 and verdict.allowed == False, a BudgetExhaustedError has been raised (this function does not return).",
+        "If phase == 1 and verdict.allowed == True, the BudgetVerdict is returned normally.",
+        "If phase == 2 or 3 and verdict.allowed == False, a WARNING-level log has been emitted and the BudgetVerdict is returned (no exception).",
+        "If phase == 2 or 3 and verdict.allowed == True, the BudgetVerdict is returned normally."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs WARNING when budget denied in Phase 2/3 (local-only fallback accepted). Logs ERROR context when raising BudgetExhaustedError in Phase 1."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 5,
+        "max_memory_mb": null,
+        "complexity": "O(p) where p = number of configured periods (max 3)"
+      }
+    },
+    {
+      "name": "initialize",
+      "description": "Factory/initialization method that constructs and returns a fully initialized BudgetManager. Loads existing state from disk if state file exists, otherwise creates fresh state with zero totals and computed period boundaries. Validates BudgetConfig strictly — fails fast with clear error messages. Sets up the injected clock function and state file path. This is the composition root entry point for the Budget Manager component.",
+      "inputs": [
+        {
+          "name": "config",
+          "type_ref": "BudgetConfig",
+          "required": true,
+          "default": "",
+          "description": "Validated budget configuration parsed from YAML.",
+          "validators": []
+        },
+        {
+          "name": "clock",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Callable[[], datetime] — injected clock function returning current UTC datetime. For production: lambda: datetime.now(timezone.utc). For tests: controllable fake clock. Represented as type description string since function types are not directly expressible.",
+          "validators": []
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [
+        {
+          "name": "invalid_config",
+          "condition": "BudgetConfig fails validation (e.g. no period limits, invalid timezone, empty state path).",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Config validation failed with clear message indicating which field is invalid."
+          }
+        },
+        {
+          "name": "state_file_corrupted",
+          "condition": "State file exists but contains invalid JSON or fails BudgetState schema validation.",
+          "error_type": "BudgetStateCorruptedError",
+          "error_data": {
+            "detail": "Budget state file is corrupted. Manual intervention required. Path: {state_file_path}"
+          }
+        },
+        {
+          "name": "state_file_incompatible_version",
+          "condition": "State file exists but schema_version is higher than supported.",
+          "error_type": "BudgetStateCorruptedError",
+          "error_data": {
+            "detail": "Budget state file has schema_version {found} but this version supports up to {supported}. Upgrade required."
+          }
+        },
+        {
+          "name": "state_directory_not_writable",
+          "condition": "Parent directory of state_file_path does not exist or is not writable.",
+          "error_type": "BudgetPersistenceError",
+          "error_data": {
+            "detail": "Cannot write to budget state directory: {parent_dir}"
+          }
+        }
+      ],
+      "preconditions": [
+        "config has passed Pydantic validation.",
+        "config.state_file_path's parent directory exists and is writable.",
+        "clock returns timezone-aware UTC datetimes."
+      ],
+      "postconditions": [
+        "BudgetManager is fully initialized and ready to accept check_budget/record_spend calls.",
+        "If a state file existed at config.state_file_path, it has been loaded and its schema_version validated.",
+        "If no state file existed, a fresh BudgetState has been created with zero totals and period boundaries computed from the current clock time.",
+        "All configured period boundaries are set correctly for the current clock time and configured timezone.",
+        "If loaded state has period boundaries in the past, those periods have been reset."
+      ],
+      "idempotent": false,
+      "side_effects": [
+        "Loads state from disk if file exists.",
+        "May create a new state file if none exists."
+      ],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Reads existing budget state JSON file if it exists."
+        },
+        {
+          "kind": "writes_file",
+          "target": "BudgetConfig.state_file_path",
+          "description": "Creates initial state file if none exists, or persists state after period boundary resets."
+        },
+        {
+          "kind": "logging",
+          "target": "apprentice.budget_manager",
+          "description": "Logs initialization at INFO level with configured periods and limits. Logs state file load/creation."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 100,
+        "max_memory_mb": null,
+        "complexity": "O(p + h) where p = number of periods, h = size of persisted spend_history"
+      }
+    },
+    {
+      "name": "compute_period_boundaries",
+      "description": "Pure helper function that computes the start and end UTC timestamps for a given budget period, based on a reference UTC datetime and the configured IANA timezone. Daily periods reset at midnight in the configured timezone. Weekly periods reset at Monday midnight. Monthly periods reset at the 1st of the month midnight. All boundary timestamps are returned in UTC.",
+      "inputs": [
+        {
+          "name": "period",
+          "type_ref": "BudgetPeriod",
+          "required": true,
+          "default": "",
+          "description": "The budget period to compute boundaries for.",
+          "validators": []
+        },
+        {
+          "name": "reference_utc",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 UTC datetime string to use as the reference point for boundary computation.",
+          "validators": []
+        },
+        {
+          "name": "timezone_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "IANA timezone name (e.g. 'America/New_York') for determining period boundaries.",
+          "validators": []
+        }
+      ],
+      "output_type": "dict",
+      "error_cases": [
+        {
+          "name": "invalid_timezone",
+          "condition": "timezone_name is not recognized by zoneinfo.ZoneInfo.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Unknown IANA timezone: {timezone_name}"
+          }
+        },
+        {
+          "name": "invalid_reference_utc",
+          "condition": "reference_utc cannot be parsed as a valid ISO 8601 UTC datetime.",
+          "error_type": "ValueError",
+          "error_data": {
+            "detail": "Invalid ISO 8601 UTC datetime string: {reference_utc}"
+          }
+        }
+      ],
+      "preconditions": [
+        "reference_utc is a valid ISO 8601 UTC datetime string.",
+        "timezone_name is a valid IANA timezone recognized by zoneinfo.ZoneInfo.",
+        "period is a valid BudgetPeriod value."
+      ],
+      "postconditions": [
+        "Returned dict has keys 'period_start_utc' and 'period_end_utc', both ISO 8601 UTC strings.",
+        "period_start_utc <= reference_utc < period_end_utc.",
+        "For 'daily': boundaries are midnight-to-midnight in the configured timezone, converted to UTC.",
+        "For 'weekly': boundaries are Monday midnight-to-Monday midnight in the configured timezone.",
+        "For 'monthly': boundaries are 1st-of-month midnight-to-1st-of-next-month midnight in the configured timezone.",
+        "DST transitions are handled correctly via zoneinfo."
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "none",
+          "target": "",
+          "description": "Pure function with no side effects."
+        }
+      ],
+      "performance_budget": {
+        "p95_latency_ms": 1,
+        "max_memory_mb": null,
+        "complexity": "O(1)"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dependency_contracts": {},
+  "invariants": [
+    "All monetary values (Money type) are represented as Decimal with up to 6 decimal places, serialized as strings in JSON to preserve precision.",
+    "Budget state is always persisted atomically via write-temp-then-rename — no partial writes can corrupt the state file.",
+    "Running totals for a period are always reset to zero when the current clock time exceeds that period's end boundary. Reset happens lazily on the next check_budget(), record_spend(), or get_report() call.",
+    "check_budget() never mutates spend totals — it is a read-only check (aside from period boundary resets).",
+    "record_spend() always increments totals and persists state — it never silently drops a spend record.",
+    "The system never exceeds budget limits: check_budget() returns denied if (current_spend + estimated_cost) > limit for ANY period. The single-threaded execution model guarantees no race conditions between check and spend.",
+    "BudgetExhaustedError is raised only in Phase 1 (no local model). Phase 2/3 budget denial results in a logged warning and local-only fallback, never an exception.",
+    "All timestamps stored and returned are in UTC (ISO 8601 format). Period boundaries are computed using the configured IANA timezone but stored as UTC.",
+    "BudgetState.schema_version is always set and validated on load. Incompatible versions cause a clear error at initialization, not silent data corruption.",
+    "The BudgetManager never calls datetime.now() directly — all time access goes through the injected clock function for testability.",
+    "Structured JSON logging is used for all budget decisions (checks, spends, resets, warnings) via the apprentice.budget_manager logger, enabling machine-readable audit trails.",
+    "BudgetConfig is immutable after initialization. Runtime changes require restart with updated YAML config."
+  ],
+  "requires": [
+    "python>=3.12",
+    "pydantic>=2.0",
+    "pyyaml"
+  ]
+}

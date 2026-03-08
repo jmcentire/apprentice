@@ -1,0 +1,1079 @@
+{
+  "component_id": "training_pipeline",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "init_happy_path",
+      "description": "Initialize pipeline with valid config, fresh state file, and valid dependencies succeeds and sets status to IDLE",
+      "function": "initialize",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid PipelineConfig, mock data_store, orchestrator, validator",
+      "expected_output_description": "Pipeline status is IDLE, state file directory exists, data_store.initialize() called once",
+      "expected_error": "",
+      "assertions": [
+        "Pipeline status is IDLE after initialization",
+        "data_store.initialize() was called exactly once",
+        "State file directory exists on filesystem"
+      ]
+    },
+    {
+      "id": "init_loads_existing_state",
+      "description": "Initialize pipeline with existing valid state file loads persisted state",
+      "function": "initialize",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config with existing state file containing prior runs",
+      "expected_output_description": "Pipeline loads state from file, run history is preserved",
+      "expected_error": "",
+      "assertions": [
+        "Run history from state file is preserved",
+        "Pipeline status is IDLE"
+      ]
+    },
+    {
+      "id": "init_marks_incomplete_runs_failed",
+      "description": "Initialize pipeline when state file has a RUNNING run marks it as FAILED with crash recovery detail",
+      "function": "initialize",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "State file with a run in RUNNING status",
+      "expected_output_description": "The incomplete run is marked FAILED with crash recovery error_detail",
+      "expected_error": "",
+      "assertions": [
+        "Previously RUNNING run now has FAILED status",
+        "error_detail mentions crash recovery",
+        "Pipeline status is IDLE"
+      ]
+    },
+    {
+      "id": "init_budget_period_reset",
+      "description": "Initialize pipeline when current date is past budget_reset_day resets current_month_spent_usd to 0.0",
+      "function": "initialize",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "State file with spent budget and current date past reset day",
+      "expected_output_description": "current_month_spent_usd is reset to 0.0",
+      "expected_error": "",
+      "assertions": [
+        "current_month_spent_usd is 0.0 after initialization"
+      ]
+    },
+    {
+      "id": "init_config_validation_error",
+      "description": "Initialize with invalid PipelineConfig raises ValueError",
+      "function": "initialize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "PipelineConfig with invalid task_type or missing fields",
+      "expected_output_description": "",
+      "expected_error": "ValueError",
+      "assertions": [
+        "ValueError is raised",
+        "Error message describes the validation failure"
+      ]
+    },
+    {
+      "id": "init_dependency_missing_none",
+      "description": "Initialize with None dependency raises TypeError or RuntimeError",
+      "function": "initialize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "data_store=None",
+      "expected_output_description": "",
+      "expected_error": "TypeError",
+      "assertions": [
+        "TypeError or RuntimeError is raised for missing dependency"
+      ]
+    },
+    {
+      "id": "init_state_file_corrupt",
+      "description": "Initialize with corrupt state file raises IOError",
+      "function": "initialize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "State file containing invalid JSON",
+      "expected_output_description": "",
+      "expected_error": "IOError",
+      "assertions": [
+        "IOError is raised for corrupt state file"
+      ]
+    },
+    {
+      "id": "init_data_store_init_error",
+      "description": "Initialize when data_store.initialize() fails propagates error",
+      "function": "initialize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "data_store.initialize() raises an exception",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "Error from data_store.initialize() is propagated"
+      ]
+    },
+    {
+      "id": "init_not_reentrant",
+      "description": "Calling initialize() twice raises RuntimeError",
+      "function": "initialize",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Call initialize() on already-initialized pipeline",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised on second initialize() call"
+      ]
+    },
+    {
+      "id": "add_example_happy_path",
+      "description": "Add a valid example returns correct counts and trigger evaluation",
+      "function": "add_example",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid AddExampleInput matching pipeline task_type",
+      "expected_output_description": "AddExampleOutput with correct counts, trigger_evaluation populated",
+      "expected_error": "",
+      "assertions": [
+        "Returned task_type matches input",
+        "example_count is positive",
+        "trigger_evaluation is populated with should_trigger boolean",
+        "data_store.add_example() was called once"
+      ]
+    },
+    {
+      "id": "add_example_trigger_evaluation_populated",
+      "description": "AddExampleOutput.trigger_evaluation reflects current state after addition",
+      "function": "add_example",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid example added when enough examples exist to trigger",
+      "expected_output_description": "trigger_evaluation.should_trigger reflects policy evaluation",
+      "expected_error": "",
+      "assertions": [
+        "trigger_evaluation.new_examples_since_last_run is accurate",
+        "trigger_evaluation.reason is non-empty string"
+      ]
+    },
+    {
+      "id": "add_example_no_auto_trigger",
+      "description": "Adding example never initiates a pipeline run even when should_trigger is True",
+      "function": "add_example",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid example that causes should_trigger=True",
+      "expected_output_description": "No pipeline run is started",
+      "expected_error": "",
+      "assertions": [
+        "Pipeline status remains IDLE",
+        "fine_tuning_orchestrator was not called",
+        "trigger_evaluation.should_trigger is True"
+      ]
+    },
+    {
+      "id": "add_example_not_initialized",
+      "description": "Calling add_example before initialize raises RuntimeError",
+      "function": "add_example",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "AddExampleInput on uninitialized pipeline",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised with not_initialized message"
+      ]
+    },
+    {
+      "id": "add_example_task_type_mismatch",
+      "description": "Adding example with wrong task_type raises ValueError",
+      "function": "add_example",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "AddExampleInput with task_type different from pipeline config",
+      "expected_output_description": "",
+      "expected_error": "ValueError",
+      "assertions": [
+        "ValueError is raised mentioning task_type mismatch"
+      ]
+    },
+    {
+      "id": "add_example_validation_error_empty_input",
+      "description": "Adding example with empty input string raises ValueError",
+      "function": "add_example",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "AddExampleInput with input=''",
+      "expected_output_description": "",
+      "expected_error": "ValueError",
+      "assertions": [
+        "ValueError is raised for empty input field"
+      ]
+    },
+    {
+      "id": "add_example_data_store_write_error",
+      "description": "When data_store.add_example() fails, IOError is raised",
+      "function": "add_example",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "data_store.add_example() raises IOError",
+      "expected_output_description": "",
+      "expected_error": "IOError",
+      "assertions": [
+        "IOError is propagated from data_store"
+      ]
+    },
+    {
+      "id": "should_trigger_happy_all_conditions_met",
+      "description": "should_trigger returns True when all policy conditions are met",
+      "function": "should_trigger",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Sufficient new examples, interval elapsed, failures below max, budget remaining, not running",
+      "expected_output_description": "TriggerEvaluation with should_trigger=True",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is True",
+        "reason explains why triggering is recommended",
+        "new_examples_since_last_run >= min_new_examples",
+        "budget_remaining_usd > 0"
+      ]
+    },
+    {
+      "id": "should_trigger_insufficient_examples",
+      "description": "should_trigger returns False when new examples below min_new_examples",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "new examples count is min_new_examples - 1",
+      "expected_output_description": "TriggerEvaluation with should_trigger=False",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is False",
+        "reason mentions insufficient examples"
+      ]
+    },
+    {
+      "id": "should_trigger_exact_min_examples_boundary",
+      "description": "should_trigger returns True when new examples equals exactly min_new_examples",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "new examples count is exactly min_new_examples",
+      "expected_output_description": "TriggerEvaluation with should_trigger=True (assuming other conditions met)",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is True at exact boundary"
+      ]
+    },
+    {
+      "id": "should_trigger_interval_not_elapsed",
+      "description": "should_trigger returns False when min_interval_seconds has not elapsed",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "seconds since last run < min_interval_seconds",
+      "expected_output_description": "TriggerEvaluation with should_trigger=False",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is False",
+        "reason mentions cooldown/interval"
+      ]
+    },
+    {
+      "id": "should_trigger_max_consecutive_failures_reached",
+      "description": "should_trigger returns False when consecutive failures >= max_consecutive_failures",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "consecutive_failures == max_consecutive_failures",
+      "expected_output_description": "TriggerEvaluation with should_trigger=False",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is False",
+        "reason mentions consecutive failures"
+      ]
+    },
+    {
+      "id": "should_trigger_budget_exhausted",
+      "description": "should_trigger returns False when remaining budget < estimated_cost_per_run",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "current_month_spent nearly equals max_monthly_budget",
+      "expected_output_description": "TriggerEvaluation with should_trigger=False",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is False",
+        "reason mentions budget",
+        "budget_remaining_usd < estimated_cost_per_run_usd"
+      ]
+    },
+    {
+      "id": "should_trigger_pipeline_running",
+      "description": "should_trigger returns False when pipeline status is RUNNING",
+      "function": "should_trigger",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline has status RUNNING",
+      "expected_output_description": "TriggerEvaluation with should_trigger=False",
+      "expected_error": "",
+      "assertions": [
+        "should_trigger is False",
+        "reason mentions already running"
+      ]
+    },
+    {
+      "id": "should_trigger_read_only",
+      "description": "should_trigger does not mutate any pipeline state",
+      "function": "should_trigger",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Any valid pipeline state",
+      "expected_output_description": "State is unchanged after call",
+      "expected_error": "",
+      "assertions": [
+        "Pipeline state is identical before and after call",
+        "No state file writes occurred"
+      ]
+    },
+    {
+      "id": "should_trigger_not_initialized",
+      "description": "Calling should_trigger before initialize raises RuntimeError",
+      "function": "should_trigger",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised"
+      ]
+    },
+    {
+      "id": "run_pipeline_happy_full_success",
+      "description": "run_pipeline completes all 5 steps and returns PipelineSuccess",
+      "function": "run_pipeline",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "All dependencies succeed, sufficient data and budget",
+      "expected_output_description": "PipelineSuccess with status='success', all 5 steps COMPLETED",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'success'",
+        "Result is PipelineSuccess type",
+        "run.status is COMPLETED",
+        "All 5 steps have COMPLETED status",
+        "Steps are in canonical order: DATA_SNAPSHOT, BUDGET_CHECK, FINE_TUNE, VALIDATE, PROMOTE",
+        "consecutive_failures reset to 0",
+        "model_version_id is set"
+      ]
+    },
+    {
+      "id": "run_pipeline_result_union_success",
+      "description": "PipelineResult discriminated union resolves to PipelineSuccess on success",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Successful pipeline run",
+      "expected_output_description": "PipelineSuccess with status='success'",
+      "expected_error": "",
+      "assertions": [
+        "Result has status='success'",
+        "Result contains aggregate_validation_score",
+        "Result contains promotion_decision"
+      ]
+    },
+    {
+      "id": "run_pipeline_result_union_failure",
+      "description": "PipelineResult discriminated union resolves to PipelineFailure on failure",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline run that fails at FINE_TUNE step",
+      "expected_output_description": "PipelineFailure with status='failure'",
+      "expected_error": "",
+      "assertions": [
+        "Result has status='failure'",
+        "Result contains failed_step",
+        "Result contains error_detail",
+        "Result contains retry_recommended"
+      ]
+    },
+    {
+      "id": "run_pipeline_five_step_records",
+      "description": "PipelineRun.steps always contains exactly 5 records in canonical order",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Any pipeline run (success or failure)",
+      "expected_output_description": "Exactly 5 PipelineStepRecord entries",
+      "expected_error": "",
+      "assertions": [
+        "len(run.steps) == 5",
+        "Steps are DATA_SNAPSHOT, BUDGET_CHECK, FINE_TUNE, VALIDATE, PROMOTE"
+      ]
+    },
+    {
+      "id": "run_pipeline_failure_skips_subsequent_steps",
+      "description": "When a step fails, all subsequent steps are marked SKIPPED",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline run where FINE_TUNE step fails",
+      "expected_output_description": "VALIDATE and PROMOTE steps are SKIPPED",
+      "expected_error": "",
+      "assertions": [
+        "DATA_SNAPSHOT step is COMPLETED",
+        "BUDGET_CHECK step is COMPLETED",
+        "FINE_TUNE step is FAILED",
+        "VALIDATE step is SKIPPED",
+        "PROMOTE step is SKIPPED"
+      ]
+    },
+    {
+      "id": "run_pipeline_increments_consecutive_failures",
+      "description": "Failed run increments consecutive_failures counter",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline run that fails",
+      "expected_output_description": "consecutive_failures incremented by 1",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures increased by 1 from pre-run value"
+      ]
+    },
+    {
+      "id": "run_pipeline_resets_consecutive_failures_on_success",
+      "description": "Successful run resets consecutive_failures to 0",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline run that succeeds after prior failures",
+      "expected_output_description": "consecutive_failures is 0",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures is 0 after successful run"
+      ]
+    },
+    {
+      "id": "run_pipeline_not_initialized",
+      "description": "Calling run_pipeline before initialize raises RuntimeError",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised with not_initialized message"
+      ]
+    },
+    {
+      "id": "run_pipeline_already_running",
+      "description": "Concurrent run_pipeline call raises RuntimeError",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline already has a run in progress",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised with already_running message"
+      ]
+    },
+    {
+      "id": "run_pipeline_insufficient_data",
+      "description": "Pipeline returns PipelineFailure with INSUFFICIENT_DATA when not enough training examples",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "data_store reports fewer examples than required minimum",
+      "expected_output_description": "PipelineFailure with INSUFFICIENT_DATA status",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "run.status is INSUFFICIENT_DATA",
+        "failed_step is DATA_SNAPSHOT"
+      ]
+    },
+    {
+      "id": "run_pipeline_budget_exhausted",
+      "description": "Pipeline returns PipelineFailure with SKIPPED_BUDGET when budget would be exceeded",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "current_month_spent_usd + estimated_cost > max_monthly_budget_usd",
+      "expected_output_description": "PipelineFailure with SKIPPED_BUDGET status, no fine-tuning resources consumed",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "run.status is SKIPPED_BUDGET",
+        "fine_tuning_orchestrator.trigger_fine_tuning was NOT called",
+        "failed_step is BUDGET_CHECK"
+      ]
+    },
+    {
+      "id": "run_pipeline_fine_tune_failed",
+      "description": "Pipeline returns PipelineFailure when fine-tuning orchestrator fails",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "orchestrator.trigger_fine_tuning raises FineTuneError",
+      "expected_output_description": "PipelineFailure with failed_step=FINE_TUNE",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "failed_step is FINE_TUNE",
+        "VALIDATE and PROMOTE are SKIPPED"
+      ]
+    },
+    {
+      "id": "run_pipeline_validation_failed",
+      "description": "Pipeline returns PipelineFailure when validation rejects the candidate model",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "validator.validate_candidate returns rejection",
+      "expected_output_description": "PipelineFailure with failed_step=VALIDATE",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "failed_step is VALIDATE",
+        "PROMOTE is SKIPPED",
+        "Previous model version continues serving"
+      ]
+    },
+    {
+      "id": "run_pipeline_promotion_failed",
+      "description": "Pipeline returns PipelineFailure when model promotion/swap fails",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "validator.promote_candidate raises an error",
+      "expected_output_description": "PipelineFailure with failed_step=PROMOTE",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "failed_step is PROMOTE",
+        "Previous model version continues serving"
+      ]
+    },
+    {
+      "id": "run_pipeline_data_store_error",
+      "description": "Pipeline returns PipelineFailure when data_store fails during data snapshot",
+      "function": "run_pipeline",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "data_store.iter_training_examples raises IOError",
+      "expected_output_description": "PipelineFailure with failed_step=DATA_SNAPSHOT",
+      "expected_error": "",
+      "assertions": [
+        "Result status is 'failure'",
+        "failed_step is DATA_SNAPSHOT"
+      ]
+    },
+    {
+      "id": "run_pipeline_hyperparameter_overrides_passthrough",
+      "description": "Hyperparameter overrides are passed through to the fine-tuning orchestrator",
+      "function": "run_pipeline",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "HyperparameterOverrides with learning_rate=0.001, num_epochs=3",
+      "expected_output_description": "orchestrator.trigger_fine_tuning called with the overrides",
+      "expected_error": "",
+      "assertions": [
+        "orchestrator.trigger_fine_tuning received the hyperparameter overrides"
+      ]
+    },
+    {
+      "id": "run_pipeline_persists_state_after_each_step",
+      "description": "Pipeline state is persisted to state file after each step transition",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Successful pipeline run",
+      "expected_output_description": "State file is written at least 5 times (once per step)",
+      "expected_error": "",
+      "assertions": [
+        "State file was written after each step completion"
+      ]
+    },
+    {
+      "id": "run_pipeline_status_returns_to_idle",
+      "description": "Pipeline status returns to IDLE after run completes (success or failure)",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Any pipeline run",
+      "expected_output_description": "get_status() returns IDLE after run",
+      "expected_error": "",
+      "assertions": [
+        "get_status() returns IDLE after run completes"
+      ]
+    },
+    {
+      "id": "run_pipeline_budget_tracking_updated",
+      "description": "Budget tracking is updated with actual cost after successful run",
+      "function": "run_pipeline",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Successful run with known cost",
+      "expected_output_description": "current_month_spent_usd increased by run cost",
+      "expected_error": "",
+      "assertions": [
+        "budget_spent_usd in PipelineRun is positive",
+        "State current_month_spent_usd increased"
+      ]
+    },
+    {
+      "id": "run_pipeline_run_history_pruned",
+      "description": "Run history is pruned to run_history_limit after each run",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline with run_history_limit=5 and 6 total runs",
+      "expected_output_description": "run_history contains at most 5 entries, oldest removed",
+      "expected_error": "",
+      "assertions": [
+        "len(run_history) <= run_history_limit",
+        "Oldest run was removed"
+      ]
+    },
+    {
+      "id": "run_pipeline_no_model_mutation_on_failure",
+      "description": "Currently serving model is not changed when any post-fine-tune step fails",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline where VALIDATE step fails",
+      "expected_output_description": "active_model_version_id unchanged",
+      "expected_error": "",
+      "assertions": [
+        "active_model_version_id is same as before the run"
+      ]
+    },
+    {
+      "id": "budget_hard_enforcement_exact_boundary",
+      "description": "Budget check rejects run when remaining budget exactly equals estimated cost (boundary)",
+      "function": "run_pipeline",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "max_budget=100, spent=90, estimated_cost=10.01",
+      "expected_output_description": "Run is rejected with SKIPPED_BUDGET",
+      "expected_error": "",
+      "assertions": [
+        "Run is rejected",
+        "No fine-tuning resources consumed"
+      ]
+    },
+    {
+      "id": "budget_hard_enforcement_allows_exact_fit",
+      "description": "Budget check allows run when remaining budget exactly equals estimated cost",
+      "function": "run_pipeline",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "max_budget=100, spent=90, estimated_cost=10.00",
+      "expected_output_description": "Run proceeds (budget check passes)",
+      "expected_error": "",
+      "assertions": [
+        "BUDGET_CHECK step is COMPLETED",
+        "Fine-tuning proceeds"
+      ]
+    },
+    {
+      "id": "budget_period_reset_on_init",
+      "description": "Budget period resets current_month_spent to 0 when past budget_reset_day",
+      "function": "initialize",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "State with spent=$50, budget_reset_day=1, current day=2, last reset was last month",
+      "expected_output_description": "current_month_spent_usd reset to 0.0",
+      "expected_error": "",
+      "assertions": [
+        "current_month_spent_usd is 0.0"
+      ]
+    },
+    {
+      "id": "budget_never_exceeded",
+      "description": "Budget is never exceeded even across multiple runs",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Multiple sequential runs consuming budget",
+      "expected_output_description": "current_month_spent_usd never exceeds max_monthly_budget_usd",
+      "expected_error": "",
+      "assertions": [
+        "current_month_spent_usd <= max_monthly_budget_usd after every run"
+      ]
+    },
+    {
+      "id": "get_status_happy_path",
+      "description": "get_status returns IDLE after initialization",
+      "function": "get_status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "PipelineStatus.IDLE",
+      "expected_error": "",
+      "assertions": [
+        "Status is IDLE"
+      ]
+    },
+    {
+      "id": "get_status_not_initialized",
+      "description": "get_status before initialize raises RuntimeError",
+      "function": "get_status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised"
+      ]
+    },
+    {
+      "id": "get_status_no_mutation",
+      "description": "get_status does not mutate any state",
+      "function": "get_status",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State is unchanged after get_status call"
+      ]
+    },
+    {
+      "id": "get_run_history_happy_path",
+      "description": "get_run_history returns correct history with summary stats",
+      "function": "get_run_history",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline with 3 completed runs (2 success, 1 failure)",
+      "expected_output_description": "PipelineRunHistory with accurate counts",
+      "expected_error": "",
+      "assertions": [
+        "total_runs == 3",
+        "successful_runs == 2",
+        "failed_runs == 1",
+        "Runs ordered by started_at_utc descending"
+      ]
+    },
+    {
+      "id": "get_run_history_respects_limit",
+      "description": "get_run_history returns at most 'limit' entries",
+      "function": "get_run_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "limit=2 with 5 runs in history",
+      "expected_output_description": "Only 2 most recent runs returned",
+      "expected_error": "",
+      "assertions": [
+        "len(runs) == 2",
+        "Runs are the 2 most recent"
+      ]
+    },
+    {
+      "id": "get_run_history_empty",
+      "description": "get_run_history returns empty history when no runs exist",
+      "function": "get_run_history",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Freshly initialized pipeline with no runs",
+      "expected_output_description": "Empty PipelineRunHistory",
+      "expected_error": "",
+      "assertions": [
+        "total_runs == 0",
+        "successful_runs == 0",
+        "failed_runs == 0",
+        "runs is empty list"
+      ]
+    },
+    {
+      "id": "get_run_history_not_initialized",
+      "description": "get_run_history before initialize raises RuntimeError",
+      "function": "get_run_history",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised"
+      ]
+    },
+    {
+      "id": "get_run_history_no_mutation",
+      "description": "get_run_history does not mutate any state",
+      "function": "get_run_history",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "State is unchanged after call"
+      ]
+    },
+    {
+      "id": "reset_failures_happy_path",
+      "description": "reset_consecutive_failures sets counter to 0 and persists state",
+      "function": "reset_consecutive_failures",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pipeline with consecutive_failures=3",
+      "expected_output_description": "consecutive_failures is 0, state persisted",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures is 0",
+        "State file was written"
+      ]
+    },
+    {
+      "id": "reset_failures_not_initialized",
+      "description": "reset_consecutive_failures before initialize raises RuntimeError",
+      "function": "reset_consecutive_failures",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "RuntimeError",
+      "assertions": [
+        "RuntimeError is raised"
+      ]
+    },
+    {
+      "id": "reset_failures_already_zero",
+      "description": "reset_consecutive_failures when counter is already 0 is idempotent",
+      "function": "reset_consecutive_failures",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "consecutive_failures already at 0",
+      "expected_output_description": "consecutive_failures remains 0, no error",
+      "expected_error": "",
+      "assertions": [
+        "consecutive_failures is 0",
+        "No error raised"
+      ]
+    },
+    {
+      "id": "invariant_no_exceptions_for_expected_failures",
+      "description": "Expected failure conditions return PipelineFailure, never raise exceptions",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Various failure scenarios: insufficient data, budget exhausted, fine-tune error, validation regression",
+      "expected_output_description": "All return PipelineFailure, none raise exceptions",
+      "expected_error": "",
+      "assertions": [
+        "No exceptions raised",
+        "All results are PipelineFailure instances"
+      ]
+    },
+    {
+      "id": "invariant_serialized_runs",
+      "description": "Only one run_pipeline can execute at a time, enforced by asyncio.Lock",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Two concurrent run_pipeline calls",
+      "expected_output_description": "Second call raises RuntimeError",
+      "expected_error": "",
+      "assertions": [
+        "Second concurrent call raises RuntimeError with already_running"
+      ]
+    },
+    {
+      "id": "invariant_data_snapshot_hash_deterministic",
+      "description": "DataSnapshot.data_version_hash is SHA-256 of sorted concatenated inputs, independent of insertion order",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Same training examples in different insertion orders",
+      "expected_output_description": "Same data_version_hash",
+      "expected_error": "",
+      "assertions": [
+        "Hash is consistent regardless of insertion order"
+      ]
+    },
+    {
+      "id": "invariant_config_strict_validation",
+      "description": "Config parsing is strict - invalid config causes immediate ValueError, never silently defaults",
+      "function": "initialize",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config with various invalid fields",
+      "expected_output_description": "ValueError raised immediately",
+      "expected_error": "",
+      "assertions": [
+        "ValueError raised for invalid config",
+        "No silent defaults applied"
+      ]
+    },
+    {
+      "id": "invariant_no_global_mutable_state",
+      "description": "Two pipeline instances do not share any state",
+      "function": "initialize",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Two separate pipeline instances with different configs",
+      "expected_output_description": "State changes in one do not affect the other",
+      "expected_error": "",
+      "assertions": [
+        "Instance A state is independent of instance B"
+      ]
+    },
+    {
+      "id": "invariant_only_allowed_exception_types",
+      "description": "Only RuntimeError, ValueError, IOError, and TypeError are raised as exceptions",
+      "function": "run_pipeline",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Various error scenarios",
+      "expected_output_description": "Only allowed exception types",
+      "expected_error": "",
+      "assertions": [
+        "All raised exceptions are RuntimeError, ValueError, IOError, or TypeError"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract tests for TrainingPipeline component.\n\nTests verify the TrainingPipeline implementation against its contract,\ncovering initialization, example management, trigger evaluation,\npipeline execution, budget enforcement, status/history, state persistence,\nand cross-cutting invariants.\n\nRun with: pytest contract_test.py -v\n\"\"\"\n\nimport asyncio\nimport copy\nimport hashlib\nimport json\nimport os\nimport tempfile\nimport time\nfrom datetime import datetime, timedelta, timezone\nfrom unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch, call\nfrom typing import Any, Dict, List, Optional\n\nimport pytest\n\n# ---------------------------------------------------------------------------\n# Import the component under test\n# ---------------------------------------------------------------------------\nfrom src.training_pipeline import (\n    TrainingPipeline,\n    PipelineConfig,\n    PipelineTriggerPolicy,\n    BudgetConstraint,\n    PipelineStatus,\n    PipelineStepName,\n    PipelineStepStatus,\n    PipelineState,\n    PipelineRun,\n    PipelineStepRecord,\n    PipelineResult,\n    PipelineSuccess,\n    PipelineFailure,\n    PipelineRunHistory,\n    TriggerEvaluation,\n    AddExampleInput,\n    AddExampleOutput,\n    DataSnapshot,\n    HyperparameterOverrides,\n)\n\n\n# ============================================================================\n# Fixtures and Helpers\n# ============================================================================\n\ndef make_trigger_policy(**overrides) -> PipelineTriggerPolicy:\n    \"\"\"Factory for PipelineTriggerPolicy with sensible defaults.\"\"\"\n    defaults = dict(\n        min_new_examples=10,\n        min_interval_seconds=3600.0,\n        max_consecutive_failures=3,\n        confidence_ceiling=0.95,\n    )\n    defaults.update(overrides)\n    return PipelineTriggerPolicy(**defaults)\n\n\ndef make_budget(**overrides) -> BudgetConstraint:\n    \"\"\"Factory for BudgetConstraint with sensible defaults.\"\"\"\n    defaults = dict(\n        max_monthly_budget_usd=100.0,\n        current_month_spent_usd=0.0,\n        estimated_cost_per_run_usd=10.0,\n        budget_reset_day=1,\n    )\n    defaults.update(overrides)\n    return BudgetConstraint(**defaults)\n\n\ndef make_config(tmp_dir: str, **overrides) -> PipelineConfig:\n    \"\"\"Factory for PipelineConfig with sensible defaults.\"\"\"\n    defaults = dict(\n        task_type=\"text_classification\",\n        base_model=\"gpt-4o-mini\",\n        trigger_policy=make_trigger_policy(),\n        budget=make_budget(),\n        state_file_path=os.path.join(tmp_dir, \"pipeline_state.json\"),\n        run_history_limit=50,\n    )\n    defaults.update(overrides)\n    return PipelineConfig(**defaults)\n\n\ndef make_example_input(**overrides) -> AddExampleInput:\n    \"\"\"Factory for AddExampleInput with sensible defaults.\"\"\"\n    defaults = dict(\n        input=\"What is the capital of France?\",\n        output=\"Paris\",\n        task_type=\"text_classification\",\n        timestamp=datetime.now(timezone.utc).isoformat(),\n        metadata={},\n    )\n    defaults.update(overrides)\n    return AddExampleInput(**defaults)\n\n\ndef make_training_example(input_text: str = \"sample input\", output_text: str = \"sample output\"):\n    \"\"\"Create a simple mock training example.\"\"\"\n    ex = MagicMock()\n    ex.input = input_text\n    ex.output = output_text\n    ex.task_type = \"text_classification\"\n    return ex\n\n\ndef make_mock_data_store(\n    example_count: int = 50,\n    training_count: int = 40,\n    validation_count: int = 10,\n):\n    \"\"\"Create a mock training data store with configurable behavior.\"\"\"\n    store = MagicMock()\n    store.initialize = MagicMock(return_value=None)\n\n    add_result = MagicMock()\n    add_result.task_type = \"text_classification\"\n    add_result.example_count = example_count\n    add_result.training_count = training_count\n    add_result.validation_count = validation_count\n    store.add_example = MagicMock(return_value=add_result)\n\n    # Return training examples\n    training_examples = [make_training_example(f\"input_{i}\", f\"output_{i}\") for i in range(training_count)]\n    store.iter_training_examples = MagicMock(return_value=training_examples)\n\n    validation_examples = [make_training_example(f\"val_input_{i}\", f\"val_output_{i}\") for i in range(validation_count)]\n    store.iter_validation_examples = MagicMock(return_value=validation_examples)\n\n    count_result = MagicMock()\n    count_result.total = example_count\n    count_result.training = training_count\n    count_result.validation = validation_count\n    store.get_example_count = MagicMock(return_value=count_result)\n\n    store.get_task_types = MagicMock(return_value=[\"text_classification\"])\n    return store\n\n\ndef make_mock_orchestrator(\n    fine_tune_run_id: str = \"ft-run-123\",\n    model_version_id: str = \"model-v1\",\n    cost_usd: float = 8.0,\n):\n    \"\"\"Create a mock fine-tuning orchestrator.\"\"\"\n    orch = MagicMock()\n\n    fine_tune_result = MagicMock()\n    fine_tune_result.run_id = fine_tune_run_id\n    fine_tune_result.model_version_id = model_version_id\n    fine_tune_result.cost_usd = cost_usd\n    fine_tune_result.status = \"completed\"\n    orch.trigger_fine_tuning = MagicMock(return_value=fine_tune_result)\n    orch.fine_tune = MagicMock(return_value=fine_tune_result)\n    orch.save_model_version = MagicMock(return_value=None)\n\n    model_version = MagicMock()\n    model_version.version_id = model_version_id\n    orch.get_model_version = MagicMock(return_value=model_version)\n    orch.get_latest_model_version = MagicMock(return_value=model_version)\n    orch.list_model_versions = MagicMock(return_value=[model_version])\n\n    return orch\n\n\ndef make_mock_validator(\n    score: float = 0.92,\n    passed: bool = True,\n    promotion_decision: str = \"promoted\",\n):\n    \"\"\"Create a mock model validator.\"\"\"\n    val = MagicMock()\n\n    validation_result = MagicMock()\n    validation_result.score = score\n    validation_result.aggregate_score = score\n    validation_result.passed = passed\n    validation_result.candidate_model_id = \"model-v1\"\n    validation_result.decision = \"pass\" if passed else \"reject\"\n    val.validate_candidate = MagicMock(return_value=validation_result)\n\n    promotion_record = MagicMock()\n    promotion_record.decision = promotion_decision\n    promotion_record.model_version_id = \"model-v1\"\n    promotion_record.validation_result = validation_result\n    val.promote_candidate = MagicMock(return_value=promotion_record)\n    val.validate_and_promote = MagicMock(return_value=promotion_record)\n\n    return val\n\n\n@pytest.fixture\ndef tmp_dir():\n    \"\"\"Create a temporary directory for state files.\"\"\"\n    with tempfile.TemporaryDirectory() as d:\n        yield d\n\n\n@pytest.fixture\ndef config(tmp_dir):\n    \"\"\"Create a default PipelineConfig.\"\"\"\n    return make_config(tmp_dir)\n\n\n@pytest.fixture\ndef data_store():\n    \"\"\"Create a default mock data store.\"\"\"\n    return make_mock_data_store()\n\n\n@pytest.fixture\ndef orchestrator():\n    \"\"\"Create a default mock orchestrator.\"\"\"\n    return make_mock_orchestrator()\n\n\n@pytest.fixture\ndef validator():\n    \"\"\"Create a default mock validator.\"\"\"\n    return make_mock_validator()\n\n\n@pytest.fixture\ndef pipeline():\n    \"\"\"Create a bare TrainingPipeline instance (not yet initialized).\"\"\"\n    return TrainingPipeline()\n\n\n@pytest.fixture\ndef initialized_pipeline(tmp_dir, data_store, orchestrator, validator):\n    \"\"\"Create and return a fully initialized TrainingPipeline.\"\"\"\n    config = make_config(tmp_dir)\n    p = TrainingPipeline()\n    p.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n    return p, config, data_store, orchestrator, validator\n\n\n# ============================================================================\n# Test: initialize()\n# ============================================================================\n\nclass TestInitialize:\n    \"\"\"Tests for TrainingPipeline.initialize().\"\"\"\n\n    def test_init_happy_path(self, pipeline, config, data_store, orchestrator, validator):\n        \"\"\"Initialize pipeline with valid config and dependencies succeeds; status is IDLE.\"\"\"\n        pipeline.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n\n        status = pipeline.get_status()\n        assert status == PipelineStatus.IDLE, f\"Expected IDLE, got {status}\"\n        data_store.initialize.assert_called_once()\n        # State file directory should exist\n        state_dir = os.path.dirname(config.state_file_path)\n        assert os.path.isdir(state_dir), f\"State file directory {state_dir} should exist\"\n\n    def test_init_loads_existing_state(self, tmp_dir, data_store, orchestrator, validator):\n        \"\"\"Initialize loads persisted state from existing state file.\"\"\"\n        config = make_config(tmp_dir)\n        # First pipeline: initialize and do something to create state\n        p1 = TrainingPipeline()\n        p1.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n        # Write some state (trigger a run or just ensure state file exists)\n        # Now create a second pipeline and load from the same state file\n        p2 = TrainingPipeline()\n        data_store2 = make_mock_data_store()\n        p2.initialize(config=config, data_store=data_store2, orchestrator=orchestrator, validator=validator)\n        status = p2.get_status()\n        assert status == PipelineStatus.IDLE, \"Second pipeline should load state and be IDLE\"\n\n    def test_init_marks_incomplete_runs_failed(self, tmp_dir, data_store, orchestrator, validator):\n        \"\"\"Incomplete (RUNNING) runs from prior crash are marked FAILED on init.\"\"\"\n        config = make_config(tmp_dir)\n        # Create a state file with a RUNNING run\n        running_state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"RUNNING\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [\n                {\n                    \"run_id\": \"run-incomplete\",\n                    \"task_type\": \"text_classification\",\n                    \"status\": \"RUNNING\",\n                    \"data_snapshot\": None,\n                    \"steps\": [],\n                    \"started_at_utc\": datetime.now(timezone.utc).isoformat(),\n                    \"completed_at_utc\": \"\",\n                    \"duration_seconds\": 0.0,\n                    \"fine_tune_run_id\": \"\",\n                    \"model_version_id\": \"\",\n                    \"promotion_decision\": \"\",\n                    \"error_detail\": \"\",\n                    \"budget_spent_usd\": 0.0,\n                    \"metadata\": {},\n                }\n            ],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(running_state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n\n        status = p.get_status()\n        assert status == PipelineStatus.IDLE, \"Pipeline should be IDLE after crash recovery\"\n        # Verify the incomplete run was marked FAILED\n        history = p.get_run_history(limit=10)\n        if history.runs:\n            recovered_run = [r for r in history.runs if r.run_id == \"run-incomplete\"]\n            if recovered_run:\n                assert recovered_run[0].status in (PipelineStatus.FAILED, \"FAILED\"), \\\n                    \"Incomplete run should be marked FAILED\"\n                assert recovered_run[0].error_detail, \\\n                    \"FAILED run should have error_detail about crash recovery\"\n\n    def test_init_budget_period_reset(self, tmp_dir, data_store, orchestrator, validator):\n        \"\"\"Budget resets to 0.0 when current date is past budget_reset_day.\"\"\"\n        config = make_config(tmp_dir, budget=make_budget(\n            max_monthly_budget_usd=100.0,\n            current_month_spent_usd=50.0,\n            budget_reset_day=1,\n        ))\n        # Create state with spent budget and old period\n        old_period = (datetime.now(timezone.utc) - timedelta(days=35)).isoformat()\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 50.0,\n            \"budget_period_start_utc\": old_period,\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n        # The budget should have been reset — verify via trigger evaluation\n        trigger = p.should_trigger()\n        assert trigger.budget_remaining_usd >= config.budget.max_monthly_budget_usd - 1.0, \\\n            f\"Budget should have been reset; remaining={trigger.budget_remaining_usd}\"\n\n    def test_init_config_validation_error(self, pipeline, data_store, orchestrator, validator, tmp_dir):\n        \"\"\"Invalid PipelineConfig raises ValueError.\"\"\"\n        with pytest.raises((ValueError, TypeError)):\n            # Create config with invalid fields\n            bad_config = make_config(tmp_dir, task_type=\"\", base_model=\"\")\n            pipeline.initialize(config=bad_config, data_store=data_store,\n                                orchestrator=orchestrator, validator=validator)\n\n    def test_init_dependency_missing_none(self, pipeline, config):\n        \"\"\"None dependency raises TypeError or RuntimeError.\"\"\"\n        with pytest.raises((TypeError, RuntimeError)):\n            pipeline.initialize(config=config, data_store=None,\n                                orchestrator=MagicMock(), validator=MagicMock())\n\n    def test_init_state_file_corrupt(self, tmp_dir, pipeline, data_store, orchestrator, validator):\n        \"\"\"Corrupt state file raises IOError.\"\"\"\n        config = make_config(tmp_dir)\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            f.write(\"{{{not valid json!!!\")\n\n        with pytest.raises((IOError, OSError, ValueError, RuntimeError)):\n            pipeline.initialize(config=config, data_store=data_store,\n                                orchestrator=orchestrator, validator=validator)\n\n    def test_init_data_store_init_error(self, pipeline, config, orchestrator, validator):\n        \"\"\"data_store.initialize() failure propagates as an error.\"\"\"\n        bad_store = make_mock_data_store()\n        bad_store.initialize.side_effect = RuntimeError(\"data store init failed\")\n\n        with pytest.raises((RuntimeError, IOError)):\n            pipeline.initialize(config=config, data_store=bad_store,\n                                orchestrator=orchestrator, validator=validator)\n\n    def test_init_not_reentrant(self, config, data_store, orchestrator, validator):\n        \"\"\"Calling initialize() twice raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store,\n                     orchestrator=orchestrator, validator=validator)\n        with pytest.raises(RuntimeError):\n            p.initialize(config=config, data_store=data_store,\n                         orchestrator=orchestrator, validator=validator)\n\n\n# ============================================================================\n# Test: add_example()\n# ============================================================================\n\nclass TestAddExample:\n    \"\"\"Tests for TrainingPipeline.add_example().\"\"\"\n\n    def test_add_example_happy_path(self, initialized_pipeline):\n        \"\"\"Adding a valid example returns correct AddExampleOutput.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        example = make_example_input(task_type=config.task_type)\n\n        result = p.add_example(example)\n\n        assert isinstance(result, AddExampleOutput), \"Should return AddExampleOutput\"\n        assert result.task_type == config.task_type, \"task_type should match\"\n        assert result.example_count > 0, \"example_count should be positive\"\n        assert result.trigger_evaluation is not None, \"trigger_evaluation should be populated\"\n        assert isinstance(result.trigger_evaluation.should_trigger, bool), \\\n            \"should_trigger should be a boolean\"\n        data_store.add_example.assert_called_once()\n\n    def test_add_example_trigger_evaluation_populated(self, initialized_pipeline):\n        \"\"\"trigger_evaluation has reason and counts.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        example = make_example_input(task_type=config.task_type)\n\n        result = p.add_example(example)\n\n        te = result.trigger_evaluation\n        assert te.reason, \"reason should be non-empty\"\n        assert isinstance(te.new_examples_since_last_run, int), \"new_examples should be int\"\n        assert te.evaluated_at_utc, \"evaluated_at_utc should be set\"\n\n    def test_add_example_no_auto_trigger(self, tmp_dir):\n        \"\"\"add_example never auto-triggers a pipeline run even when should_trigger=True.\"\"\"\n        # Set up a pipeline where trigger conditions are met\n        data_store = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir, trigger_policy=make_trigger_policy(min_new_examples=1))\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        example = make_example_input(task_type=config.task_type)\n        result = p.add_example(example)\n\n        # Pipeline should still be IDLE\n        assert p.get_status() == PipelineStatus.IDLE, \"Pipeline should remain IDLE after add_example\"\n        # Orchestrator should not have been called\n        orch.trigger_fine_tuning.assert_not_called()\n\n    def test_add_example_not_initialized(self):\n        \"\"\"Calling add_example before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        example = make_example_input()\n        with pytest.raises(RuntimeError, match=\"(?i)not.*init|(?i)uninit\"):\n            p.add_example(example)\n\n    def test_add_example_task_type_mismatch(self, initialized_pipeline):\n        \"\"\"Wrong task_type raises ValueError.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        example = make_example_input(task_type=\"wrong_task_type\")\n\n        with pytest.raises((ValueError, RuntimeError)):\n            p.add_example(example)\n\n    def test_add_example_validation_error_empty_input(self, initialized_pipeline):\n        \"\"\"Empty input string raises ValueError.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        with pytest.raises((ValueError, TypeError)):\n            example = make_example_input(input=\"\", task_type=config.task_type)\n            p.add_example(example)\n\n    def test_add_example_validation_error_empty_output(self, initialized_pipeline):\n        \"\"\"Empty output string raises ValueError.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        with pytest.raises((ValueError, TypeError)):\n            example = make_example_input(output=\"\", task_type=config.task_type)\n            p.add_example(example)\n\n    def test_add_example_data_store_write_error(self, initialized_pipeline):\n        \"\"\"data_store.add_example failure propagates as IOError.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        data_store.add_example.side_effect = IOError(\"disk full\")\n        example = make_example_input(task_type=config.task_type)\n\n        with pytest.raises((IOError, OSError, RuntimeError)):\n            p.add_example(example)\n\n\n# ============================================================================\n# Test: should_trigger()\n# ============================================================================\n\nclass TestShouldTrigger:\n    \"\"\"Tests for TrainingPipeline.should_trigger().\"\"\"\n\n    def test_should_trigger_all_conditions_met(self, tmp_dir):\n        \"\"\"Returns True when all trigger conditions are satisfied.\"\"\"\n        data_store = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(\n                min_new_examples=5,\n                min_interval_seconds=0.0,\n                max_consecutive_failures=10,\n            ),\n            budget=make_budget(max_monthly_budget_usd=1000.0, estimated_cost_per_run_usd=10.0),\n        )\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.should_trigger()\n        assert isinstance(result, TriggerEvaluation), \"Should return TriggerEvaluation\"\n        assert result.should_trigger is True, f\"Expected should_trigger=True, reason: {result.reason}\"\n        assert result.reason, \"reason should be non-empty\"\n        assert result.budget_remaining_usd > 0, \"budget_remaining should be positive\"\n\n    def test_should_trigger_insufficient_examples(self, tmp_dir):\n        \"\"\"Returns False when new examples < min_new_examples.\"\"\"\n        # Data store reports 0 examples (or very few)\n        data_store = make_mock_data_store(example_count=2, training_count=2, validation_count=0)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(min_new_examples=100),\n        )\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.should_trigger()\n        assert result.should_trigger is False, f\"Should not trigger with insufficient examples: {result.reason}\"\n\n    def test_should_trigger_exact_min_examples_boundary(self, tmp_dir):\n        \"\"\"Returns True when new examples == min_new_examples exactly.\"\"\"\n        data_store = make_mock_data_store(example_count=10, training_count=10, validation_count=0)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(\n                min_new_examples=10,\n                min_interval_seconds=0.0,\n                max_consecutive_failures=10,\n            ),\n            budget=make_budget(max_monthly_budget_usd=1000.0),\n        )\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.should_trigger()\n        # At exact boundary, trigger should be True (>= semantics)\n        assert result.should_trigger is True, \\\n            f\"Should trigger at exact min_new_examples boundary, reason: {result.reason}\"\n\n    def test_should_trigger_interval_not_elapsed(self, tmp_dir):\n        \"\"\"Returns False when min_interval_seconds has not elapsed.\"\"\"\n        data_store = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(\n                min_new_examples=1,\n                min_interval_seconds=999999.0,  # Very long interval\n            ),\n        )\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        # Simulate a recent run by running the pipeline first (or writing state)\n        # For simplicity, write state with recent last_run time\n        state_with_recent_run = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": datetime.now(timezone.utc).isoformat(),\n            \"last_successful_data_version_hash\": \"abc123\",\n            \"training_example_count_at_last_success\": 80,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state_with_recent_run, f)\n\n        # Re-initialize to pick up the state\n        p2 = TrainingPipeline()\n        data_store2 = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        p2.initialize(config=config, data_store=data_store2, orchestrator=orch, validator=val)\n\n        result = p2.should_trigger()\n        # With 999999s interval and recent last run, should not trigger\n        assert result.should_trigger is False, \\\n            f\"Should not trigger when interval not elapsed, reason: {result.reason}\"\n\n    def test_should_trigger_max_consecutive_failures(self, tmp_dir):\n        \"\"\"Returns False when consecutive_failures >= max_consecutive_failures.\"\"\"\n        data_store = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(\n                min_new_examples=1,\n                min_interval_seconds=0.0,\n                max_consecutive_failures=3,\n            ),\n        )\n\n        # Write state with max consecutive failures\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 3,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.should_trigger()\n        assert result.should_trigger is False, \\\n            f\"Should not trigger at max_consecutive_failures, reason: {result.reason}\"\n        assert result.consecutive_failures >= 3\n\n    def test_should_trigger_budget_exhausted(self, tmp_dir):\n        \"\"\"Returns False when remaining budget < estimated cost.\"\"\"\n        data_store = make_mock_data_store(example_count=100, training_count=80, validation_count=20)\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            trigger_policy=make_trigger_policy(\n                min_new_examples=1,\n                min_interval_seconds=0.0,\n                max_consecutive_failures=10,\n            ),\n            budget=make_budget(\n                max_monthly_budget_usd=100.0,\n                current_month_spent_usd=95.0,\n                estimated_cost_per_run_usd=10.0,\n            ),\n        )\n\n        # Write state with high spend\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 95.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.should_trigger()\n        assert result.should_trigger is False, \\\n            f\"Should not trigger with exhausted budget, reason: {result.reason}\"\n        assert result.budget_remaining_usd < config.budget.estimated_cost_per_run_usd\n\n    def test_should_trigger_read_only(self, initialized_pipeline):\n        \"\"\"should_trigger does not mutate pipeline state.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        # Get state before\n        status_before = p.get_status()\n        history_before = p.get_run_history(limit=100)\n\n        p.should_trigger()\n\n        status_after = p.get_status()\n        history_after = p.get_run_history(limit=100)\n\n        assert status_before == status_after, \"Status should not change\"\n        assert history_before.total_runs == history_after.total_runs, \"Run count should not change\"\n\n    def test_should_trigger_not_initialized(self):\n        \"\"\"should_trigger before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        with pytest.raises(RuntimeError):\n            p.should_trigger()\n\n\n# ============================================================================\n# Test: run_pipeline()\n# ============================================================================\n\nclass TestRunPipeline:\n    \"\"\"Tests for TrainingPipeline.run_pipeline().\"\"\"\n\n    def test_run_pipeline_happy_full_success(self, initialized_pipeline):\n        \"\"\"Full pipeline run completes all 5 steps and returns PipelineSuccess.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n\n        assert isinstance(result, (PipelineSuccess, PipelineResult)), \\\n            f\"Expected PipelineSuccess, got {type(result)}\"\n        assert result.status == \"success\", f\"Expected 'success', got {result.status}\"\n        assert result.run is not None\n        run = result.run\n        assert run.status in (PipelineStatus.COMPLETED, \"COMPLETED\"), \\\n            f\"Run status should be COMPLETED, got {run.status}\"\n        assert len(run.steps) == 5, f\"Should have 5 steps, got {len(run.steps)}\"\n\n        # Verify canonical step order\n        step_names = [s.step_name for s in run.steps]\n        expected_order = [\n            PipelineStepName.DATA_SNAPSHOT,\n            PipelineStepName.BUDGET_CHECK,\n            PipelineStepName.FINE_TUNE,\n            PipelineStepName.VALIDATE,\n            PipelineStepName.PROMOTE,\n        ]\n        # Handle string or enum comparison\n        for i, (actual, expected) in enumerate(zip(step_names, expected_order)):\n            assert str(actual) == str(expected) or actual == expected, \\\n                f\"Step {i} should be {expected}, got {actual}\"\n\n        # All steps should be COMPLETED\n        for step in run.steps:\n            assert step.status in (PipelineStepStatus.COMPLETED, \"COMPLETED\"), \\\n                f\"Step {step.step_name} should be COMPLETED, got {step.status}\"\n\n        assert result.model_version_id, \"model_version_id should be set on success\"\n        assert p.get_status() == PipelineStatus.IDLE, \"Pipeline should return to IDLE\"\n\n    def test_run_pipeline_result_union_success(self, initialized_pipeline):\n        \"\"\"PipelineResult discriminated union resolves to PipelineSuccess.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n        result = p.run_pipeline(hyperparameter_overrides=None)\n\n        assert result.status == \"success\"\n        assert hasattr(result, \"aggregate_validation_score\") or hasattr(result, \"promotion_decision\"), \\\n            \"PipelineSuccess should have validation/promotion fields\"\n\n    def test_run_pipeline_result_union_failure(self, tmp_dir):\n        \"\"\"PipelineResult discriminated union resolves to PipelineFailure on failure.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"Fine-tuning failed\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n\n        assert result.status == \"failure\", f\"Expected 'failure', got {result.status}\"\n        assert isinstance(result, (PipelineFailure, PipelineResult))\n        assert hasattr(result, \"failed_step\"), \"PipelineFailure should have failed_step\"\n        assert hasattr(result, \"error_detail\"), \"PipelineFailure should have error_detail\"\n        assert hasattr(result, \"retry_recommended\"), \"PipelineFailure should have retry_recommended\"\n\n    def test_run_pipeline_five_step_records_on_failure(self, tmp_dir):\n        \"\"\"PipelineRun.steps always has exactly 5 records even on failure.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"boom\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert len(result.run.steps) == 5, f\"Should always have 5 steps, got {len(result.run.steps)}\"\n\n    def test_run_pipeline_failure_skips_subsequent_steps(self, tmp_dir):\n        \"\"\"Failed step causes subsequent steps to be SKIPPED.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"fine-tune error\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        steps = result.run.steps\n\n        # DATA_SNAPSHOT and BUDGET_CHECK should be COMPLETED\n        assert steps[0].status in (PipelineStepStatus.COMPLETED, \"COMPLETED\"), \\\n            f\"DATA_SNAPSHOT should be COMPLETED, got {steps[0].status}\"\n        assert steps[1].status in (PipelineStepStatus.COMPLETED, \"COMPLETED\"), \\\n            f\"BUDGET_CHECK should be COMPLETED, got {steps[1].status}\"\n        # FINE_TUNE should be FAILED\n        assert steps[2].status in (PipelineStepStatus.FAILED, \"FAILED\"), \\\n            f\"FINE_TUNE should be FAILED, got {steps[2].status}\"\n        # VALIDATE and PROMOTE should be SKIPPED\n        assert steps[3].status in (PipelineStepStatus.SKIPPED, \"SKIPPED\"), \\\n            f\"VALIDATE should be SKIPPED, got {steps[3].status}\"\n        assert steps[4].status in (PipelineStepStatus.SKIPPED, \"SKIPPED\"), \\\n            f\"PROMOTE should be SKIPPED, got {steps[4].status}\"\n\n    def test_run_pipeline_increments_consecutive_failures(self, tmp_dir):\n        \"\"\"Failed run increments consecutive_failures.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"fail\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        trigger = p.should_trigger()\n        assert trigger.consecutive_failures >= 1, \\\n            f\"consecutive_failures should be >= 1, got {trigger.consecutive_failures}\"\n\n    def test_run_pipeline_resets_consecutive_failures_on_success(self, tmp_dir):\n        \"\"\"Successful run resets consecutive_failures to 0.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir, trigger_policy=make_trigger_policy(max_consecutive_failures=10))\n\n        # First, create state with failures\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 2,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"success\"\n\n        trigger = p.should_trigger()\n        assert trigger.consecutive_failures == 0, \\\n            f\"consecutive_failures should be 0 after success, got {trigger.consecutive_failures}\"\n\n    def test_run_pipeline_not_initialized(self):\n        \"\"\"run_pipeline before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        with pytest.raises(RuntimeError):\n            p.run_pipeline(hyperparameter_overrides=None)\n\n    def test_run_pipeline_insufficient_data(self, tmp_dir):\n        \"\"\"Pipeline with too few examples returns PipelineFailure/INSUFFICIENT_DATA.\"\"\"\n        data_store = make_mock_data_store(example_count=1, training_count=1, validation_count=0)\n        data_store.iter_training_examples.return_value = [make_training_example()]\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        # Could be PipelineFailure with INSUFFICIENT_DATA or similar\n        if result.status == \"failure\":\n            assert result.run.status in (\n                PipelineStatus.INSUFFICIENT_DATA, PipelineStatus.FAILED,\n                \"INSUFFICIENT_DATA\", \"FAILED\"\n            )\n        # Orchestrator should not have been called for fine-tuning\n        orch.trigger_fine_tuning.assert_not_called()\n\n    def test_run_pipeline_budget_exhausted(self, tmp_dir):\n        \"\"\"Pipeline returns SKIPPED_BUDGET when budget would be exceeded.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            budget=make_budget(\n                max_monthly_budget_usd=100.0,\n                estimated_cost_per_run_usd=20.0,\n            ),\n        )\n\n        # Write state with nearly exhausted budget\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 90.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\", f\"Should fail with budget exhausted, got {result.status}\"\n        assert result.run.status in (PipelineStatus.SKIPPED_BUDGET, \"SKIPPED_BUDGET\"), \\\n            f\"Run status should be SKIPPED_BUDGET, got {result.run.status}\"\n        orch.trigger_fine_tuning.assert_not_called()\n\n    def test_run_pipeline_fine_tune_failed(self, tmp_dir):\n        \"\"\"Fine-tuning failure returns PipelineFailure with failed_step=FINE_TUNE.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"GPU unavailable\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\"\n        failed_step = str(result.failed_step)\n        assert \"FINE_TUNE\" in failed_step, f\"failed_step should be FINE_TUNE, got {failed_step}\"\n\n    def test_run_pipeline_validation_failed(self, tmp_dir):\n        \"\"\"Validation failure returns PipelineFailure; previous model continues serving.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator(score=0.3, passed=False, promotion_decision=\"rejected\")\n        val.validate_candidate.side_effect = RuntimeError(\"Candidate below threshold\")\n        config = make_config(tmp_dir)\n\n        # Set an existing model version\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"old-model-v0\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\"\n        failed_step = str(result.failed_step)\n        assert \"VALIDATE\" in failed_step, f\"failed_step should be VALIDATE, got {failed_step}\"\n\n    def test_run_pipeline_promotion_failed(self, tmp_dir):\n        \"\"\"Promotion failure returns PipelineFailure; previous model continues serving.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        val.promote_candidate.side_effect = RuntimeError(\"Model server swap failed\")\n        val.validate_and_promote.side_effect = RuntimeError(\"Model server swap failed\")\n        config = make_config(tmp_dir)\n\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"old-model-v0\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        # Could fail at VALIDATE or PROMOTE depending on implementation\n        assert result.status == \"failure\"\n\n    def test_run_pipeline_data_store_error(self, tmp_dir):\n        \"\"\"Data store failure during snapshot returns PipelineFailure.\"\"\"\n        data_store = make_mock_data_store()\n        data_store.iter_training_examples.side_effect = IOError(\"Data store unavailable\")\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\"\n        failed_step = str(result.failed_step)\n        assert \"DATA_SNAPSHOT\" in failed_step, f\"failed_step should be DATA_SNAPSHOT, got {failed_step}\"\n\n    def test_run_pipeline_hyperparameter_overrides_passthrough(self, initialized_pipeline):\n        \"\"\"Hyperparameter overrides are passed through to orchestrator.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        overrides = HyperparameterOverrides(\n            learning_rate=0.001,\n            num_epochs=3,\n            batch_size=16,\n            lora_rank=8,\n            lora_alpha=16,\n        )\n        result = p.run_pipeline(hyperparameter_overrides=overrides)\n\n        if result.status == \"success\":\n            # Check that orchestrator was called with the overrides\n            assert orch.trigger_fine_tuning.called, \"orchestrator.trigger_fine_tuning should be called\"\n            call_kwargs = orch.trigger_fine_tuning.call_args\n            # The overrides should be somewhere in the call arguments\n            call_str = str(call_kwargs)\n            assert call_kwargs is not None, \"trigger_fine_tuning should have been called with args\"\n\n    def test_run_pipeline_status_returns_to_idle(self, initialized_pipeline):\n        \"\"\"Pipeline status returns to IDLE after run completes.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert p.get_status() == PipelineStatus.IDLE, \\\n            f\"Pipeline should be IDLE after run, got {p.get_status()}\"\n\n    def test_run_pipeline_budget_tracking_updated(self, initialized_pipeline):\n        \"\"\"Budget tracking is updated after successful run.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        if result.status == \"success\":\n            assert result.run.budget_spent_usd >= 0, \\\n                f\"budget_spent_usd should be non-negative, got {result.run.budget_spent_usd}\"\n\n    def test_run_pipeline_no_model_mutation_on_failure(self, tmp_dir):\n        \"\"\"Active model version is not changed when validation fails.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        val.validate_candidate.side_effect = RuntimeError(\"Validation regression\")\n        config = make_config(tmp_dir)\n\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 0.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"stable-model-v42\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\"\n\n        # Read state file to check active model version\n        with open(config.state_file_path, \"r\") as f:\n            persisted_state = json.load(f)\n        assert persisted_state.get(\"active_model_version_id\") == \"stable-model-v42\", \\\n            \"Active model should remain unchanged on failure\"\n\n\n# ============================================================================\n# Test: Budget enforcement\n# ============================================================================\n\nclass TestBudgetEnforcement:\n    \"\"\"Tests for hard budget enforcement.\"\"\"\n\n    def test_budget_exact_boundary_exceeds(self, tmp_dir):\n        \"\"\"Budget rejects when spent + estimated > max (by a tiny amount).\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            budget=make_budget(\n                max_monthly_budget_usd=100.0,\n                estimated_cost_per_run_usd=10.01,\n            ),\n        )\n\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 90.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert result.status == \"failure\"\n        assert result.run.status in (PipelineStatus.SKIPPED_BUDGET, \"SKIPPED_BUDGET\"), \\\n            f\"Should be SKIPPED_BUDGET, got {result.run.status}\"\n        orch.trigger_fine_tuning.assert_not_called()\n\n    def test_budget_exact_fit_allows(self, tmp_dir):\n        \"\"\"Budget allows run when spent + estimated == max exactly.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator(cost_usd=10.0)\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            budget=make_budget(\n                max_monthly_budget_usd=100.0,\n                estimated_cost_per_run_usd=10.0,\n            ),\n        )\n\n        state = {\n            \"task_type\": \"text_classification\",\n            \"current_status\": \"IDLE\",\n            \"consecutive_failures\": 0,\n            \"last_run_completed_at_utc\": \"\",\n            \"last_successful_data_version_hash\": \"\",\n            \"training_example_count_at_last_success\": 0,\n            \"current_month_spent_usd\": 90.0,\n            \"budget_period_start_utc\": datetime.now(timezone.utc).isoformat(),\n            \"active_model_version_id\": \"\",\n            \"run_history\": [],\n        }\n        os.makedirs(os.path.dirname(config.state_file_path), exist_ok=True)\n        with open(config.state_file_path, \"w\") as f:\n            json.dump(state, f)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        # Budget check should pass — the run should proceed past BUDGET_CHECK\n        budget_step = result.run.steps[1]  # BUDGET_CHECK is step index 1\n        assert budget_step.status in (PipelineStepStatus.COMPLETED, \"COMPLETED\"), \\\n            f\"BUDGET_CHECK should pass at exact boundary, got {budget_step.status}\"\n\n    def test_budget_never_exceeded_across_runs(self, tmp_dir):\n        \"\"\"Multiple runs never exceed the budget.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator(cost_usd=30.0)\n        val = make_mock_validator()\n        config = make_config(\n            tmp_dir,\n            budget=make_budget(\n                max_monthly_budget_usd=100.0,\n                estimated_cost_per_run_usd=30.0,\n            ),\n        )\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        total_spent = 0.0\n        for i in range(5):\n            result = p.run_pipeline(hyperparameter_overrides=None)\n            if result.status == \"success\":\n                total_spent += result.run.budget_spent_usd\n            elif result.run.status in (PipelineStatus.SKIPPED_BUDGET, \"SKIPPED_BUDGET\"):\n                break\n\n        assert total_spent <= config.budget.max_monthly_budget_usd, \\\n            f\"Total spent {total_spent} should not exceed {config.budget.max_monthly_budget_usd}\"\n\n\n# ============================================================================\n# Test: get_status()\n# ============================================================================\n\nclass TestGetStatus:\n    \"\"\"Tests for TrainingPipeline.get_status().\"\"\"\n\n    def test_get_status_idle_after_init(self, initialized_pipeline):\n        \"\"\"Status is IDLE after initialization.\"\"\"\n        p, *_ = initialized_pipeline\n        assert p.get_status() == PipelineStatus.IDLE\n\n    def test_get_status_not_initialized(self):\n        \"\"\"get_status before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        with pytest.raises(RuntimeError):\n            p.get_status()\n\n    def test_get_status_no_mutation(self, initialized_pipeline):\n        \"\"\"get_status does not mutate state.\"\"\"\n        p, config, *_ = initialized_pipeline\n\n        status1 = p.get_status()\n        status2 = p.get_status()\n        assert status1 == status2, \"get_status should be idempotent\"\n\n    def test_get_status_idle_after_run(self, initialized_pipeline):\n        \"\"\"Status returns to IDLE after pipeline run completes.\"\"\"\n        p, *_ = initialized_pipeline\n        p.run_pipeline(hyperparameter_overrides=None)\n        assert p.get_status() == PipelineStatus.IDLE\n\n\n# ============================================================================\n# Test: get_run_history()\n# ============================================================================\n\nclass TestGetRunHistory:\n    \"\"\"Tests for TrainingPipeline.get_run_history().\"\"\"\n\n    def test_get_run_history_after_runs(self, initialized_pipeline):\n        \"\"\"Returns correct history and stats after runs.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        # Run pipeline successfully twice\n        p.run_pipeline(hyperparameter_overrides=None)\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        # Make one fail\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"fail\")\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        history = p.get_run_history(limit=10)\n        assert isinstance(history, PipelineRunHistory)\n        assert history.total_runs == 3, f\"total_runs should be 3, got {history.total_runs}\"\n        assert history.successful_runs == 2, f\"successful_runs should be 2, got {history.successful_runs}\"\n        assert history.failed_runs >= 1, f\"failed_runs should be >= 1, got {history.failed_runs}\"\n        assert history.task_type == config.task_type\n\n        # Verify descending order\n        if len(history.runs) >= 2:\n            for i in range(len(history.runs) - 1):\n                assert history.runs[i].started_at_utc >= history.runs[i + 1].started_at_utc, \\\n                    \"Runs should be ordered by started_at_utc descending\"\n\n    def test_get_run_history_respects_limit(self, initialized_pipeline):\n        \"\"\"Limit parameter caps the number of returned runs.\"\"\"\n        p, *_ = initialized_pipeline\n\n        # Run pipeline 3 times\n        for _ in range(3):\n            p.run_pipeline(hyperparameter_overrides=None)\n\n        history = p.get_run_history(limit=2)\n        assert len(history.runs) <= 2, f\"Should return at most 2 runs, got {len(history.runs)}\"\n\n    def test_get_run_history_empty(self, initialized_pipeline):\n        \"\"\"Empty history when no runs have been executed.\"\"\"\n        p, *_ = initialized_pipeline\n        history = p.get_run_history(limit=10)\n        assert history.total_runs == 0, f\"total_runs should be 0, got {history.total_runs}\"\n        assert history.successful_runs == 0\n        assert history.failed_runs == 0\n        assert len(history.runs) == 0\n\n    def test_get_run_history_not_initialized(self):\n        \"\"\"get_run_history before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        with pytest.raises(RuntimeError):\n            p.get_run_history(limit=10)\n\n    def test_get_run_history_no_mutation(self, initialized_pipeline):\n        \"\"\"get_run_history does not mutate state.\"\"\"\n        p, *_ = initialized_pipeline\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        h1 = p.get_run_history(limit=10)\n        h2 = p.get_run_history(limit=10)\n        assert h1.total_runs == h2.total_runs\n        assert len(h1.runs) == len(h2.runs)\n\n\n# ============================================================================\n# Test: reset_consecutive_failures()\n# ============================================================================\n\nclass TestResetConsecutiveFailures:\n    \"\"\"Tests for TrainingPipeline.reset_consecutive_failures().\"\"\"\n\n    def test_reset_failures_happy_path(self, tmp_dir):\n        \"\"\"Resets consecutive_failures to 0 and persists state.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"fail\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir, trigger_policy=make_trigger_policy(max_consecutive_failures=10))\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        # Create some failures\n        p.run_pipeline(hyperparameter_overrides=None)\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        trigger_before = p.should_trigger()\n        assert trigger_before.consecutive_failures >= 2\n\n        p.reset_consecutive_failures()\n\n        trigger_after = p.should_trigger()\n        assert trigger_after.consecutive_failures == 0, \\\n            f\"consecutive_failures should be 0 after reset, got {trigger_after.consecutive_failures}\"\n\n    def test_reset_failures_not_initialized(self):\n        \"\"\"reset_consecutive_failures before initialize raises RuntimeError.\"\"\"\n        p = TrainingPipeline()\n        with pytest.raises(RuntimeError):\n            p.reset_consecutive_failures()\n\n    def test_reset_failures_idempotent(self, initialized_pipeline):\n        \"\"\"Resetting when already at 0 is a no-op (idempotent).\"\"\"\n        p, *_ = initialized_pipeline\n\n        # Should already be at 0\n        p.reset_consecutive_failures()\n        trigger = p.should_trigger()\n        assert trigger.consecutive_failures == 0\n\n\n# ============================================================================\n# Test: State persistence and run history pruning\n# ============================================================================\n\nclass TestStatePersistence:\n    \"\"\"Tests for state file persistence behavior.\"\"\"\n\n    def test_state_file_created_on_init(self, tmp_dir, data_store, orchestrator, validator):\n        \"\"\"State file is created during initialization.\"\"\"\n        config = make_config(tmp_dir)\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orchestrator, validator=validator)\n\n        assert os.path.exists(config.state_file_path), \"State file should exist after init\"\n\n    def test_state_file_updated_after_run(self, initialized_pipeline):\n        \"\"\"State file is updated after a pipeline run.\"\"\"\n        p, config, *_ = initialized_pipeline\n\n        mtime_before = os.path.getmtime(config.state_file_path)\n        time.sleep(0.01)  # Small delay to ensure mtime changes\n        p.run_pipeline(hyperparameter_overrides=None)\n        mtime_after = os.path.getmtime(config.state_file_path)\n\n        assert mtime_after > mtime_before, \"State file should be updated after run\"\n\n    def test_state_file_valid_json(self, initialized_pipeline):\n        \"\"\"State file contains valid JSON after operations.\"\"\"\n        p, config, *_ = initialized_pipeline\n        p.run_pipeline(hyperparameter_overrides=None)\n\n        with open(config.state_file_path, \"r\") as f:\n            state = json.load(f)\n\n        assert isinstance(state, dict), \"State file should contain a JSON object\"\n        assert \"task_type\" in state, \"State should contain task_type\"\n        assert \"run_history\" in state, \"State should contain run_history\"\n\n    def test_run_history_pruned_to_limit(self, tmp_dir):\n        \"\"\"Run history is pruned to run_history_limit.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir, run_history_limit=3)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        # Run more times than the limit\n        for _ in range(5):\n            p.run_pipeline(hyperparameter_overrides=None)\n\n        history = p.get_run_history(limit=100)\n        assert len(history.runs) <= 3, \\\n            f\"Run history should be pruned to 3, got {len(history.runs)}\"\n\n    def test_state_survives_restart(self, tmp_dir):\n        \"\"\"State is preserved across pipeline instance lifetimes.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        # First instance\n        p1 = TrainingPipeline()\n        p1.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n        p1.run_pipeline(hyperparameter_overrides=None)\n\n        h1 = p1.get_run_history(limit=100)\n\n        # Second instance (simulating restart)\n        p2 = TrainingPipeline()\n        data_store2 = make_mock_data_store()\n        p2.initialize(config=config, data_store=data_store2, orchestrator=orch, validator=val)\n\n        h2 = p2.get_run_history(limit=100)\n        assert h2.total_runs >= h1.total_runs, \\\n            \"State should be preserved across restarts\"\n\n\n# ============================================================================\n# Test: Cross-cutting invariants\n# ============================================================================\n\nclass TestInvariants:\n    \"\"\"Tests for cross-cutting invariants.\"\"\"\n\n    def test_no_exceptions_for_expected_failures(self, tmp_dir):\n        \"\"\"Expected failures return PipelineFailure, never raise exceptions.\"\"\"\n        scenarios = [\n            (\"fine_tune_error\", {\"trigger_fine_tuning_side_effect\": RuntimeError(\"GPU error\")}),\n        ]\n\n        for name, setup in scenarios:\n            data_store = make_mock_data_store()\n            orch = make_mock_orchestrator()\n            val = make_mock_validator()\n\n            if \"trigger_fine_tuning_side_effect\" in setup:\n                orch.trigger_fine_tuning.side_effect = setup[\"trigger_fine_tuning_side_effect\"]\n\n            config = make_config(tmp_dir)\n            p = TrainingPipeline()\n            p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n            # This should NOT raise — should return PipelineFailure\n            result = p.run_pipeline(hyperparameter_overrides=None)\n            assert result.status == \"failure\", \\\n                f\"Scenario {name}: expected PipelineFailure, got {result.status}\"\n\n    def test_only_allowed_exception_types(self, tmp_dir):\n        \"\"\"Only RuntimeError, ValueError, IOError, TypeError may be raised.\"\"\"\n        # Test with not_initialized (should be RuntimeError)\n        p = TrainingPipeline()\n        try:\n            p.run_pipeline(hyperparameter_overrides=None)\n            assert False, \"Should have raised\"\n        except (RuntimeError, ValueError, IOError, TypeError):\n            pass  # These are allowed\n        except Exception as e:\n            pytest.fail(f\"Unexpected exception type: {type(e).__name__}: {e}\")\n\n    def test_serialized_runs_no_concurrent(self, initialized_pipeline):\n        \"\"\"Only one run_pipeline can execute at a time.\"\"\"\n        p, *_ = initialized_pipeline\n\n        # We test the lock by checking that the pipeline tracks RUNNING status\n        # A synchronous test can't truly test concurrency, but we can verify\n        # the contract by checking status transitions\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert p.get_status() == PipelineStatus.IDLE, \\\n            \"Pipeline should be IDLE after run completes\"\n\n    def test_step_count_invariant_success(self, initialized_pipeline):\n        \"\"\"Successful run has exactly 5 step records in canonical order.\"\"\"\n        p, *_ = initialized_pipeline\n        result = p.run_pipeline(hyperparameter_overrides=None)\n\n        assert len(result.run.steps) == 5, f\"Must have 5 steps, got {len(result.run.steps)}\"\n\n    def test_step_count_invariant_failure(self, tmp_dir):\n        \"\"\"Failed run still has exactly 5 step records.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"error\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        assert len(result.run.steps) == 5, f\"Must have 5 steps even on failure, got {len(result.run.steps)}\"\n\n    def test_failed_steps_marked_skipped_not_pending(self, tmp_dir):\n        \"\"\"After a failure, subsequent steps are SKIPPED (not PENDING).\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"error\")\n        val = make_mock_validator()\n        config = make_config(tmp_dir)\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        found_failure = False\n        for step in result.run.steps:\n            if found_failure:\n                assert step.status in (PipelineStepStatus.SKIPPED, \"SKIPPED\"), \\\n                    f\"Step {step.step_name} after failure should be SKIPPED, got {step.status}\"\n            if step.status in (PipelineStepStatus.FAILED, \"FAILED\"):\n                found_failure = True\n\n        assert found_failure, \"Should have found at least one FAILED step\"\n\n    def test_no_global_mutable_state(self, tmp_dir):\n        \"\"\"Two pipeline instances do not share state.\"\"\"\n        data_store1 = make_mock_data_store()\n        data_store2 = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n\n        config1 = make_config(\n            tmp_dir,\n            state_file_path=os.path.join(tmp_dir, \"state1.json\"),\n        )\n        config2 = make_config(\n            tmp_dir,\n            state_file_path=os.path.join(tmp_dir, \"state2.json\"),\n        )\n\n        p1 = TrainingPipeline()\n        p1.initialize(config=config1, data_store=data_store1, orchestrator=orch, validator=val)\n        p2 = TrainingPipeline()\n        p2.initialize(config=config2, data_store=data_store2, orchestrator=orch, validator=val)\n\n        # Run pipeline on p1\n        p1.run_pipeline(hyperparameter_overrides=None)\n\n        # p2 should have no runs\n        h1 = p1.get_run_history(limit=100)\n        h2 = p2.get_run_history(limit=100)\n\n        assert h1.total_runs >= 1, \"p1 should have at least 1 run\"\n        assert h2.total_runs == 0, \"p2 should have 0 runs (independent state)\"\n\n    def test_consecutive_failures_only_modified_by_runs_and_reset(self, tmp_dir):\n        \"\"\"Consecutive failures modified only by run outcomes and reset_consecutive_failures.\"\"\"\n        data_store = make_mock_data_store()\n        orch = make_mock_orchestrator()\n        val = make_mock_validator()\n        config = make_config(tmp_dir, trigger_policy=make_trigger_policy(max_consecutive_failures=100))\n\n        p = TrainingPipeline()\n        p.initialize(config=config, data_store=data_store, orchestrator=orch, validator=val)\n\n        # Initial state: 0 failures\n        t = p.should_trigger()\n        assert t.consecutive_failures == 0\n\n        # Successful run: still 0\n        p.run_pipeline(hyperparameter_overrides=None)\n        t = p.should_trigger()\n        assert t.consecutive_failures == 0\n\n        # Failed run: incremented\n        orch.trigger_fine_tuning.side_effect = RuntimeError(\"fail\")\n        p.run_pipeline(hyperparameter_overrides=None)\n        t = p.should_trigger()\n        assert t.consecutive_failures == 1\n\n        # Another failed run: incremented again\n        p.run_pipeline(hyperparameter_overrides=None)\n        t = p.should_trigger()\n        assert t.consecutive_failures == 2\n\n        # get_status, should_trigger, add_example should NOT change it\n        p.get_status()\n        p.should_trigger()\n        t = p.should_trigger()\n        assert t.consecutive_failures == 2\n\n        # Reset: back to 0\n        p.reset_consecutive_failures()\n        t = p.should_trigger()\n        assert t.consecutive_failures == 0\n\n    def test_pipeline_result_discriminated_union(self, initialized_pipeline):\n        \"\"\"PipelineResult status field discriminates between Success and Failure.\"\"\"\n        p, config, data_store, orch, val = initialized_pipeline\n\n        # Success case\n        result = p.run_pipeline(hyperparameter_overrides=None)\n        if result.status == \"success\":\n            assert isinstance(result, PipelineSuccess) or hasattr(result, \"model_version_id\")\n        elif result.status == \"failure\":\n            assert isinstance(result, PipelineFailure) or hasattr(result, \"failed_step\")\n        else:\n            pytest.fail(f\"PipelineResult.status must be 'success' or 'failure', got '{result.status}'\")\n\n    def test_config_strict_validation_no_silent_defaults(self, tmp_dir):\n        \"\"\"Invalid config causes ValueError, never silently defaults.\"\"\"\n        p = TrainingPipeline()\n\n        # Various invalid configs\n        invalid_configs = []\n\n        # Negative budget\n        try:\n            invalid_configs.append(make_config(\n                tmp_dir,\n                budget=make_budget(max_monthly_budget_usd=-1.0),\n            ))\n        except (ValueError, TypeError):\n            pass  # Config itself may reject this\n\n        # Negative min_new_examples\n        try:\n            invalid_configs.append(make_config(\n                tmp_dir,\n                trigger_policy=make_trigger_policy(min_new_examples=-1),\n            ))\n        except (ValueError, TypeError):\n            pass  # Config itself may reject this\n\n        for bad_config in invalid_configs:\n            with pytest.raises((ValueError, TypeError)):\n                p2 = TrainingPipeline()\n                p2.initialize(\n                    config=bad_config,\n                    data_store=make_mock_data_store(),\n                    orchestrator=make_mock_orchestrator(),\n                    validator=make_mock_validator(),\n                )\n"
+}

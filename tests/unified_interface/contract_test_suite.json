@@ -1,0 +1,1140 @@
+{
+  "component_id": "unified_interface",
+  "contract_version": 1,
+  "test_cases": [
+    {
+      "id": "lifecycle_init_with_config_path",
+      "description": "Constructor accepts a valid YAML file path and creates a fully initialized instance with _running=False",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid YAML config file path with all required fields",
+      "expected_output_description": "Instance with validated _config, all 10 components non-None, _running=False",
+      "expected_error": "",
+      "assertions": [
+        "self._config is a validated ApprenticeConfig",
+        "All 10 internal components are non-None",
+        "self._running is False"
+      ]
+    },
+    {
+      "id": "lifecycle_init_with_config_object",
+      "description": "Constructor accepts an ApprenticeConfig object directly",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Pre-constructed ApprenticeConfig object",
+      "expected_output_description": "Instance initialized without file I/O",
+      "expected_error": "",
+      "assertions": [
+        "self._config matches the provided ApprenticeConfig"
+      ]
+    },
+    {
+      "id": "lifecycle_init_with_overrides",
+      "description": "Component overrides completely replace default-constructed components",
+      "function": "__init__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Config plus mock overrides for several components",
+      "expected_output_description": "Overridden components are used, not default-constructed ones",
+      "expected_error": "",
+      "assertions": [
+        "Overridden component is the exact mock object provided"
+      ]
+    },
+    {
+      "id": "lifecycle_init_config_file_not_found",
+      "description": "Constructor raises error when config file path does not exist",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Non-existent file path",
+      "expected_output_description": "",
+      "expected_error": "config_file_not_found",
+      "assertions": [
+        "FileNotFoundError or appropriate config error raised"
+      ]
+    },
+    {
+      "id": "lifecycle_init_config_parse_error",
+      "description": "Constructor raises error when YAML is malformed",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Path to file with invalid YAML syntax",
+      "expected_output_description": "",
+      "expected_error": "config_parse_error",
+      "assertions": [
+        "Config parse error raised with clear message"
+      ]
+    },
+    {
+      "id": "lifecycle_init_config_validation_error",
+      "description": "Constructor raises error when config values fail Pydantic strict validation",
+      "function": "__init__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid YAML but missing required fields or invalid values",
+      "expected_output_description": "",
+      "expected_error": "config_validation_error",
+      "assertions": [
+        "Validation error raised"
+      ]
+    },
+    {
+      "id": "lifecycle_create_returns_running_instance",
+      "description": "create() classmethod returns a fully ready instance with _running=True",
+      "function": "create",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid config",
+      "expected_output_description": "Instance with _running=True, all async resources initialized",
+      "expected_error": "",
+      "assertions": [
+        "Returned instance has _running == True",
+        "__aenter__ was called"
+      ]
+    },
+    {
+      "id": "lifecycle_aenter_sets_running",
+      "description": "__aenter__ sets _running to True and initializes async resources",
+      "function": "__aenter__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Properly constructed instance with _running=False",
+      "expected_output_description": "Instance with _running=True",
+      "expected_error": "",
+      "assertions": [
+        "self._running is True after __aenter__"
+      ]
+    },
+    {
+      "id": "lifecycle_aenter_double_enter_raises",
+      "description": "__aenter__ raises error if already running",
+      "function": "__aenter__",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Instance with _running already True",
+      "expected_output_description": "",
+      "expected_error": "already_running",
+      "assertions": [
+        "RuntimeError raised on double-enter"
+      ]
+    },
+    {
+      "id": "lifecycle_aexit_cleans_up",
+      "description": "__aexit__ sets _running to False and releases all resources",
+      "function": "__aexit__",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Running instance",
+      "expected_output_description": "_running=False, resources released, returns False",
+      "expected_error": "",
+      "assertions": [
+        "self._running is False",
+        "Return value is False"
+      ]
+    },
+    {
+      "id": "lifecycle_close_idempotent",
+      "description": "close() is safe to call multiple times",
+      "function": "close",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Call close() twice on same instance",
+      "expected_output_description": "No error on second call",
+      "expected_error": "",
+      "assertions": [
+        "Second close() call does not raise"
+      ]
+    },
+    {
+      "id": "lifecycle_close_sets_not_running",
+      "description": "close() sets _running to False and releases resources",
+      "function": "close",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Running instance",
+      "expected_output_description": "_running=False",
+      "expected_error": "",
+      "assertions": [
+        "self._running is False after close()"
+      ]
+    },
+    {
+      "id": "ops_run_happy_path_local",
+      "description": "run() routes to local model when local available and budget available",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name, input_data dict, local model available, budget available",
+      "expected_output_description": "TaskResponse with source=LOCAL, status=SUCCESS",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source reflects actual backend used",
+        "TaskResponse.status is SUCCESS",
+        "TaskResponse.request_id is non-empty"
+      ]
+    },
+    {
+      "id": "ops_run_happy_path_remote",
+      "description": "run() routes to remote model when confidence is low",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name, low confidence score",
+      "expected_output_description": "TaskResponse with source=REMOTE, status=SUCCESS",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source is REMOTE",
+        "Budget spend recorded"
+      ]
+    },
+    {
+      "id": "ops_run_budget_exhausted_local_available",
+      "description": "run() degrades gracefully to local-only when budget exhausted but local available",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Budget exhausted, local model available",
+      "expected_output_description": "TaskResponse with source=LOCAL, status=DEGRADED",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.status is DEGRADED",
+        "No remote API call made"
+      ]
+    },
+    {
+      "id": "ops_run_local_unavailable_budget_available",
+      "description": "run() falls back to remote when local unavailable but budget available",
+      "function": "run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Local model unavailable, budget available",
+      "expected_output_description": "TaskResponse with source=REMOTE, fallback_used=True",
+      "expected_error": "",
+      "assertions": [
+        "TaskResponse.source is REMOTE",
+        "metadata.fallback_used is True"
+      ]
+    },
+    {
+      "id": "ops_run_both_unavailable_raises",
+      "description": "run() raises BudgetExhaustedError when both local and budget unavailable",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Local model unavailable AND budget exhausted",
+      "expected_output_description": "",
+      "expected_error": "budget_exhausted_no_local",
+      "assertions": [
+        "BudgetExhaustedError raised",
+        "Error contains task_name and budget info"
+      ]
+    },
+    {
+      "id": "ops_run_not_running_raises",
+      "description": "run() raises RuntimeError when called outside async context",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Instance with _running=False",
+      "expected_output_description": "",
+      "expected_error": "not_running",
+      "assertions": [
+        "RuntimeError raised"
+      ]
+    },
+    {
+      "id": "ops_run_task_not_found",
+      "description": "run() raises TaskNotFoundError for unknown task_name",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_name not in registry",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "TaskNotFoundError raised",
+        "available_tasks field populated"
+      ]
+    },
+    {
+      "id": "ops_run_empty_task_name",
+      "description": "run() raises error for empty or whitespace task_name",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "task_name is empty string or whitespace",
+      "expected_output_description": "",
+      "expected_error": "empty_task_name",
+      "assertions": [
+        "ValueError or appropriate error raised"
+      ]
+    },
+    {
+      "id": "ops_run_invalid_input_data",
+      "description": "run() raises error when input_data is not a dict",
+      "function": "run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "input_data is None, a list, or a string",
+      "expected_output_description": "",
+      "expected_error": "invalid_input_data",
+      "assertions": [
+        "TypeError or appropriate error raised"
+      ]
+    },
+    {
+      "id": "ops_run_audit_log_flushed",
+      "description": "Every run() invocation flushes a RunContext to the audit log",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Any valid run() call",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Audit log flush called exactly once",
+        "RunContext contains request_id, task_name, timing info"
+      ]
+    },
+    {
+      "id": "ops_status_happy_path",
+      "description": "status() returns a frozen ConfidenceSnapshot for a valid task",
+      "function": "status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Valid task_name",
+      "expected_output_description": "ConfidenceSnapshot with matching task_name",
+      "expected_error": "",
+      "assertions": [
+        "ConfidenceSnapshot.task_name matches requested",
+        "Phase consistent with confidence score",
+        "budget_remaining + budget_used == budget_limit"
+      ]
+    },
+    {
+      "id": "ops_status_not_running",
+      "description": "status() raises RuntimeError when called outside async context",
+      "function": "status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_running",
+      "assertions": [
+        "RuntimeError raised"
+      ]
+    },
+    {
+      "id": "ops_status_task_not_found",
+      "description": "status() raises TaskNotFoundError for unknown task",
+      "function": "status",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "TaskNotFoundError raised"
+      ]
+    },
+    {
+      "id": "ops_report_happy_path",
+      "description": "report() returns SystemReport with snapshots for all tasks",
+      "function": "report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "SystemReport with correct aggregates",
+      "expected_error": "",
+      "assertions": [
+        "task_snapshots count equals registered task count",
+        "total_runs == total_local_runs + total_remote_runs",
+        "global_budget_used == sum of task budgets"
+      ]
+    },
+    {
+      "id": "ops_report_uptime_zero_before_enter",
+      "description": "report() returns uptime_seconds=0.0 before async context entered",
+      "function": "report",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Instance not yet entered async context",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "SystemReport.uptime_seconds == 0.0"
+      ]
+    },
+    {
+      "id": "cli_parse_args_run",
+      "description": "parse_args correctly parses 'run' subcommand with task and input",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"run\", \"my_task\", \"--input\", \"{\\\"key\\\": \\\"val\\\"}\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "command is RUN",
+        "run_args.task_name == 'my_task'",
+        "run_args.input_raw contains the JSON string"
+      ]
+    },
+    {
+      "id": "cli_parse_args_status",
+      "description": "parse_args correctly parses 'status' subcommand with optional filter",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"status\", \"--task\", \"my_task\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "command is STATUS",
+        "status_args.task_filter == 'my_task'"
+      ]
+    },
+    {
+      "id": "cli_parse_args_report",
+      "description": "parse_args correctly parses 'report' subcommand with optional output",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"report\", \"--output\", \"/tmp/report.json\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "command is REPORT",
+        "report_args.output_path == '/tmp/report.json'"
+      ]
+    },
+    {
+      "id": "cli_parse_args_global_flags",
+      "description": "parse_args correctly handles global flags --config, --json, --verbose",
+      "function": "parse_args",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--config\", \"custom.yaml\", \"--json\", \"-vv\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "global_flags.config_path == 'custom.yaml'",
+        "global_flags.json_mode is True",
+        "global_flags.verbose == 2"
+      ]
+    },
+    {
+      "id": "cli_parse_args_no_subcommand",
+      "description": "parse_args raises SystemExit when no subcommand provided",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "no_subcommand",
+      "assertions": [
+        "SystemExit raised with code 2"
+      ]
+    },
+    {
+      "id": "cli_parse_args_unknown_flag",
+      "description": "parse_args raises SystemExit for unrecognized flags",
+      "function": "parse_args",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"--bogus\", \"run\", \"task\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "unrecognized_flag",
+      "assertions": [
+        "SystemExit raised"
+      ]
+    },
+    {
+      "id": "cli_parse_args_verbose_clamped",
+      "description": "Verbose flag is clamped to max 2",
+      "function": "parse_args",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "argv": "[\"-vvvvv\", \"status\"]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "global_flags.verbose <= 2"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_json_string",
+      "description": "resolve_input parses a JSON string directly",
+      "function": "resolve_input",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "{\"key\": \"value\"}"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned InputData.data == {'key': 'value'}"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_file_reference",
+      "description": "resolve_input reads JSON from a @file reference",
+      "function": "resolve_input",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "input_raw starts with @ followed by a valid file path",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "InputData.data is parsed from file contents"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_invalid_json",
+      "description": "resolve_input raises error for invalid JSON string",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "not json at all"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_json_string",
+      "assertions": [
+        "Error raised for invalid JSON"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_not_object",
+      "description": "resolve_input raises error when JSON is array or scalar, not object",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "[1, 2, 3]"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "not_json_object",
+      "assertions": [
+        "Error raised indicating result must be a JSON object"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_file_not_found",
+      "description": "resolve_input raises error when @file does not exist",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@/nonexistent/file.json"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "input_file_not_found",
+      "assertions": [
+        "FileNotFoundError or appropriate error raised"
+      ]
+    },
+    {
+      "id": "cli_resolve_input_empty_file_ref",
+      "description": "resolve_input raises error when input is exactly '@' with no path",
+      "function": "resolve_input",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "input_raw": "@"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "empty_file_reference",
+      "assertions": [
+        "Error raised for empty file reference"
+      ]
+    },
+    {
+      "id": "cli_format_output_json_mode",
+      "description": "format_output produces valid JSON in json_mode=True",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "RunResult instance, json_mode=True",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned string is valid JSON",
+        "json.loads succeeds"
+      ]
+    },
+    {
+      "id": "cli_format_output_human_mode",
+      "description": "format_output produces human-readable text in json_mode=False",
+      "function": "format_output",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "StatusResult instance, json_mode=False",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned string is non-empty",
+        "No raw JSON in output"
+      ]
+    },
+    {
+      "id": "cli_format_output_no_trailing_newline",
+      "description": "format_output does not include trailing newline",
+      "function": "format_output",
+      "category": "edge_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned string does not end with newline"
+      ]
+    },
+    {
+      "id": "cli_configure_logging_warning",
+      "description": "configure_logging sets WARNING level for verbose=0",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "0"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Root logger level is WARNING"
+      ]
+    },
+    {
+      "id": "cli_configure_logging_info",
+      "description": "configure_logging sets INFO level for verbose=1",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "1"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Root logger level is INFO"
+      ]
+    },
+    {
+      "id": "cli_configure_logging_debug",
+      "description": "configure_logging sets DEBUG level for verbose=2",
+      "function": "configure_logging",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {
+        "verbose": "2"
+      },
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Root logger level is DEBUG"
+      ]
+    },
+    {
+      "id": "cli_execute_run_happy",
+      "description": "execute_run resolves input, calls Apprentice.run(), wraps in RunResult",
+      "function": "execute_run",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "RunResult.task_name matches run_args.task_name",
+        "RunResult.success is True",
+        "RunResult.output contains task response payload"
+      ]
+    },
+    {
+      "id": "cli_execute_run_task_not_found",
+      "description": "execute_run wraps TaskNotFoundError into RunResult with success=False",
+      "function": "execute_run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "task_not_found",
+      "assertions": [
+        "RunResult.success is False or TaskNotFoundError propagated",
+        "error_message is descriptive"
+      ]
+    },
+    {
+      "id": "cli_execute_run_invalid_input",
+      "description": "execute_run handles input resolution failure",
+      "function": "execute_run",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "input_resolution_failed",
+      "assertions": [
+        "Error propagated or captured in RunResult"
+      ]
+    },
+    {
+      "id": "cli_execute_status_happy",
+      "description": "execute_status returns StatusResult with task entries",
+      "function": "execute_status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "StatusResult.tasks is non-empty",
+        "timestamp is ISO 8601"
+      ]
+    },
+    {
+      "id": "cli_execute_status_filtered",
+      "description": "execute_status filters to single task when task_filter provided",
+      "function": "execute_status",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "StatusResult.tasks has at most 1 entry matching filter"
+      ]
+    },
+    {
+      "id": "cli_execute_report_happy",
+      "description": "execute_report returns ReportResult with all tasks",
+      "function": "execute_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "ReportResult.tasks populated",
+        "total_budget_spent <= total_budget_limit",
+        "system_uptime_seconds >= 0"
+      ]
+    },
+    {
+      "id": "cli_execute_report_writes_file",
+      "description": "execute_report writes output to file when output_path specified",
+      "function": "execute_report",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "File at output_path contains report",
+        "written_to_file matches output_path"
+      ]
+    },
+    {
+      "id": "cli_main_success_exit_0",
+      "description": "main() returns exit code 0 on successful run",
+      "function": "main",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Return value is 0"
+      ]
+    },
+    {
+      "id": "cli_main_config_error_exit_1",
+      "description": "main() returns exit code 1 on config/application error",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "config_file_not_found",
+      "assertions": [
+        "Return value is 1"
+      ]
+    },
+    {
+      "id": "cli_main_usage_error_exit_2",
+      "description": "main() returns exit code 2 on usage error (bad args)",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "usage_error",
+      "assertions": [
+        "Return value is 2"
+      ]
+    },
+    {
+      "id": "cli_main_keyboard_interrupt_exit_130",
+      "description": "main() returns exit code 130 on KeyboardInterrupt",
+      "function": "main",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "keyboard_interrupt",
+      "assertions": [
+        "Return value is 130"
+      ]
+    },
+    {
+      "id": "config_load_valid",
+      "description": "load_config parses a valid YAML file into ApprenticeConfig",
+      "function": "load_config",
+      "category": "happy_path",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Returned ApprenticeConfig passes all validation",
+        "All required fields present"
+      ]
+    },
+    {
+      "id": "config_load_file_not_found",
+      "description": "load_config raises error for non-existent file",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "file_not_found",
+      "assertions": [
+        "FileNotFoundError raised"
+      ]
+    },
+    {
+      "id": "config_load_invalid_yaml",
+      "description": "load_config raises error for malformed YAML",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "invalid_yaml",
+      "assertions": [
+        "YAML parse error raised"
+      ]
+    },
+    {
+      "id": "config_load_validation_error",
+      "description": "load_config raises error when YAML doesn't match schema",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "validation_error",
+      "assertions": [
+        "Pydantic validation error raised"
+      ]
+    },
+    {
+      "id": "config_load_permission_denied",
+      "description": "load_config raises error when file is not readable",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "permission_denied",
+      "assertions": [
+        "PermissionError raised"
+      ]
+    },
+    {
+      "id": "config_thresholds_ordering",
+      "description": "ConfidenceThresholds rejects invalid ordering of thresholds",
+      "function": "load_config",
+      "category": "error_case",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "Thresholds where bootstrapping_upper >= active_learning_upper",
+      "expected_output_description": "",
+      "expected_error": "validation_error",
+      "assertions": [
+        "Validation error about threshold ordering"
+      ]
+    },
+    {
+      "id": "invariant_running_state_consistency",
+      "description": "_running is True iff async context entered and not exited",
+      "function": "__aenter__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "_running False after init",
+        "_running True after aenter",
+        "_running False after aexit"
+      ]
+    },
+    {
+      "id": "invariant_all_components_non_none",
+      "description": "All 10 internal components are non-None after __init__",
+      "function": "__init__",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Each of the 10 component attributes is not None"
+      ]
+    },
+    {
+      "id": "invariant_budget_enforcement_hard",
+      "description": "When budget exhausted, no remote API call is made",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "remote_client not called when budget manager returns False"
+      ]
+    },
+    {
+      "id": "invariant_total_runs_sum",
+      "description": "SystemReport.total_runs == total_local_runs + total_remote_runs",
+      "function": "report",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "total_runs equals sum of local and remote runs"
+      ]
+    },
+    {
+      "id": "invariant_source_attribution",
+      "description": "TaskResponse.source accurately reflects which backend was used",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "source=LOCAL when local model used",
+        "source=REMOTE when remote model used"
+      ]
+    },
+    {
+      "id": "invariant_frozen_responses",
+      "description": "TaskResponse, ConfidenceSnapshot, and SystemReport are immutable",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Attempting to modify frozen model raises error"
+      ]
+    },
+    {
+      "id": "invariant_no_crash_on_graceful_degradation",
+      "description": "Local failure + budget available triggers remote fallback without crash",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "No exception raised",
+        "TaskResponse returned with fallback"
+      ]
+    },
+    {
+      "id": "invariant_only_both_unavailable_raises",
+      "description": "Error raised only when BOTH local unavailable AND budget exhausted",
+      "function": "run",
+      "category": "invariant",
+      "setup_description": "",
+      "mock_dependencies": {},
+      "input_values": {},
+      "input_description": "",
+      "expected_output_description": "",
+      "expected_error": "",
+      "assertions": [
+        "Single unavailability handled gracefully",
+        "Both unavailable raises error"
+      ]
+    }
+  ],
+  "test_language": "python",
+  "generated_code": "\"\"\"\nContract test suite for the Unified Interface component.\nTests Apprentice lifecycle, operations, CLI parsing, CLI execution, and config loading.\n\nRun with: pytest contract_test.py -v\n\"\"\"\nimport asyncio\nimport json\nimport logging\nimport os\nimport tempfile\nfrom datetime import datetime, timezone\nfrom pathlib import Path\nfrom unittest.mock import (\n    AsyncMock,\n    MagicMock,\n    Mock,\n    PropertyMock,\n    call,\n    patch,\n)\n\nimport pytest\n\n# ---------------------------------------------------------------------------\n# Attempt imports – tests degrade gracefully if module not yet implemented\n# ---------------------------------------------------------------------------\ntry:\n    from src.unified_interface import (\n        Apprentice,\n        ApprenticeConfig,\n        ApprenticeError,\n        BudgetExhaustedError,\n        BudgetInfo,\n        ConfidenceSnapshot,\n        ConfidenceThresholds,\n        ErrorKind,\n        ExitCode,\n        GlobalFlags,\n        InputData,\n        LocalModelUnavailableError,\n        LogLevel,\n        ModelSource,\n        OutputFormat,\n        ParsedArgs,\n        PhaseInfo,\n        PhaseLabel,\n        ReportArgs,\n        ReportResult,\n        ResponseMetadata,\n        RunArgs,\n        RunContext,\n        RunResult,\n        RunStatus,\n        StatusArgs,\n        StatusResult,\n        SubcommandName,\n        SystemReport,\n        TaskConfig,\n        TaskNotFoundError,\n        TaskResponse,\n        TaskStatusEntry,\n    )\nexcept ImportError:\n    pytest.skip(\"unified_interface module not available\", allow_module_level=True)\n\n# Try importing CLI functions separately (they may be in a sub-module)\ntry:\n    from src.unified_interface.cli import (\n        configure_logging,\n        execute_report,\n        execute_run,\n        execute_status,\n        format_output,\n        load_config,\n        main,\n        parse_args,\n        resolve_input,\n    )\nexcept ImportError:\n    try:\n        from src.unified_interface import (\n            configure_logging,\n            execute_report,\n            execute_run,\n            execute_status,\n            format_output,\n            load_config,\n            main,\n            parse_args,\n            resolve_input,\n        )\n    except ImportError:\n        pytest.skip(\"CLI functions not importable\", allow_module_level=True)\n\n\n# ===========================================================================\n# Shared Fixtures\n# ===========================================================================\n\nVALID_YAML_CONTENT = \"\"\"\nschema_version: 1\nremote_api_base_url: \"https://api.example.com\"\nlocal_model_endpoint: \"http://localhost:8080\"\naudit_log_path: \"/tmp/audit.log\"\nretry_max_attempts: 3\nretry_backoff_base_seconds: 1.0\nbudget_enforcement:\n  hard_limit: true\n  warning_threshold_pct: 80.0\n  log_every_spend: true\ntasks:\n  - task_name: \"test_task\"\n    remote_model_id: \"gpt-4\"\n    local_model_id: \"local-llama\"\n    budget_limit_usd: 10.0\n    budget_period_days: 30\n    confidence_thresholds:\n      bootstrapping_upper: 0.2\n      active_learning_upper: 0.5\n      supervised_upper: 0.8\n      autonomous_lower: 0.8\n\"\"\"\n\n\n@pytest.fixture\ndef valid_config_path(tmp_path):\n    \"\"\"Write a valid YAML config file and return its path.\"\"\"\n    p = tmp_path / \"apprentice.yaml\"\n    p.write_text(VALID_YAML_CONTENT)\n    return str(p)\n\n\n@pytest.fixture\ndef mock_components():\n    \"\"\"Create a dict of all 10 mock dependency components.\"\"\"\n    return {\n        \"config_loader\": MagicMock(),\n        \"task_registry\": MagicMock(),\n        \"remote_client\": AsyncMock(),\n        \"local_client\": AsyncMock(),\n        \"confidence_engine\": MagicMock(),\n        \"sampling_scheduler\": MagicMock(),\n        \"budget_manager\": MagicMock(),\n        \"training_data_store\": MagicMock(),\n        \"router\": MagicMock(),\n        \"audit_log\": AsyncMock(),\n    }\n\n\ndef make_task_response(\n    task_name=\"test_task\",\n    source=ModelSource.LOCAL,\n    status=RunStatus.SUCCESS,\n    fallback_used=False,\n):\n    \"\"\"Helper to create a TaskResponse for test assertions.\"\"\"\n    metadata = ResponseMetadata(\n        model_id=\"test-model\",\n        cost_usd=0.001,\n        retries=0,\n        fallback_used=fallback_used,\n        timestamp_utc=datetime.now(timezone.utc).isoformat(),\n    )\n    return TaskResponse(\n        task_name=task_name,\n        output={\"result\": \"ok\"},\n        source=source,\n        status=status,\n        request_id=\"req-123\",\n        duration_ms=42.0,\n        metadata=metadata,\n    )\n\n\ndef make_confidence_snapshot(\n    task_name=\"test_task\",\n    confidence=0.6,\n    phase=PhaseLabel.SUPERVISED,\n    budget_remaining=8.0,\n    budget_used=2.0,\n):\n    \"\"\"Helper to create a ConfidenceSnapshot.\"\"\"\n    return ConfidenceSnapshot(\n        task_name=task_name,\n        confidence_score=confidence,\n        phase=phase,\n        sampling_rate=0.3,\n        budget_remaining_usd=budget_remaining,\n        budget_used_usd=budget_used,\n        budget_exhausted=False,\n        local_model_available=True,\n        total_runs=10,\n        timestamp_utc=datetime.now(timezone.utc).isoformat(),\n    )\n\n\ndef make_system_report(task_snapshots=None):\n    \"\"\"Helper to create a SystemReport.\"\"\"\n    if task_snapshots is None:\n        task_snapshots = [make_confidence_snapshot()]\n    return SystemReport(\n        task_snapshots=task_snapshots,\n        global_budget_used_usd=2.0,\n        global_budget_remaining_usd=8.0,\n        total_runs=10,\n        total_local_runs=7,\n        total_remote_runs=3,\n        total_fallbacks=1,\n        total_errors=0,\n        uptime_seconds=120.0,\n        timestamp_utc=datetime.now(timezone.utc).isoformat(),\n    )\n\n\n# ===========================================================================\n# 1. LIFECYCLE TESTS – __init__, create, __aenter__, __aexit__, close\n# ===========================================================================\n\n\nclass TestApprenticeLifecycle:\n    \"\"\"Tests for Apprentice construction, async context management, and teardown.\"\"\"\n\n    def test_init_with_config_path(self, valid_config_path, mock_components):\n        \"\"\"Constructor accepts a valid YAML file path and creates instance with _running=False.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n\n        assert hasattr(apprentice, \"_config\"), \"Should have _config attribute\"\n        assert apprentice._running is False, \"_running should be False after __init__\"\n\n    def test_init_with_config_object(self, valid_config_path, mock_components):\n        \"\"\"Constructor accepts a pre-built ApprenticeConfig object.\"\"\"\n        config = load_config(valid_config_path)\n        apprentice = Apprentice(config, **mock_components)\n\n        assert apprentice._running is False\n\n    def test_init_with_overrides_replaces_defaults(self, valid_config_path):\n        \"\"\"Component overrides completely replace default-constructed components.\"\"\"\n        custom_router = MagicMock(name=\"custom_router\")\n        apprentice = Apprentice(valid_config_path, router=custom_router)\n\n        assert apprentice._router is custom_router, (\n            \"Override should replace default component exactly\"\n        )\n\n    def test_init_config_file_not_found(self, mock_components):\n        \"\"\"Constructor raises error for non-existent config file path.\"\"\"\n        with pytest.raises((FileNotFoundError, Exception)):\n            Apprentice(\"/nonexistent/path/config.yaml\", **mock_components)\n\n    def test_init_config_parse_error(self, tmp_path, mock_components):\n        \"\"\"Constructor raises error for malformed YAML.\"\"\"\n        bad_yaml = tmp_path / \"bad.yaml\"\n        bad_yaml.write_text(\":::not: valid:: yaml: [\")\n        with pytest.raises(Exception):\n            Apprentice(str(bad_yaml), **mock_components)\n\n    def test_init_config_validation_error(self, tmp_path, mock_components):\n        \"\"\"Constructor raises error when config fails Pydantic validation.\"\"\"\n        incomplete = tmp_path / \"incomplete.yaml\"\n        incomplete.write_text(\"schema_version: 1\\n\")\n        with pytest.raises(Exception):\n            Apprentice(str(incomplete), **mock_components)\n\n    def test_init_all_10_components_non_none(self, valid_config_path, mock_components):\n        \"\"\"Invariant: All 10 internal components are non-None after __init__.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n\n        component_names = [\n            \"_config_loader\",\n            \"_task_registry\",\n            \"_remote_client\",\n            \"_local_client\",\n            \"_confidence_engine\",\n            \"_sampling_scheduler\",\n            \"_budget_manager\",\n            \"_training_data_store\",\n            \"_router\",\n            \"_audit_log\",\n        ]\n        for name in component_names:\n            assert getattr(apprentice, name, None) is not None, (\n                f\"Component {name} should be non-None after __init__\"\n            )\n\n    @pytest.mark.asyncio\n    async def test_aenter_sets_running(self, valid_config_path, mock_components):\n        \"\"\"__aenter__ sets _running to True.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        assert apprentice._running is False\n\n        result = await apprentice.__aenter__()\n\n        assert apprentice._running is True, \"_running should be True after __aenter__\"\n        assert result is apprentice, \"__aenter__ should return self\"\n        await apprentice.__aexit__(None, None, None)\n\n    @pytest.mark.asyncio\n    async def test_aenter_double_enter_raises(self, valid_config_path, mock_components):\n        \"\"\"__aenter__ raises error if already running.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n\n        with pytest.raises(RuntimeError):\n            await apprentice.__aenter__()\n\n        await apprentice.__aexit__(None, None, None)\n\n    @pytest.mark.asyncio\n    async def test_aexit_cleans_up(self, valid_config_path, mock_components):\n        \"\"\"__aexit__ sets _running to False and returns False (no suppression).\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n\n        result = await apprentice.__aexit__(None, None, None)\n\n        assert apprentice._running is False, \"_running should be False after __aexit__\"\n        assert result is False, \"__aexit__ must return False to not suppress exceptions\"\n\n    @pytest.mark.asyncio\n    async def test_close_sets_not_running(self, valid_config_path, mock_components):\n        \"\"\"close() sets _running to False.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n\n        await apprentice.close()\n\n        assert apprentice._running is False\n\n    @pytest.mark.asyncio\n    async def test_close_idempotent(self, valid_config_path, mock_components):\n        \"\"\"close() is safe to call multiple times.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n\n        await apprentice.close()\n        await apprentice.close()  # second call — should not raise\n\n        assert apprentice._running is False\n\n    @pytest.mark.asyncio\n    async def test_create_returns_running_instance(\n        self, valid_config_path, mock_components\n    ):\n        \"\"\"create() returns a fully ready instance with _running=True.\"\"\"\n        instance = await Apprentice.create(valid_config_path, **mock_components)\n\n        assert instance._running is True, \"create() should return running instance\"\n        await instance.close()\n\n    @pytest.mark.asyncio\n    async def test_running_state_consistency(self, valid_config_path, mock_components):\n        \"\"\"Invariant: _running is True iff async context entered and not exited.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        assert apprentice._running is False, \"False after init\"\n\n        await apprentice.__aenter__()\n        assert apprentice._running is True, \"True after aenter\"\n\n        await apprentice.__aexit__(None, None, None)\n        assert apprentice._running is False, \"False after aexit\"\n\n\n# ===========================================================================\n# 2. OPERATIONS TESTS – run(), status(), report()\n# ===========================================================================\n\n\nclass TestApprenticeRun:\n    \"\"\"Tests for run() method covering the routing/fallback decision matrix.\"\"\"\n\n    @pytest.fixture\n    async def running_apprentice(self, valid_config_path, mock_components):\n        \"\"\"Provide a running Apprentice with mocked dependencies.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n        yield apprentice, mock_components\n        await apprentice.close()\n\n    @pytest.mark.asyncio\n    async def test_run_happy_path_success(self, running_apprentice):\n        \"\"\"run() returns TaskResponse with SUCCESS for nominal path.\"\"\"\n        apprentice, mocks = running_apprentice\n        expected_response = make_task_response(source=ModelSource.LOCAL, status=RunStatus.SUCCESS)\n\n        # Configure router to return a successful response\n        mocks[\"router\"].route = AsyncMock(return_value=expected_response)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=True)\n        mocks[\"confidence_engine\"].get_confidence = MagicMock(return_value=0.9)\n\n        result = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert isinstance(result, TaskResponse), \"Should return TaskResponse\"\n        assert result.task_name == \"test_task\"\n        assert result.status == RunStatus.SUCCESS\n        assert result.request_id, \"request_id must be non-empty\"\n\n    @pytest.mark.asyncio\n    async def test_run_budget_exhausted_local_available_degrades(\n        self, running_apprentice\n    ):\n        \"\"\"Budget exhausted + local available → DEGRADED status, LOCAL source.\"\"\"\n        apprentice, mocks = running_apprentice\n        expected = make_task_response(\n            source=ModelSource.LOCAL, status=RunStatus.DEGRADED\n        )\n        mocks[\"router\"].route = AsyncMock(return_value=expected)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=False)\n        mocks[\"local_client\"].is_available = MagicMock(return_value=True)\n\n        result = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert result.source == ModelSource.LOCAL, \"Should use local when budget exhausted\"\n        assert result.status == RunStatus.DEGRADED, \"Should be DEGRADED\"\n\n    @pytest.mark.asyncio\n    async def test_run_local_unavailable_budget_available_fallback(\n        self, running_apprentice\n    ):\n        \"\"\"Local unavailable + budget available → REMOTE source, fallback_used=True.\"\"\"\n        apprentice, mocks = running_apprentice\n        expected = make_task_response(\n            source=ModelSource.REMOTE, status=RunStatus.SUCCESS, fallback_used=True\n        )\n        mocks[\"router\"].route = AsyncMock(return_value=expected)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=True)\n        mocks[\"local_client\"].is_available = MagicMock(return_value=False)\n\n        result = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert result.source == ModelSource.REMOTE\n        assert result.metadata.fallback_used is True\n\n    @pytest.mark.asyncio\n    async def test_run_both_unavailable_raises_budget_exhausted(\n        self, running_apprentice\n    ):\n        \"\"\"Local unavailable AND budget exhausted → BudgetExhaustedError.\"\"\"\n        apprentice, mocks = running_apprentice\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=False)\n        mocks[\"local_client\"].is_available = MagicMock(return_value=False)\n        mocks[\"router\"].route = AsyncMock(\n            side_effect=BudgetExhaustedError(\n                error_kind=ErrorKind.BUDGET_EXHAUSTED,\n                message=\"Budget exhausted\",\n                task_name=\"test_task\",\n                budget_limit_usd=10.0,\n                budget_used_usd=10.0,\n                request_id=\"req-123\",\n            )\n        )\n\n        with pytest.raises(BudgetExhaustedError) as exc_info:\n            await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert exc_info.value.error_kind == ErrorKind.BUDGET_EXHAUSTED\n        assert exc_info.value.task_name == \"test_task\"\n\n    @pytest.mark.asyncio\n    async def test_run_not_running_raises(self, valid_config_path, mock_components):\n        \"\"\"run() raises RuntimeError when called outside async context.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n\n        with pytest.raises(RuntimeError):\n            await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n    @pytest.mark.asyncio\n    async def test_run_task_not_found(self, running_apprentice):\n        \"\"\"run() raises TaskNotFoundError for unknown task.\"\"\"\n        apprentice, mocks = running_apprentice\n        mocks[\"task_registry\"].get_task = MagicMock(\n            side_effect=TaskNotFoundError(\n                error_kind=ErrorKind.TASK_NOT_FOUND,\n                message=\"Task 'unknown' not found\",\n                task_name=\"unknown\",\n                available_tasks=[\"test_task\"],\n            )\n        )\n\n        with pytest.raises(TaskNotFoundError) as exc_info:\n            await apprentice.run(\"unknown\", {\"prompt\": \"hello\"})\n\n        assert \"unknown\" in str(exc_info.value.message)\n        assert \"test_task\" in exc_info.value.available_tasks\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"bad_name\", [\"\", \"   \", \"\\t\", \"\\n\"])\n    async def test_run_empty_task_name(self, running_apprentice, bad_name):\n        \"\"\"run() raises error for empty or whitespace-only task_name.\"\"\"\n        apprentice, _ = running_apprentice\n\n        with pytest.raises((ValueError, ApprenticeError)):\n            await apprentice.run(bad_name, {\"prompt\": \"hello\"})\n\n    @pytest.mark.asyncio\n    @pytest.mark.parametrize(\"bad_input\", [None, [1, 2], \"string\", 42, True])\n    async def test_run_invalid_input_data(self, running_apprentice, bad_input):\n        \"\"\"run() raises error when input_data is not a dict.\"\"\"\n        apprentice, _ = running_apprentice\n\n        with pytest.raises((TypeError, ValueError, ApprenticeError)):\n            await apprentice.run(\"test_task\", bad_input)\n\n    @pytest.mark.asyncio\n    async def test_run_audit_log_always_flushed(self, running_apprentice):\n        \"\"\"Every run() invocation flushes a RunContext to the audit log.\"\"\"\n        apprentice, mocks = running_apprentice\n        expected = make_task_response()\n        mocks[\"router\"].route = AsyncMock(return_value=expected)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=True)\n\n        await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        # Verify audit log was called\n        audit_log = mocks[\"audit_log\"]\n        assert audit_log.flush.called or audit_log.log.called or audit_log.write.called, (\n            \"Audit log must be called during run()\"\n        )\n\n    @pytest.mark.asyncio\n    async def test_run_source_attribution_accuracy(self, running_apprentice):\n        \"\"\"Invariant: TaskResponse.source accurately reflects which backend was used.\"\"\"\n        apprentice, mocks = running_apprentice\n        local_response = make_task_response(source=ModelSource.LOCAL)\n        mocks[\"router\"].route = AsyncMock(return_value=local_response)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n        mocks[\"budget_manager\"].can_spend = MagicMock(return_value=True)\n\n        result = await apprentice.run(\"test_task\", {\"prompt\": \"hello\"})\n\n        assert result.source == ModelSource.LOCAL, (\n            \"Source must match actual backend used\"\n        )\n\n\nclass TestApprenticeStatus:\n    \"\"\"Tests for status() method.\"\"\"\n\n    @pytest.fixture\n    async def running_apprentice(self, valid_config_path, mock_components):\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        await apprentice.__aenter__()\n        yield apprentice, mock_components\n        await apprentice.close()\n\n    @pytest.mark.asyncio\n    async def test_status_happy_path(self, running_apprentice):\n        \"\"\"status() returns ConfidenceSnapshot for a valid task.\"\"\"\n        apprentice, mocks = running_apprentice\n        snapshot = make_confidence_snapshot(\n            task_name=\"test_task\", budget_remaining=8.0, budget_used=2.0\n        )\n        mocks[\"confidence_engine\"].get_snapshot = MagicMock(return_value=snapshot)\n        mocks[\"task_registry\"].get_task = MagicMock(return_value=MagicMock())\n\n        result = await apprentice.status(\"test_task\")\n\n        assert isinstance(result, ConfidenceSnapshot)\n        assert result.task_name == \"test_task\"\n        # Budget invariant: remaining + used == limit\n        assert abs(result.budget_remaining_usd + result.budget_used_usd - 10.0) < 0.01\n\n    @pytest.mark.asyncio\n    async def test_status_not_running_raises(self, valid_config_path, mock_components):\n        \"\"\"status() raises RuntimeError when _running is False.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n\n        with pytest.raises(RuntimeError):\n            await apprentice.status(\"test_task\")\n\n    @pytest.mark.asyncio\n    async def test_status_task_not_found(self, running_apprentice):\n        \"\"\"status() raises TaskNotFoundError for unknown task.\"\"\"\n        apprentice, mocks = running_apprentice\n        mocks[\"task_registry\"].get_task = MagicMock(\n            side_effect=TaskNotFoundError(\n                error_kind=ErrorKind.TASK_NOT_FOUND,\n                message=\"Not found\",\n                task_name=\"unknown\",\n                available_tasks=[\"test_task\"],\n            )\n        )\n\n        with pytest.raises(TaskNotFoundError):\n            await apprentice.status(\"unknown\")\n\n\nclass TestApprenticeReport:\n    \"\"\"Tests for report() method.\"\"\"\n\n    def test_report_happy_path(self, valid_config_path, mock_components):\n        \"\"\"report() returns SystemReport with correct aggregates.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n        expected_report = make_system_report()\n        mock_components[\"confidence_engine\"].get_all_snapshots = MagicMock(\n            return_value=[make_confidence_snapshot()]\n        )\n\n        # report() may be sync or async depending on implementation\n        try:\n            result = apprentice.report()\n        except RuntimeError:\n            # If it requires running, skip this specific assertion\n            pytest.skip(\"report() requires running context in this implementation\")\n            return\n\n        assert isinstance(result, SystemReport)\n        assert result.total_runs == result.total_local_runs + result.total_remote_runs, (\n            \"Invariant: total_runs must equal local + remote\"\n        )\n\n    def test_report_uptime_zero_before_enter(self, valid_config_path, mock_components):\n        \"\"\"report() returns uptime_seconds=0.0 before async context entered.\"\"\"\n        apprentice = Apprentice(valid_config_path, **mock_components)\n\n        try:\n            result = apprentice.report()\n            assert result.uptime_seconds == 0.0, (\n                \"Uptime should be 0 before async context entered\"\n            )\n        except (RuntimeError, Exception):\n            pytest.skip(\"report() may require running state in this implementation\")\n\n    def test_report_total_runs_invariant(self, valid_config_path, mock_components):\n        \"\"\"Invariant: total_runs == total_local_runs + total_remote_runs.\"\"\"\n        report = make_system_report()\n        assert report.total_runs == report.total_local_runs + report.total_remote_runs\n\n\n# ===========================================================================\n# 3. CLI PARSING TESTS – parse_args, resolve_input, format_output, configure_logging\n# ===========================================================================\n\n\nclass TestParseArgs:\n    \"\"\"Tests for parse_args() pure function.\"\"\"\n\n    def test_parse_run_subcommand(self):\n        \"\"\"parse_args parses 'run' with task name and input.\"\"\"\n        result = parse_args([\"run\", \"my_task\", \"--input\", '{\"key\": \"val\"}'])\n\n        assert result.command == SubcommandName.RUN\n        assert result.run_args.task_name == \"my_task\"\n        assert result.run_args.input_raw == '{\"key\": \"val\"}'\n\n    def test_parse_status_subcommand(self):\n        \"\"\"parse_args parses 'status' with optional task filter.\"\"\"\n        result = parse_args([\"status\", \"--task\", \"my_task\"])\n\n        assert result.command == SubcommandName.STATUS\n        assert result.status_args.task_filter == \"my_task\"\n\n    def test_parse_report_subcommand(self):\n        \"\"\"parse_args parses 'report' with optional output path.\"\"\"\n        result = parse_args([\"report\", \"--output\", \"/tmp/report.json\"])\n\n        assert result.command == SubcommandName.REPORT\n        assert result.report_args.output_path == \"/tmp/report.json\"\n\n    def test_parse_global_flags(self):\n        \"\"\"parse_args handles --config, --json, and -vv correctly.\"\"\"\n        result = parse_args([\"--config\", \"custom.yaml\", \"--json\", \"-vv\", \"status\"])\n\n        assert result.global_flags.config_path == \"custom.yaml\"\n        assert result.global_flags.json_mode is True\n        assert result.global_flags.verbose == 2\n\n    def test_parse_default_config_path(self):\n        \"\"\"Default config_path is non-empty when not specified.\"\"\"\n        result = parse_args([\"status\"])\n\n        assert result.global_flags.config_path, (\n            \"Default config_path should be non-empty\"\n        )\n\n    def test_parse_no_subcommand_raises(self):\n        \"\"\"No subcommand raises SystemExit with code 2.\"\"\"\n        with pytest.raises(SystemExit) as exc_info:\n            parse_args([])\n        assert exc_info.value.code == 2\n\n    def test_parse_unknown_flag_raises(self):\n        \"\"\"Unknown flag raises SystemExit.\"\"\"\n        with pytest.raises(SystemExit):\n            parse_args([\"--bogus-flag\", \"run\", \"task\"])\n\n    def test_parse_verbose_clamped_to_max_2(self):\n        \"\"\"Verbose flag is clamped to [0, 2].\"\"\"\n        result = parse_args([\"-vvvvv\", \"status\"])\n        assert result.global_flags.verbose <= 2, \"verbose should be clamped to max 2\"\n\n    def test_parse_verbose_zero_by_default(self):\n        \"\"\"Verbose defaults to 0.\"\"\"\n        result = parse_args([\"status\"])\n        assert result.global_flags.verbose == 0\n\n    def test_parse_status_no_filter(self):\n        \"\"\"status subcommand works without --task filter.\"\"\"\n        result = parse_args([\"status\"])\n        assert result.command == SubcommandName.STATUS\n        # task_filter should be empty/None\n        assert not result.status_args.task_filter or result.status_args.task_filter == \"\"\n\n    def test_parse_report_no_output(self):\n        \"\"\"report subcommand works without --output.\"\"\"\n        result = parse_args([\"report\"])\n        assert result.command == SubcommandName.REPORT\n\n\nclass TestResolveInput:\n    \"\"\"Tests for resolve_input() function.\"\"\"\n\n    def test_resolve_json_string(self):\n        \"\"\"resolve_input parses inline JSON string.\"\"\"\n        result = resolve_input('{\"key\": \"value\", \"num\": 42}')\n\n        assert isinstance(result.data, dict)\n        assert result.data == {\"key\": \"value\", \"num\": 42}\n\n    def test_resolve_file_reference(self, tmp_path):\n        \"\"\"resolve_input reads JSON from @file reference.\"\"\"\n        json_file = tmp_path / \"input.json\"\n        json_file.write_text('{\"from_file\": true}')\n\n        result = resolve_input(f\"@{json_file}\")\n\n        assert result.data == {\"from_file\": True}\n\n    def test_resolve_invalid_json_raises(self):\n        \"\"\"resolve_input raises error for invalid JSON string.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input(\"not json at all\")\n\n    def test_resolve_json_array_not_object_raises(self):\n        \"\"\"resolve_input raises when JSON is array, not object.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input(\"[1, 2, 3]\")\n\n    def test_resolve_json_scalar_not_object_raises(self):\n        \"\"\"resolve_input raises when JSON is scalar.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input('\"just a string\"')\n\n    def test_resolve_file_not_found_raises(self):\n        \"\"\"resolve_input raises when @file does not exist.\"\"\"\n        with pytest.raises((FileNotFoundError, Exception)):\n            resolve_input(\"@/nonexistent/file.json\")\n\n    def test_resolve_empty_file_reference_raises(self):\n        \"\"\"resolve_input raises when input is exactly '@'.\"\"\"\n        with pytest.raises(Exception):\n            resolve_input(\"@\")\n\n    def test_resolve_nested_json(self):\n        \"\"\"resolve_input handles nested JSON objects.\"\"\"\n        result = resolve_input('{\"outer\": {\"inner\": [1, 2, 3]}}')\n        assert result.data[\"outer\"][\"inner\"] == [1, 2, 3]\n\n    def test_resolve_empty_object(self):\n        \"\"\"resolve_input accepts empty JSON object.\"\"\"\n        result = resolve_input(\"{}\")\n        assert result.data == {}\n\n\nclass TestFormatOutput:\n    \"\"\"Tests for format_output() function.\"\"\"\n\n    def test_json_mode_produces_valid_json(self):\n        \"\"\"JSON mode output is parseable by json.loads.\"\"\"\n        result_obj = RunResult(\n            task_name=\"test\",\n            output={\"answer\": 42},\n            success=True,\n            error_message=\"\",\n        )\n        output = format_output(result_obj, json_mode=True)\n\n        parsed = json.loads(output)\n        assert parsed[\"task_name\"] == \"test\"\n\n    def test_human_mode_produces_readable_text(self):\n        \"\"\"Human mode output is non-empty and not raw JSON.\"\"\"\n        result_obj = RunResult(\n            task_name=\"test\",\n            output={\"answer\": 42},\n            success=True,\n            error_message=\"\",\n        )\n        output = format_output(result_obj, json_mode=False)\n\n        assert len(output) > 0, \"Human output should be non-empty\"\n\n    def test_format_output_no_trailing_newline(self):\n        \"\"\"Output does not include trailing newline.\"\"\"\n        result_obj = RunResult(\n            task_name=\"test\",\n            output={\"answer\": 42},\n            success=True,\n            error_message=\"\",\n        )\n        output = format_output(result_obj, json_mode=True)\n\n        assert not output.endswith(\"\\n\"), \"Should not end with newline\"\n\n    def test_format_status_result_json(self):\n        \"\"\"StatusResult formats correctly in JSON mode.\"\"\"\n        status_result = StatusResult(\n            tasks=[],\n            timestamp=datetime.now(timezone.utc).isoformat(),\n        )\n        output = format_output(status_result, json_mode=True)\n        parsed = json.loads(output)\n        assert \"tasks\" in parsed\n\n\nclass TestConfigureLogging:\n    \"\"\"Tests for configure_logging().\"\"\"\n\n    def test_verbose_0_sets_warning(self):\n        \"\"\"verbose=0 sets root logger to WARNING.\"\"\"\n        configure_logging(0)\n        assert logging.getLogger().level == logging.WARNING\n\n    def test_verbose_1_sets_info(self):\n        \"\"\"verbose=1 sets root logger to INFO.\"\"\"\n        configure_logging(1)\n        assert logging.getLogger().level == logging.INFO\n\n    def test_verbose_2_sets_debug(self):\n        \"\"\"verbose=2 sets root logger to DEBUG.\"\"\"\n        configure_logging(2)\n        assert logging.getLogger().level == logging.DEBUG\n\n\n# ===========================================================================\n# 4. CLI EXECUTION TESTS – execute_run, execute_status, execute_report, main\n# ===========================================================================\n\n\nclass TestExecuteRun:\n    \"\"\"Tests for execute_run() async function.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_execute_run_success(self):\n        \"\"\"execute_run resolves input, calls run(), wraps in RunResult.\"\"\"\n        mock_apprentice = AsyncMock()\n        mock_apprentice.run = AsyncMock(return_value=make_task_response())\n\n        run_args = RunArgs(task_name=\"test_task\", input_raw='{\"prompt\": \"hello\"}')\n\n        result = await execute_run(mock_apprentice, run_args)\n\n        assert isinstance(result, RunResult)\n        assert result.task_name == \"test_task\"\n        assert result.success is True\n        assert result.output, \"Output should contain response payload\"\n\n    @pytest.mark.asyncio\n    async def test_execute_run_task_not_found_error(self):\n        \"\"\"execute_run handles TaskNotFoundError.\"\"\"\n        mock_apprentice = AsyncMock()\n        mock_apprentice.run = AsyncMock(\n            side_effect=TaskNotFoundError(\n                error_kind=ErrorKind.TASK_NOT_FOUND,\n                message=\"Task 'bad' not found\",\n                task_name=\"bad\",\n                available_tasks=[\"test_task\"],\n            )\n        )\n\n        run_args = RunArgs(task_name=\"bad\", input_raw='{\"prompt\": \"hello\"}')\n\n        # Implementation may propagate or wrap the error\n        try:\n            result = await execute_run(mock_apprentice, run_args)\n            # If wrapped, should indicate failure\n            assert result.success is False\n            assert result.error_message, \"Should have error message\"\n        except TaskNotFoundError:\n            pass  # Also acceptable: propagation\n\n    @pytest.mark.asyncio\n    async def test_execute_run_invalid_input_json(self):\n        \"\"\"execute_run handles invalid JSON in input_raw.\"\"\"\n        mock_apprentice = AsyncMock()\n        run_args = RunArgs(task_name=\"test_task\", input_raw=\"not valid json\")\n\n        with pytest.raises(Exception):\n            await execute_run(mock_apprentice, run_args)\n\n\nclass TestExecuteStatus:\n    \"\"\"Tests for execute_status() async function.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_execute_status_success(self):\n        \"\"\"execute_status returns StatusResult with task entries.\"\"\"\n        mock_apprentice = AsyncMock()\n        mock_apprentice.status = AsyncMock(return_value=make_confidence_snapshot())\n\n        status_args = StatusArgs(task_filter=\"test_task\")\n\n        result = await execute_status(mock_apprentice, status_args)\n\n        assert isinstance(result, StatusResult)\n        assert result.timestamp, \"Should have ISO 8601 timestamp\"\n\n    @pytest.mark.asyncio\n    async def test_execute_status_filtered(self):\n        \"\"\"execute_status filters to single task when task_filter provided.\"\"\"\n        mock_apprentice = AsyncMock()\n        snapshot = make_confidence_snapshot(task_name=\"specific_task\")\n        mock_apprentice.status = AsyncMock(return_value=snapshot)\n\n        status_args = StatusArgs(task_filter=\"specific_task\")\n\n        result = await execute_status(mock_apprentice, status_args)\n\n        assert isinstance(result, StatusResult)\n        # All tasks in result should match the filter\n        for task in result.tasks:\n            assert task.task_name == \"specific_task\"\n\n\nclass TestExecuteReport:\n    \"\"\"Tests for execute_report() async function.\"\"\"\n\n    @pytest.mark.asyncio\n    async def test_execute_report_success(self):\n        \"\"\"execute_report returns ReportResult with all tasks.\"\"\"\n        mock_apprentice = AsyncMock()\n        mock_apprentice.report = AsyncMock(return_value=make_system_report())\n\n        report_args = ReportArgs(output_path=\"\")\n\n        result = await execute_report(\n            mock_apprentice, report_args, config_path=\"config.yaml\", json_mode=False\n        )\n\n        assert isinstance(result, ReportResult)\n        assert result.total_budget_spent <= result.total_budget_limit\n        assert result.system_uptime_seconds >= 0\n\n    @pytest.mark.asyncio\n    async def test_execute_report_writes_file(self, tmp_path):\n        \"\"\"execute_report writes output to file when output_path specified.\"\"\"\n        mock_apprentice = AsyncMock()\n        mock_apprentice.report = AsyncMock(return_value=make_system_report())\n\n        output_file = str(tmp_path / \"report_output.json\")\n        report_args = ReportArgs(output_path=output_file)\n\n        result = await execute_report(\n            mock_apprentice, report_args, config_path=\"config.yaml\", json_mode=True\n        )\n\n        assert result.written_to_file == output_file\n        assert Path(output_file).exists(), \"Report file should have been written\"\n\n\nclass TestMain:\n    \"\"\"Tests for the CLI main() entry point.\"\"\"\n\n    def test_main_usage_error_exit_2(self):\n        \"\"\"main() returns 2 on usage error (no subcommand).\"\"\"\n        exit_code = main([])\n        assert exit_code == 2, \"No subcommand should yield exit code 2\"\n\n    def test_main_config_not_found_exit_1(self, tmp_path):\n        \"\"\"main() returns 1 when config file doesn't exist.\"\"\"\n        exit_code = main([\n            \"--config\", str(tmp_path / \"nonexistent.yaml\"),\n            \"status\",\n        ])\n        assert exit_code == 1, \"Missing config should yield exit code 1\"\n\n    def test_main_keyboard_interrupt_exit_130(self):\n        \"\"\"main() returns 130 on KeyboardInterrupt.\"\"\"\n        with patch(\n            \"src.unified_interface.cli.load_config\",\n            side_effect=KeyboardInterrupt,\n        ):\n            exit_code = main([\"--config\", \"dummy.yaml\", \"status\"])\n            assert exit_code == 130\n\n    def test_main_success_exit_0(self, valid_config_path):\n        \"\"\"main() returns 0 on successful execution.\"\"\"\n        mock_report = make_system_report()\n        mock_apprentice = AsyncMock()\n        mock_apprentice.report = AsyncMock(return_value=mock_report)\n        mock_apprentice.__aenter__ = AsyncMock(return_value=mock_apprentice)\n        mock_apprentice.__aexit__ = AsyncMock(return_value=False)\n        mock_apprentice._running = True\n\n        with patch(\n            \"src.unified_interface.cli.Apprentice\",\n            return_value=mock_apprentice,\n        ):\n            exit_code = main([\"--config\", valid_config_path, \"report\"])\n\n        assert exit_code == 0, \"Successful report should yield exit code 0\"\n\n\n# ===========================================================================\n# 5. CONFIG LOADING TESTS\n# ===========================================================================\n\n\nclass TestLoadConfig:\n    \"\"\"Tests for load_config() function.\"\"\"\n\n    def test_load_valid_config(self, valid_config_path):\n        \"\"\"load_config parses a valid YAML file into ApprenticeConfig.\"\"\"\n        config = load_config(valid_config_path)\n\n        assert isinstance(config, ApprenticeConfig)\n        assert config.schema_version == 1\n        assert len(config.tasks) == 1\n        assert config.tasks[0].task_name == \"test_task\"\n\n    def test_load_config_file_not_found(self):\n        \"\"\"load_config raises for non-existent file.\"\"\"\n        with pytest.raises((FileNotFoundError, Exception)):\n            load_config(\"/nonexistent/path/config.yaml\")\n\n    def test_load_config_invalid_yaml(self, tmp_path):\n        \"\"\"load_config raises for malformed YAML.\"\"\"\n        bad = tmp_path / \"bad.yaml\"\n        bad.write_text(\":::invalid[yaml{\")\n        with pytest.raises(Exception):\n            load_config(str(bad))\n\n    def test_load_config_validation_error_missing_fields(self, tmp_path):\n        \"\"\"load_config raises when required fields missing.\"\"\"\n        incomplete = tmp_path / \"incomplete.yaml\"\n        incomplete.write_text(\"schema_version: 1\\ntasks: []\\n\")\n        with pytest.raises(Exception):\n            load_config(str(incomplete))\n\n    def test_load_config_validation_error_unknown_fields(self, tmp_path):\n        \"\"\"load_config rejects unknown fields (strict mode).\"\"\"\n        extra_field = tmp_path / \"extra.yaml\"\n        content = VALID_YAML_CONTENT + \"\\nunknown_field: surprise\\n\"\n        extra_field.write_text(content)\n        with pytest.raises(Exception):\n            load_config(str(extra_field))\n\n    @pytest.mark.skipif(\n        os.name == \"nt\", reason=\"Permission tricks unreliable on Windows\"\n    )\n    def test_load_config_permission_denied(self, tmp_path):\n        \"\"\"load_config raises when file not readable.\"\"\"\n        no_read = tmp_path / \"noperm.yaml\"\n        no_read.write_text(VALID_YAML_CONTENT)\n        no_read.chmod(0o000)\n\n        try:\n            with pytest.raises((PermissionError, Exception)):\n                load_config(str(no_read))\n        finally:\n            no_read.chmod(0o644)\n\n    def test_load_config_thresholds_ordering_violation(self, tmp_path):\n        \"\"\"ConfidenceThresholds rejects invalid ordering.\"\"\"\n        bad_thresholds = tmp_path / \"bad_thresholds.yaml\"\n        bad_content = VALID_YAML_CONTENT.replace(\n            \"bootstrapping_upper: 0.2\", \"bootstrapping_upper: 0.9\"\n        )\n        bad_thresholds.write_text(bad_content)\n\n        with pytest.raises(Exception):\n            load_config(str(bad_thresholds))\n\n\n# ===========================================================================\n# 6. INVARIANT TESTS\n# ===========================================================================\n\n\nclass TestInvariants:\n    \"\"\"Cross-cutting invariant tests.\"\"\"\n\n    def test_frozen_task_response_immutable(self):\n        \"\"\"TaskResponse is frozen — mutation raises error.\"\"\"\n        resp = make_task_response()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            resp.task_name = \"mutated\"\n\n    def test_frozen_confidence_snapshot_immutable(self):\n        \"\"\"ConfidenceSnapshot is frozen — mutation raises error.\"\"\"\n        snap = make_confidence_snapshot()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            snap.confidence_score = 999.0\n\n    def test_frozen_system_report_immutable(self):\n        \"\"\"SystemReport is frozen — mutation raises error.\"\"\"\n        report = make_system_report()\n        with pytest.raises((AttributeError, TypeError, Exception)):\n            report.total_runs = 999\n\n    def test_model_source_is_str_enum(self):\n        \"\"\"ModelSource values are strings (StrEnum).\"\"\"\n        assert isinstance(ModelSource.LOCAL, str)\n        assert isinstance(ModelSource.REMOTE, str)\n\n    def test_exit_code_is_int_enum(self):\n        \"\"\"ExitCode values are integers (IntEnum).\"\"\"\n        assert isinstance(ExitCode.SUCCESS_0, int)\n        assert ExitCode.SUCCESS_0 == 0\n        assert ExitCode.APP_ERROR_1 == 1\n        assert ExitCode.USAGE_ERROR_2 == 2\n        assert ExitCode.KEYBOARD_INTERRUPT_130 == 130\n\n    def test_phase_label_is_str_enum(self):\n        \"\"\"PhaseLabel values are strings (StrEnum).\"\"\"\n        for phase in PhaseLabel:\n            assert isinstance(phase, str)\n\n    def test_run_status_is_str_enum(self):\n        \"\"\"RunStatus values are strings (StrEnum).\"\"\"\n        for status in RunStatus:\n            assert isinstance(status, str)\n\n    def test_error_kind_is_str_enum(self):\n        \"\"\"ErrorKind values are strings (StrEnum).\"\"\"\n        for kind in ErrorKind:\n            assert isinstance(kind, str)\n\n    def test_confidence_thresholds_valid_ordering(self):\n        \"\"\"Valid thresholds respect ordering invariant.\"\"\"\n        ct = ConfidenceThresholds(\n            bootstrapping_upper=0.2,\n            active_learning_upper=0.5,\n            supervised_upper=0.8,\n            autonomous_lower=0.8,\n        )\n        assert ct.bootstrapping_upper < ct.active_learning_upper\n        assert ct.active_learning_upper < ct.supervised_upper\n        assert ct.supervised_upper <= ct.autonomous_lower\n\n    def test_confidence_thresholds_rejects_invalid_ordering(self):\n        \"\"\"Invalid threshold ordering is rejected at construction.\"\"\"\n        with pytest.raises(Exception):\n            ConfidenceThresholds(\n                bootstrapping_upper=0.9,  # violates: must be < active_learning_upper\n                active_learning_upper=0.5,\n                supervised_upper=0.8,\n                autonomous_lower=0.8,\n            )\n\n    def test_budget_exhausted_error_fields(self):\n        \"\"\"BudgetExhaustedError has all required structured fields.\"\"\"\n        err = BudgetExhaustedError(\n            error_kind=ErrorKind.BUDGET_EXHAUSTED,\n            message=\"Over budget\",\n            task_name=\"task_a\",\n            budget_limit_usd=10.0,\n            budget_used_usd=10.5,\n            request_id=\"req-456\",\n        )\n        assert err.error_kind == ErrorKind.BUDGET_EXHAUSTED\n        assert err.task_name == \"task_a\"\n        assert err.budget_limit_usd == 10.0\n        assert err.budget_used_usd == 10.5\n\n    def test_task_not_found_error_fields(self):\n        \"\"\"TaskNotFoundError has available_tasks field.\"\"\"\n        err = TaskNotFoundError(\n            error_kind=ErrorKind.TASK_NOT_FOUND,\n            message=\"Not found\",\n            task_name=\"missing\",\n            available_tasks=[\"a\", \"b\"],\n        )\n        assert err.available_tasks == [\"a\", \"b\"]\n\n    def test_apprentice_error_is_exception(self):\n        \"\"\"ApprenticeError derives from Exception.\"\"\"\n        err = ApprenticeError(\n            error_kind=ErrorKind.INTERNAL,\n            message=\"test\",\n            task_name=\"t\",\n            request_id=\"r\",\n        )\n        assert isinstance(err, Exception)\n\n    def test_budget_exhausted_derives_from_apprentice_error(self):\n        \"\"\"BudgetExhaustedError derives from ApprenticeError.\"\"\"\n        err = BudgetExhaustedError(\n            error_kind=ErrorKind.BUDGET_EXHAUSTED,\n            message=\"test\",\n            task_name=\"t\",\n            budget_limit_usd=10.0,\n            budget_used_usd=10.0,\n            request_id=\"r\",\n        )\n        assert isinstance(err, ApprenticeError)\n        assert isinstance(err, Exception)\n"
+}

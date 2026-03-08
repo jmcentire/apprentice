@@ -1,0 +1,1233 @@
+{
+  "component_id": "cli",
+  "name": "CLI Entry Point",
+  "description": "Command-line interface via apprentice.cli:main. A thin shell with three responsibilities: (1) parse arguments via argparse with subcommands (run, status, report) and global flags (--config, --json, --verbose), (2) load config and construct Apprentice instance via dependency injection, (3) format and print results. Synchronous entry point that calls asyncio.run() exactly once. Handles Ctrl+C gracefully (exit 130), SIGPIPE on Unix, and fails fast on config errors. Structured JSON logging to stderr. File kept under 300 lines by extracting result models to cli_models.py and formatters to cli_formatters.py.",
+  "version": 1,
+  "types": [
+    {
+      "name": "ExitCode",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "SUCCESS_0",
+        "APP_ERROR_1",
+        "USAGE_ERROR_2",
+        "KEYBOARD_INTERRUPT_130"
+      ],
+      "inner_types": [],
+      "description": "Process exit codes returned by main(). Follows Unix conventions."
+    },
+    {
+      "name": "OutputFormat",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "HUMAN",
+        "JSON"
+      ],
+      "inner_types": [],
+      "description": "Controls how results are serialized for terminal output."
+    },
+    {
+      "name": "LogLevel",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "WARNING",
+        "INFO",
+        "DEBUG"
+      ],
+      "inner_types": [],
+      "description": "Logging verbosity levels mapped from --verbose flag."
+    },
+    {
+      "name": "SubcommandName",
+      "kind": "enum",
+      "fields": [],
+      "item_type": "",
+      "variants": [
+        "run",
+        "status",
+        "report"
+      ],
+      "inner_types": [],
+      "description": "The three CLI subcommands recognized by the argument parser."
+    },
+    {
+      "name": "GlobalFlags",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "./apprentice.yaml",
+          "description": "Path to apprentice.yaml config file. Defaults to ./apprentice.yaml.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": false,
+          "default": "false",
+          "description": "If true, output machine-readable JSON to stdout instead of human-readable tables.",
+          "validators": []
+        },
+        {
+          "name": "verbose",
+          "type_ref": "int",
+          "required": false,
+          "default": "0",
+          "description": "Verbosity level. 0=WARNING (default), 1=INFO (-v), 2=DEBUG (-vv). Clamped to [0, 2].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 2",
+              "error_message": "Verbose level must be 0, 1, or 2"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed global flags that apply to all subcommands. Produced by argument parsing before subcommand dispatch."
+    },
+    {
+      "name": "RunArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task to execute. Must match a task defined in config.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "task_name must be non-empty"
+            }
+          ]
+        },
+        {
+          "name": "input_raw",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Raw input: either a JSON string or a file path prefixed with '@' (e.g., @input.json). Parsed into a dict before passing to Apprentice.",
+          "validators": [
+            {
+              "kind": "length",
+              "expression": "len(value) >= 1",
+              "error_message": "input must be non-empty"
+            }
+          ]
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'run' subcommand."
+    },
+    {
+      "name": "StatusArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_filter",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional task name to filter status output. If empty string, show all tasks.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'status' subcommand."
+    },
+    {
+      "name": "ReportArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "output_path",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Optional file path to write report output. If empty string, write to stdout.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Parsed arguments specific to the 'report' subcommand."
+    },
+    {
+      "name": "ParsedArgs",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "global_flags",
+          "type_ref": "GlobalFlags",
+          "required": true,
+          "default": "",
+          "description": "Global flags parsed from top-level arguments.",
+          "validators": []
+        },
+        {
+          "name": "command",
+          "type_ref": "SubcommandName",
+          "required": true,
+          "default": "",
+          "description": "Which subcommand was invoked.",
+          "validators": []
+        },
+        {
+          "name": "run_args",
+          "type_ref": "RunArgs",
+          "required": false,
+          "default": "null",
+          "description": "Arguments for 'run' subcommand. Only populated when command is 'run'.",
+          "validators": []
+        },
+        {
+          "name": "status_args",
+          "type_ref": "StatusArgs",
+          "required": false,
+          "default": "null",
+          "description": "Arguments for 'status' subcommand. Only populated when command is 'status'.",
+          "validators": []
+        },
+        {
+          "name": "report_args",
+          "type_ref": "ReportArgs",
+          "required": false,
+          "default": "null",
+          "description": "Arguments for 'report' subcommand. Only populated when command is 'report'.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Complete parsed CLI arguments combining global flags and subcommand-specific args."
+    },
+    {
+      "name": "InputData",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The parsed input dictionary to pass to Apprentice.run().",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Deserialized input data for the 'run' subcommand after resolving file references and parsing JSON."
+    },
+    {
+      "name": "PhaseInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "phase_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Human-readable phase label (e.g., 'exploration', 'converging', 'optimized').",
+          "validators": []
+        },
+        {
+          "name": "confidence_score",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Current confidence score for the task, range [0.0, 1.0].",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0.0 <= value <= 1.0",
+              "error_message": "Confidence score must be between 0.0 and 1.0"
+            }
+          ]
+        },
+        {
+          "name": "is_local_primary",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the local model is currently the primary responder for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Current phase information for a single task, derived from confidence scores."
+    },
+    {
+      "name": "BudgetInfo",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "budget_limit",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget allocated for this task (in cost units).",
+          "validators": []
+        },
+        {
+          "name": "budget_spent",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget consumed so far.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "value >= 0.0",
+              "error_message": "Budget spent cannot be negative"
+            }
+          ]
+        },
+        {
+          "name": "budget_remaining",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Budget remaining. Computed as budget_limit - budget_spent.",
+          "validators": []
+        },
+        {
+          "name": "is_exhausted",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "True if budget is fully consumed. When true, only local model is used.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Budget consumption information for a single task."
+    },
+    {
+      "name": "RunResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task that was executed.",
+          "validators": []
+        },
+        {
+          "name": "output",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "The result payload from Apprentice.run(). Contents are task-dependent.",
+          "validators": []
+        },
+        {
+          "name": "success",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether the task completed successfully.",
+          "validators": []
+        },
+        {
+          "name": "error_message",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "Error message if success is false, empty string otherwise.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'run' subcommand. Wraps the TaskResponse from Apprentice with CLI-specific metadata."
+    },
+    {
+      "name": "TaskStatusEntry",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "task_name",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Name of the task.",
+          "validators": []
+        },
+        {
+          "name": "phase",
+          "type_ref": "PhaseInfo",
+          "required": true,
+          "default": "",
+          "description": "Current phase and confidence for this task.",
+          "validators": []
+        },
+        {
+          "name": "budget",
+          "type_ref": "BudgetInfo",
+          "required": true,
+          "default": "",
+          "description": "Budget consumption for this task.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Status information for a single task."
+    },
+    {
+      "name": "StatusResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "TaskStatusEntryList",
+          "required": true,
+          "default": "",
+          "description": "List of task status entries. Filtered if --task was provided.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 timestamp of when the status was captured.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'status' subcommand. Contains phase, confidence, and budget information per task."
+    },
+    {
+      "name": "TaskStatusEntryList",
+      "kind": "list",
+      "fields": [],
+      "item_type": "TaskStatusEntry",
+      "variants": [],
+      "inner_types": [],
+      "description": "A list of TaskStatusEntry objects."
+    },
+    {
+      "name": "ReportResult",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "tasks",
+          "type_ref": "TaskStatusEntryList",
+          "required": true,
+          "default": "",
+          "description": "Status of all configured tasks.",
+          "validators": []
+        },
+        {
+          "name": "total_budget_limit",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget across all tasks.",
+          "validators": []
+        },
+        {
+          "name": "total_budget_spent",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "Total budget spent across all tasks.",
+          "validators": []
+        },
+        {
+          "name": "system_uptime_seconds",
+          "type_ref": "float",
+          "required": true,
+          "default": "",
+          "description": "How long the system has been operating, in seconds.",
+          "validators": []
+        },
+        {
+          "name": "timestamp",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "ISO 8601 timestamp of when the report was generated.",
+          "validators": []
+        },
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the config file that was loaded.",
+          "validators": []
+        },
+        {
+          "name": "written_to_file",
+          "type_ref": "str",
+          "required": false,
+          "default": "",
+          "description": "If report was written to --output file, the resolved path. Empty string if written to stdout.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Pydantic model for the output of the 'report' subcommand. Full system report including all tasks, history, and audit trail."
+    },
+    {
+      "name": "CLIResult",
+      "kind": "union",
+      "fields": [],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [
+        "RunResult",
+        "StatusResult",
+        "ReportResult"
+      ],
+      "description": "Union of all possible subcommand result types. Used as input to format_output()."
+    },
+    {
+      "name": "ApprenticeConfig",
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "config_data",
+          "type_ref": "dict",
+          "required": true,
+          "default": "",
+          "description": "Opaque config data. Full structure defined in the config component contract.",
+          "validators": []
+        }
+      ],
+      "item_type": "",
+      "variants": [],
+      "inner_types": [],
+      "description": "Reference to the ApprenticeConfig type defined in the config component. Loaded from YAML and validated via pydantic strict mode."
+    }
+  ],
+  "functions": [
+    {
+      "name": "main",
+      "description": "Synchronous CLI entry point. Parses argv, loads config, constructs Apprentice, dispatches to the appropriate subcommand, formats output, and returns an exit code. Calls asyncio.run() exactly once to execute async Apprentice methods. Configures structured JSON logging to stderr before any other work. Handles SIGPIPE on Unix to prevent BrokenPipeError tracebacks.",
+      "inputs": [
+        {
+          "name": "argv",
+          "type_ref": "list",
+          "required": false,
+          "default": "null",
+          "description": "Command-line arguments (excluding program name). If None, defaults to sys.argv[1:]. Accepts None for testability.",
+          "validators": []
+        }
+      ],
+      "output_type": "int",
+      "error_cases": [
+        {
+          "name": "config_file_not_found",
+          "condition": "The config file specified by --config or the default ./apprentice.yaml does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Error message printed to stderr"
+          }
+        },
+        {
+          "name": "config_validation_error",
+          "condition": "The config file exists but fails pydantic validation (missing fields, wrong types, invalid values)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Validation error details printed to stderr"
+          }
+        },
+        {
+          "name": "usage_error",
+          "condition": "Invalid or missing arguments (no subcommand, missing task_name for run, etc.)",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2",
+            "output": "argparse usage message printed to stderr"
+          }
+        },
+        {
+          "name": "keyboard_interrupt",
+          "condition": "User presses Ctrl+C during execution",
+          "error_type": "KeyboardInterrupt",
+          "error_data": {
+            "exit_code": "130",
+            "output": "Empty or brief message to stderr"
+          }
+        },
+        {
+          "name": "apprentice_error",
+          "condition": "Any ApprenticeError raised during Apprentice construction or subcommand execution",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Error message printed to stderr"
+          }
+        },
+        {
+          "name": "invalid_input_json",
+          "condition": "The --input argument for 'run' is neither valid JSON nor a readable @file reference",
+          "error_type": "ValueError",
+          "error_data": {
+            "exit_code": "1",
+            "output": "Input parsing error printed to stderr"
+          }
+        },
+        {
+          "name": "sigpipe",
+          "condition": "Output pipe is broken (e.g., piped to head on Unix)",
+          "error_type": "BrokenPipeError",
+          "error_data": {
+            "exit_code": "0",
+            "output": "Silently exits without traceback"
+          }
+        }
+      ],
+      "preconditions": [
+        "Python >= 3.12 runtime is available",
+        "asyncio event loop is not already running (no nested asyncio.run())",
+        "Standard file descriptors (stdin, stdout, stderr) are available"
+      ],
+      "postconditions": [
+        "Returns 0 on success, 1 on application/config error, 2 on usage error, 130 on KeyboardInterrupt",
+        "All output written to stdout (results) or stderr (errors, logs) before return",
+        "No background tasks or threads are left running after return",
+        "asyncio event loop is fully closed after return"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Config file at --config path or ./apprentice.yaml",
+          "description": "Reads and parses YAML config file from disk."
+        },
+        {
+          "kind": "reads_file",
+          "target": "Input file when --input @filepath is used",
+          "description": "Reads JSON input from file referenced with @ prefix."
+        },
+        {
+          "kind": "writes_file",
+          "target": "Report output file when --output is specified for report subcommand",
+          "description": "Writes report output to specified file path."
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Configures structured JSON logging to stderr. Log level determined by --verbose flag."
+        },
+        {
+          "kind": "network_call",
+          "target": "Remote API endpoints via Apprentice delegation",
+          "description": "Apprentice may make network calls to remote model APIs during run/status/report execution."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "stdout",
+          "description": "Writes formatted results (human-readable or JSON) to stdout."
+        },
+        {
+          "kind": "mutates_state",
+          "target": "stderr",
+          "description": "Writes error messages and log output to stderr."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "parse_args",
+      "description": "Parses raw command-line arguments into a structured ParsedArgs model using argparse. Defines the top-level parser with global flags (--config, --json, --verbose) and three subcommands (run, status, report) via add_subparsers(dest='command', required=True). Pure function with no side effects except argparse's SystemExit on invalid input.",
+      "inputs": [
+        {
+          "name": "argv",
+          "type_ref": "list",
+          "required": true,
+          "default": "",
+          "description": "Raw command-line argument list to parse.",
+          "validators": []
+        }
+      ],
+      "output_type": "ParsedArgs",
+      "error_cases": [
+        {
+          "name": "no_subcommand",
+          "condition": "No subcommand is provided in argv",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "unknown_subcommand",
+          "condition": "An unrecognized subcommand is provided",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "missing_required_arg",
+          "condition": "Required argument is missing (e.g., task_name for run)",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        },
+        {
+          "name": "unrecognized_flag",
+          "condition": "An unknown flag is passed",
+          "error_type": "SystemExit",
+          "error_data": {
+            "exit_code": "2"
+          }
+        }
+      ],
+      "preconditions": [
+        "argv is a list of strings"
+      ],
+      "postconditions": [
+        "Returned ParsedArgs has exactly one of run_args, status_args, or report_args populated based on the command field",
+        "global_flags.config_path is a non-empty string",
+        "global_flags.verbose is clamped to [0, 2]"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "load_config",
+      "description": "Loads and validates the Apprentice YAML configuration file from the given path. Reads the file, parses YAML, and validates against the ApprenticeConfig pydantic model with strict mode. Fails immediately with a clear error message on missing file or validation failure — never silently defaults.",
+      "inputs": [
+        {
+          "name": "path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Filesystem path to the YAML configuration file. Resolved to absolute path internally.",
+          "validators": []
+        }
+      ],
+      "output_type": "ApprenticeConfig",
+      "error_cases": [
+        {
+          "name": "file_not_found",
+          "condition": "The specified config file path does not exist on disk",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Config file not found: {path}"
+          }
+        },
+        {
+          "name": "permission_denied",
+          "condition": "The config file exists but is not readable by the current user",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Permission denied reading config: {path}"
+          }
+        },
+        {
+          "name": "invalid_yaml",
+          "condition": "The file contents are not valid YAML syntax",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid YAML in config file: {path}"
+          }
+        },
+        {
+          "name": "validation_error",
+          "condition": "The YAML is valid but does not conform to the ApprenticeConfig schema (missing fields, wrong types, constraint violations)",
+          "error_type": "ValidationError",
+          "error_data": {
+            "message": "Config validation failed with details"
+          }
+        }
+      ],
+      "preconditions": [
+        "path is a non-empty string",
+        "Filesystem is accessible"
+      ],
+      "postconditions": [
+        "Returned ApprenticeConfig passes all pydantic validation rules",
+        "All required config fields are present and correctly typed",
+        "Config file was read but not modified"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Config file at specified path",
+          "description": "Reads YAML config file from disk. File is not modified."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "resolve_input",
+      "description": "Resolves the raw --input argument into a parsed dictionary. If the input string starts with '@', treats the remainder as a file path and reads JSON from that file. Otherwise, parses the string directly as JSON. Validates that the result is a JSON object (dict), not an array or scalar.",
+      "inputs": [
+        {
+          "name": "input_raw",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Raw input string from the --input CLI argument. Either a JSON string or '@' followed by a file path.",
+          "validators": []
+        }
+      ],
+      "output_type": "InputData",
+      "error_cases": [
+        {
+          "name": "invalid_json_string",
+          "condition": "The input string (not starting with @) is not valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid JSON input: {details}"
+          }
+        },
+        {
+          "name": "not_json_object",
+          "condition": "The parsed JSON is valid but is not a JSON object (e.g., it's an array or scalar)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Input must be a JSON object, got {type}"
+          }
+        },
+        {
+          "name": "input_file_not_found",
+          "condition": "The input starts with @ but the referenced file does not exist",
+          "error_type": "FileNotFoundError",
+          "error_data": {
+            "message": "Input file not found: {path}"
+          }
+        },
+        {
+          "name": "input_file_not_readable",
+          "condition": "The referenced input file exists but cannot be read",
+          "error_type": "PermissionError",
+          "error_data": {
+            "message": "Permission denied reading input file: {path}"
+          }
+        },
+        {
+          "name": "input_file_invalid_json",
+          "condition": "The referenced file exists and is readable but does not contain valid JSON",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Invalid JSON in input file {path}: {details}"
+          }
+        },
+        {
+          "name": "empty_file_reference",
+          "condition": "The input is exactly '@' with no file path following",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Empty file path after @"
+          }
+        }
+      ],
+      "preconditions": [
+        "input_raw is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned InputData.data is a dict (JSON object), never a list, string, number, or null",
+        "All JSON values are valid Python types (str, int, float, bool, None, list, dict)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Input file when input_raw starts with @",
+          "description": "Reads JSON content from the referenced file."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "format_output",
+      "description": "Serializes a subcommand result (RunResult, StatusResult, or ReportResult) into a string suitable for terminal output. In JSON mode, produces compact JSON via pydantic's model_dump_json(). In human mode, produces a formatted table or structured text output with aligned columns and section headers.",
+      "inputs": [
+        {
+          "name": "result",
+          "type_ref": "CLIResult",
+          "required": true,
+          "default": "",
+          "description": "The result model from any subcommand execution.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "If true, output machine-readable JSON. If false, output human-readable formatted text.",
+          "validators": []
+        }
+      ],
+      "output_type": "str",
+      "error_cases": [
+        {
+          "name": "serialization_error",
+          "condition": "The result model contains values that cannot be serialized (should not happen with well-typed models)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to serialize result: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "result is a valid RunResult, StatusResult, or ReportResult instance"
+      ],
+      "postconditions": [
+        "Returned string is non-empty",
+        "In JSON mode, returned string is valid JSON parseable by json.loads()",
+        "In human mode, returned string contains no raw JSON — values are formatted for readability",
+        "Returned string does not include a trailing newline (caller adds newline when printing)"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [],
+      "performance_budget": null
+    },
+    {
+      "name": "configure_logging",
+      "description": "Configures the Python logging subsystem for structured JSON output to stderr. Sets the root logger level based on the verbose flag (0=WARNING, 1=INFO, 2=DEBUG). Installs a JSON formatter that produces one JSON object per log line with fields: timestamp, level, logger, message, and any extra context. Must be called once at the start of main() before any other work.",
+      "inputs": [
+        {
+          "name": "verbose",
+          "type_ref": "int",
+          "required": true,
+          "default": "",
+          "description": "Verbosity level from CLI flags. 0=WARNING, 1=INFO, 2=DEBUG.",
+          "validators": [
+            {
+              "kind": "range",
+              "expression": "0 <= value <= 2",
+              "error_message": "verbose must be 0, 1, or 2"
+            }
+          ]
+        }
+      ],
+      "output_type": "None",
+      "error_cases": [],
+      "preconditions": [
+        "stderr file descriptor is available and writable",
+        "This function has not been called previously in this process (idempotent in effect but should only be called once)"
+      ],
+      "postconditions": [
+        "Root logger level is set to WARNING (verbose=0), INFO (verbose=1), or DEBUG (verbose=2)",
+        "All log output is directed to stderr, never stdout",
+        "Log format is structured JSON with one object per line",
+        "Each log line contains: timestamp (ISO 8601), level, logger name, message"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "mutates_state",
+          "target": "Python logging subsystem",
+          "description": "Configures root logger level, handler, and formatter. Replaces any existing handlers on the root logger."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_run",
+      "description": "Executes the 'run' subcommand: resolves input, calls Apprentice.run(task_name, input_data) asynchronously, and wraps the TaskResponse into a RunResult. This is an async function called within asyncio.run() from main().",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Constructed Apprentice instance with all dependencies injected.",
+          "validators": []
+        },
+        {
+          "name": "run_args",
+          "type_ref": "RunArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed run subcommand arguments containing task_name and input_raw.",
+          "validators": []
+        }
+      ],
+      "output_type": "RunResult",
+      "error_cases": [
+        {
+          "name": "task_not_found",
+          "condition": "The specified task_name is not defined in the loaded config",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Unknown task: {task_name}"
+          }
+        },
+        {
+          "name": "input_resolution_failed",
+          "condition": "The input_raw string cannot be resolved to a valid dict (invalid JSON or missing file)",
+          "error_type": "ValueError",
+          "error_data": {
+            "message": "Failed to resolve input: {details}"
+          }
+        },
+        {
+          "name": "execution_error",
+          "condition": "Apprentice.run() raises an error during task execution",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Task execution failed: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance",
+        "run_args.task_name corresponds to a task defined in the loaded config",
+        "run_args.input_raw is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned RunResult.task_name matches run_args.task_name",
+        "If success is true, output contains the task response payload",
+        "If success is false, error_message contains a human-readable error description"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "reads_file",
+          "target": "Input file if input_raw starts with @",
+          "description": "Delegates to resolve_input for file reading."
+        },
+        {
+          "kind": "network_call",
+          "target": "Remote model APIs via Apprentice",
+          "description": "Apprentice may call remote APIs depending on routing decisions."
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Logs task execution details at INFO/DEBUG level."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_status",
+      "description": "Executes the 'status' subcommand: calls Apprentice.status() asynchronously, optionally filters by task name, and wraps the result into a StatusResult with ISO 8601 timestamp.",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Constructed Apprentice instance with all dependencies injected.",
+          "validators": []
+        },
+        {
+          "name": "status_args",
+          "type_ref": "StatusArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed status subcommand arguments with optional task filter.",
+          "validators": []
+        }
+      ],
+      "output_type": "StatusResult",
+      "error_cases": [
+        {
+          "name": "filtered_task_not_found",
+          "condition": "The --task filter specifies a task name that doesn't exist in the config",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Unknown task: {task_name}"
+          }
+        },
+        {
+          "name": "status_retrieval_error",
+          "condition": "Apprentice.status() fails due to internal state corruption or other error",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Failed to retrieve status: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance"
+      ],
+      "postconditions": [
+        "Returned StatusResult.tasks is non-empty if the system has any configured tasks (unless filtered to a non-existent task)",
+        "If status_args.task_filter is non-empty, returned tasks list contains at most one entry matching that task name",
+        "timestamp is a valid ISO 8601 datetime string"
+      ],
+      "idempotent": true,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Logs status retrieval at INFO/DEBUG level."
+        }
+      ],
+      "performance_budget": null
+    },
+    {
+      "name": "execute_report",
+      "description": "Executes the 'report' subcommand: calls Apprentice.report() asynchronously, wraps into ReportResult, and optionally writes to an output file. If --output is specified, writes the formatted output to that file and records the path in the result.",
+      "inputs": [
+        {
+          "name": "apprentice",
+          "type_ref": "any",
+          "required": true,
+          "default": "",
+          "description": "Constructed Apprentice instance with all dependencies injected.",
+          "validators": []
+        },
+        {
+          "name": "report_args",
+          "type_ref": "ReportArgs",
+          "required": true,
+          "default": "",
+          "description": "Parsed report subcommand arguments with optional output path.",
+          "validators": []
+        },
+        {
+          "name": "config_path",
+          "type_ref": "str",
+          "required": true,
+          "default": "",
+          "description": "Path to the config file that was loaded, included in the report for auditability.",
+          "validators": []
+        },
+        {
+          "name": "json_mode",
+          "type_ref": "bool",
+          "required": true,
+          "default": "",
+          "description": "Whether to format output as JSON when writing to a file.",
+          "validators": []
+        }
+      ],
+      "output_type": "ReportResult",
+      "error_cases": [
+        {
+          "name": "report_retrieval_error",
+          "condition": "Apprentice.report() fails",
+          "error_type": "ApprenticeError",
+          "error_data": {
+            "message": "Failed to generate report: {details}"
+          }
+        },
+        {
+          "name": "output_file_write_error",
+          "condition": "Cannot write to the specified --output file path (permissions, directory doesn't exist)",
+          "error_type": "OSError",
+          "error_data": {
+            "message": "Failed to write report to {path}: {details}"
+          }
+        }
+      ],
+      "preconditions": [
+        "apprentice is a fully initialized Apprentice instance",
+        "config_path is a non-empty string"
+      ],
+      "postconditions": [
+        "Returned ReportResult.tasks contains entries for all configured tasks",
+        "total_budget_spent <= total_budget_limit",
+        "system_uptime_seconds >= 0",
+        "timestamp is a valid ISO 8601 datetime string",
+        "If report_args.output_path is non-empty, the file at that path contains the formatted report",
+        "written_to_file matches report_args.output_path"
+      ],
+      "idempotent": false,
+      "side_effects": [],
+      "structured_side_effects": [
+        {
+          "kind": "writes_file",
+          "target": "Report output file at report_args.output_path",
+          "description": "Writes formatted report to the specified file, if --output is provided."
+        },
+        {
+          "kind": "logging",
+          "target": "stderr",
+          "description": "Logs report generation at INFO/DEBUG level."
+        }
+      ],
+      "performance_budget": null
+    }
+  ],
+  "dependencies": [
+    "apprentice_core",
+    "config"
+  ],
+  "dependency_contracts": {
+    "apprentice_core": [
+      "Apprentice",
+      "Apprentice.run",
+      "Apprentice.status",
+      "Apprentice.report",
+      "TaskResponse",
+      "ApprenticeError"
+    ],
+    "config": [
+      "ApprenticeConfig",
+      "load_and_validate_config"
+    ]
+  },
+  "invariants": [
+    "asyncio.run() is called exactly once per main() invocation, never nested",
+    "All output to stdout; all errors and logs to stderr",
+    "No global mutable state — all state flows through function parameters or local variables",
+    "Exit codes are deterministic: 0 for success, 1 for application/config error, 2 for usage error, 130 for keyboard interrupt",
+    "Config validation errors always fail at startup, never silently default",
+    "The CLI module never catches BaseException — only Exception subclasses and KeyboardInterrupt",
+    "Structured JSON logging is configured before any other work in main()",
+    "File cli.py is under 300 lines; result models live in cli_models.py, formatters in cli_formatters.py",
+    "All pydantic models use strict mode for serialization correctness"
+  ],
+  "requires": [
+    "Python >= 3.12",
+    "pydantic >= 2.0",
+    "pyyaml",
+    "argparse (stdlib)",
+    "asyncio (stdlib)",
+    "signal (stdlib)",
+    "sys (stdlib)",
+    "pathlib (stdlib)",
+    "json (stdlib)",
+    "logging (stdlib)"
+  ]
+}

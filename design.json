@@ -1,0 +1,320 @@
+{
+  "project_id": "apprentice",
+  "title": "Design: apprentice",
+  "summary": "",
+  "decomposition_tree": {
+    "root_id": "root",
+    "nodes": {
+      "config_and_registry": {
+        "component_id": "config_and_registry",
+        "name": "Configuration, Task Registry & Data Models",
+        "description": "Parses and strictly validates apprentice.yaml at startup using Pydantic v2 models. Defines all shared data models (TaskConfig, RequestInput, TaskResult, TrainingExample, ConfidenceSnapshot, BudgetState, AuditEntry, etc.) used across the entire system. Includes the Task Registry which holds configured task types with their schemas, prompt templates, evaluator types, match fields, and confidence thresholds. Fails fast with clear error messages on invalid config. This is the foundational layer — every other component depends on these types.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "config_loader",
+          "task_registry",
+          "data_models"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "config_loader": {
+        "component_id": "config_loader",
+        "name": "Config Loader",
+        "description": "Reads apprentice.yaml, parses YAML via pyyaml, validates all fields against Pydantic models. Handles env var references for API keys (api_key_env). Returns a fully typed ApprenticeConfig object. Fails at startup with clear messages for missing required fields, invalid types, unknown evaluator types, unsupported backend combinations, etc. No defaults for critical fields — everything must be explicit.",
+        "depth": 2,
+        "parent_id": "config_and_registry",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "task_registry": {
+        "component_id": "task_registry",
+        "name": "Task Registry",
+        "description": "Holds the set of configured task types loaded from config. Each task entry includes: name, description, input/output schema, system_prompt and prompt_template, evaluator type (structured_match, semantic_similarity, exact_match, custom), match_fields, and confidence thresholds (phase1_to_phase2 example count, phase2_to_phase3 correlation score, coaching_trigger, emergency_threshold). Provides lookup by task name. Immutable after startup (no hot-reload).",
+        "depth": 2,
+        "parent_id": "config_and_registry",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "data_models": {
+        "component_id": "data_models",
+        "name": "Shared Data Models",
+        "description": "Pydantic v2 models for all data flowing between components: TaskRequest, TaskResponse, TrainingExample, ComparisonPair, ConfidenceSnapshot (score, phase, sample_count, last_updated), BudgetState (spent, remaining, period), AuditEntry (timestamp, task, routing_decision, model_used, confidence_at_decision, cost), ModelVersion (id, path, validation_score, promoted_at), SamplingDecision, EvaluationResult. All models are immutable (frozen) where appropriate. These are the contract between components.",
+        "depth": 2,
+        "parent_id": "config_and_registry",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "external_interfaces": {
+        "component_id": "external_interfaces",
+        "name": "External Model Interfaces",
+        "description": "Abstract interfaces and implementations for communicating with remote APIs and local model servers. Provides a consistent contract for sending prompts and receiving structured responses from any model source. All external I/O is behind abstract base classes for testability via dependency injection.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "remote_api_client",
+          "local_model_server"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "remote_api_client": {
+        "component_id": "remote_api_client",
+        "name": "Remote API Client",
+        "description": "Async abstraction over commercial AI APIs (Anthropic, OpenAI, Google). Implements a RemoteClient protocol/ABC with concrete implementations per provider. Handles: auth via env vars, httpx async requests, retry with exponential backoff (configurable max retries), error recovery (rate limits, transient failures, auth errors). Tracks per-request cost using provider-specific pricing tables (input/output token counts × price). Supports a primary provider for live serving/ground-truth and optional additional providers for training data diversity (same input sent to additional providers, responses stored but not used as ground truth). Reports cost per request back to caller for budget accounting. Returns structured TaskResponse or raises typed errors (RemoteUnavailableError, AuthError, RateLimitError).",
+        "depth": 2,
+        "parent_id": "external_interfaces",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "local_model_server": {
+        "component_id": "local_model_server",
+        "name": "Local Model Server Client",
+        "description": "Async abstraction over local inference servers (Ollama, vLLM, llama.cpp). Implements a LocalModelClient protocol/ABC with concrete implementations per backend. Handles: model loading status checks, health checks (is the server running, is a model loaded), inference requests, model version swapping when a new fine-tuned model is promoted. Returns a clear LocalModelUnavailable status (not an error) when no model exists yet (Phase 1) or server is down. On model promotion: loads new model, runs a smoke test, swaps to new version, unloads old. Graceful degradation — never crashes the system on local model failure.",
+        "depth": 2,
+        "parent_id": "external_interfaces",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "confidence_engine": {
+        "component_id": "confidence_engine",
+        "name": "Confidence Engine & Evaluators",
+        "description": "Per-task quality tracking system. Maintains a rolling window of comparison-pair samples (configurable window_size, default 100 pairs). Computes correlation score using task-specific evaluators. Includes evaluator implementations: structured_match (per-field exact match rate averaged across match_fields), exact_match (full output string equality), semantic_similarity (cosine similarity of sentence embeddings using configurable model, default all-MiniLM-L6-v2, loaded lazily and only if needed). Detects drift (gradual degradation: correlation trending downward over consecutive windows) and shift (sudden quality change: single-window drop exceeding trend_sensitivity). Derives current phase per task from: example count vs phase1_to_phase2 threshold, correlation vs phase2_to_phase3 threshold. Enforces time-based staleness safety net: if oldest sample in window exceeds max_window_age, signals that a coaching sample is overdue. Exposes ConfidenceSnapshot per task: current score, phase, trend direction, sample count, staleness status.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "evaluators",
+          "phase_manager",
+          "rolling_window"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "evaluators": {
+        "component_id": "evaluators",
+        "name": "Response Evaluators",
+        "description": "Pluggable evaluator implementations behind an Evaluator protocol. Each takes a local TaskResponse and a remote TaskResponse (ground truth) plus task config, and returns an EvaluationResult (score 0.0-1.0, per-field breakdown, evaluator type used). Implementations: StructuredMatchEvaluator (per-field exact match rate averaged across configured match_fields), ExactMatchEvaluator (full output equality, 0 or 1), SemanticSimilarityEvaluator (cosine similarity of embeddings, lazy-loads sentence-transformers model, configurable model name). Custom evaluator support via a callable in config (Python dotted path to a function). All evaluators are stateless and independently testable.",
+        "depth": 2,
+        "parent_id": "confidence_engine",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "phase_manager": {
+        "component_id": "phase_manager",
+        "name": "Phase Manager",
+        "description": "Determines the current phase per task type based on training example count and confidence scores. Phase 1→2 transition: when training example count >= phase1_to_phase2 threshold AND a local model is available. Phase 2→3 transition: when rolling correlation >= phase2_to_phase3 threshold over a sustained period. Phase 3→2 regression: when correlation drops below coaching_trigger. Phase 3→1 emergency: when correlation drops below emergency_threshold, revert to full remote serving. Transitions are logged as audit events. Phase is derived (computed from state), not stored as a discrete flag — emergent from confidence scores.",
+        "depth": 2,
+        "parent_id": "confidence_engine",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "rolling_window": {
+        "component_id": "rolling_window",
+        "name": "Rolling Comparison Window",
+        "description": "Maintains a fixed-size deque of ComparisonPair samples per task type. Each pair includes: timestamp, input, local response, remote response, evaluation score. Supports: adding new pairs, computing aggregate correlation (mean of evaluation scores), computing trend (slope of scores over recent N pairs), checking staleness (is oldest pair older than max_window_age). Persists to disk (JSON) for survival across restarts. Thread-safe (though single-threaded for now, future-proofed).",
+        "depth": 2,
+        "parent_id": "confidence_engine",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "sampling_scheduler": {
+        "component_id": "sampling_scheduler",
+        "name": "Adaptive Sampling Scheduler",
+        "description": "Given the current ConfidenceSnapshot from the Confidence Engine, determines whether THIS specific request should be a coaching sample (sent to both local and remote). In Phase 1: all requests go to remote (100%). In Phase 2: all requests go to both (100% coaching). In Phase 3: sampling rate is a continuous function of current correlation score, computed via configurable decay function (exponential, linear, or step — defined in config). Has a hard minimum floor (config: min_floor, default 2%) — never stops spot-checking. Forces 100% sampling when correlation < coaching_trigger. Forces full remote (no local) when correlation < emergency_threshold. Staleness override: forces a coaching sample if the confidence engine signals staleness. The decision for each request is made by generating a random float and comparing against the current sampling rate. Returns a SamplingDecision (send_to_local: bool, send_to_remote: bool, reason: str).",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "training_pipeline": {
+        "component_id": "training_pipeline",
+        "name": "Training Data Store & Fine-Tuning Pipeline",
+        "description": "Manages the full lifecycle of training data collection, storage, fine-tuning orchestration, model validation, and promotion. This is the component that turns remote API responses into local model capability.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "training_data_store",
+          "fine_tuning_orchestrator",
+          "model_validator"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "training_data_store": {
+        "component_id": "training_data_store",
+        "name": "Training Data Store",
+        "description": "Collects and persists training examples (input + remote response pairs) per task type. Stores as JSON-lines files in a configurable directory. Tracks example count per task. Automatically holds out a configurable percentage (default 10%) as a validation/test set (deterministic split based on hash of input for reproducibility). Signals when batch size threshold (fine_tune_batch_size) is reached for a task, triggering fine-tuning. Supports appending new examples without rewriting existing data. Provides iterators for training set and validation set separately.",
+        "depth": 2,
+        "parent_id": "training_pipeline",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "fine_tuning_orchestrator": {
+        "component_id": "fine_tuning_orchestrator",
+        "name": "Fine-Tuning Orchestrator",
+        "description": "Orchestrates the fine-tuning process when triggered by the training data store. Behind a FineTuneBackend protocol/ABC with implementations: UnslothBackend (local LoRA fine-tuning, trains in native PyTorch format), OpenAIBackend (OpenAI fine-tuning API), HuggingFaceBackend (Hugging Face Trainer). For local backends (Unsloth/Axolotl): manages the full pipeline of train → quantize → GGUF conversion (via llama.cpp quantize) → register with Ollama (ollama create with Modelfile). Handles fine-tuning as a blocking operation (acceptable given casual pace). On failure: logs error, keeps current model version, schedules retry on next batch. Produces a ModelVersion artifact with metadata (training examples used, timestamp, base model, backend used).",
+        "depth": 2,
+        "parent_id": "training_pipeline",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "model_validator": {
+        "component_id": "model_validator",
+        "name": "Model Validator & Promoter",
+        "description": "Validates a newly fine-tuned model before promoting it to serve live traffic. Runs the new model against the held-out test set from the training data store. Computes evaluation scores using the same evaluators as the confidence engine. Promotion criteria: new model must score above a configurable threshold (default: phase2_to_phase3 threshold) on the test set. If validation passes: signals the Local Model Server to swap to the new model version. If validation fails: logs warning, keeps current model, discards the candidate. Records validation results and promotion decisions in the audit log.",
+        "depth": 2,
+        "parent_id": "training_pipeline",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "budget_manager": {
+        "component_id": "budget_manager",
+        "name": "Budget Manager",
+        "description": "Enforces hard spending limits on remote API usage. Tracks actual spend per request (reported by Remote API Client after each call). Maintains running totals for configurable periods: daily, weekly, monthly. Persists budget state to disk (JSON) for survival across restarts. On budget check (called before every remote request): returns allowed/denied. When budget exhausted in Phase 1 (no local model): raises BudgetExhaustedError — honest failure, no silent degradation. When budget exhausted in Phase 2/3: forces local-only mode with logged warning (accepts quality risk). Tracks estimated savings (requests served locally × estimated remote cost). Reports cost trajectory showing convergence toward lower spend. Budget resets on period boundaries (midnight for daily, etc.). Never exceeds limits — check-then-spend with no race conditions (single-threaded).",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "router": {
+        "component_id": "router",
+        "name": "Request Router",
+        "description": "The central decision-maker for each request. Given a TaskRequest: (1) checks budget via Budget Manager, (2) gets current phase and confidence via Confidence Engine, (3) gets sampling decision via Sampling Scheduler, (4) routes accordingly. Phase 1: send to remote only, store response as training example. Phase 2 (coaching sample): send to both, evaluate pair, store training example, return remote response to caller. Phase 2 (non-coaching, shouldn't happen since Phase 2 is 100%): send to both. Phase 3 (coaching sample): send to both, evaluate pair, return local response to caller (remote is just for monitoring). Phase 3 (non-coaching): send to local only, return local response. Fallback: if local model fails, fall back to remote (counts against budget). Logs every routing decision to audit log with full context (phase, confidence, sampling decision, cost).",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "unified_interface": {
+        "component_id": "unified_interface",
+        "name": "Unified Interface & Entry Points",
+        "description": "The product surface — a single async class (Apprentice) that accepts a task name + input dict and returns a typed TaskResponse. The caller has zero visibility into routing, phases, or which model produced the answer. Also includes the CLI entry point (apprentice CLI command) that loads config, boots all components via dependency injection, and provides subcommands: 'run' (start serving), 'status' (show current phase/confidence/budget per task), 'report' (generate full report). Library entry point: 'from apprentice import Apprentice' for programmatic use. Constructor takes config path, wires all components together. The Apprentice class is the composition root — it constructs and injects all dependencies.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "apprentice_class",
+          "cli"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "apprentice_class": {
+        "component_id": "apprentice_class",
+        "name": "Apprentice Core Class",
+        "description": "The main Apprentice class. Constructor takes a config file path (or ApprenticeConfig object). On init: loads config, constructs all components via dependency injection (Config Loader → Task Registry → Remote Client → Local Client → Confidence Engine → Sampling Scheduler → Budget Manager → Training Data Store → Router → Audit Log). Exposes a single primary method: async def run(task_name: str, input_data: dict) -> TaskResponse. Also exposes: status(task_name: str) -> ConfidenceSnapshot, report() -> SystemReport. All internal components are accessible for testing but not part of the public API. Handles graceful error propagation — BudgetExhaustedError, TaskNotFoundError, LocalModelUnavailableError (only if also budget-exhausted).",
+        "depth": 2,
+        "parent_id": "unified_interface",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "cli": {
+        "component_id": "cli",
+        "name": "CLI Entry Point",
+        "description": "Command-line interface via apprentice.cli:main. Uses argparse (stdlib). Subcommands: 'apprentice run <task_name> --input <json_string_or_file>' for single request execution, 'apprentice status' for current phase/confidence/budget per task, 'apprentice report' for full system report (JSON or human-readable table). Loads config from ./apprentice.yaml or --config path. Constructs Apprentice instance and delegates. Handles Ctrl+C gracefully. Formats output for terminal (human-readable) or --json flag for machine-readable.",
+        "depth": 2,
+        "parent_id": "unified_interface",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "reporting": {
+        "component_id": "reporting",
+        "name": "Reporting, Observability & Audit Log",
+        "description": "Reporting and audit trail for the entire system. Provides visibility into system behavior without affecting it.",
+        "depth": 1,
+        "parent_id": "root",
+        "children": [
+          "audit_log",
+          "report_generator"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "audit_log": {
+        "component_id": "audit_log",
+        "name": "Audit Log",
+        "description": "Structured JSON logging of every system decision. Each entry is an AuditEntry: timestamp, task_name, event_type (request_routed, training_example_stored, fine_tune_started, fine_tune_completed, model_validated, model_promoted, phase_transition, budget_warning, confidence_alert), details dict (model_used, routing_reason, confidence_score, cost, etc.). Writes to a JSON-lines file (configurable path). Append-only, never modified. Provides query methods for report generation: entries_by_task, entries_by_type, entries_in_range. Uses Python stdlib logging module configured with a JSON formatter for the audit-specific logger.",
+        "depth": 2,
+        "parent_id": "reporting",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "report_generator": {
+        "component_id": "report_generator",
+        "name": "Report Generator",
+        "description": "Generates system reports by aggregating data from the Confidence Engine, Budget Manager, and Audit Log. Report contents: current phase per task type, confidence scores and trend (improving/stable/declining), current sampling frequency per task, correlation history (last N windows), cost breakdown (total remote spend, estimated savings from local serving, cost per task), alerts (quality degradation, budget warnings, staleness). Output formats: JSON (for programmatic consumption), CLI summary (human-readable table), optional webhook (POST JSON to configured URL). Reports are generated on-demand (not background), triggered by CLI or library call.",
+        "depth": 2,
+        "parent_id": "reporting",
+        "children": [],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      },
+      "root": {
+        "component_id": "root",
+        "name": "Root",
+        "description": "# Task: Apprentice — Adaptive Model Distillation with Coaching\n\n## Problem\n\nRunning specialized AI tasks via commercial APIs (Claude, GPT, etc.) is expensive at scale and in perpetuity. But local/fine",
+        "depth": 0,
+        "parent_id": "",
+        "children": [
+          "budget_manager",
+          "confidence_engine",
+          "config_and_registry",
+          "external_interfaces",
+          "reporting",
+          "router",
+          "sampling_scheduler",
+          "training_pipeline",
+          "unified_interface"
+        ],
+        "contract": null,
+        "implementation_status": "pending",
+        "test_results": null
+      }
+    }
+  },
+  "engineering_decisions": [],
+  "failure_history": [],
+  "lessons_learned": [],
+  "version": 1
+}
