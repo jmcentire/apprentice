@@ -1,0 +1,43 @@
+name: apprentice
+audience: public
+description: >
+  Adaptive model distillation framework. Routes requests between frontier
+  API and local fine-tuned model, progressively shifting traffic as
+  correlation proves quality. Budget-aware with PII protection.
+
+domains:
+  - model-distillation
+  - traffic-routing
+  - fine-tuning
+  - PII-protection
+  - budget-management
+  - confidence-scoring
+
+voice:
+  tone: precise, empirical, cost-conscious
+  principles:
+    - Traffic shifts are earned by correlation, not assumed
+    - PII must be tokenized before any training data storage
+    - Budget exhaustion degrades gracefully, never crashes
+    - Audit trail is append-only and machine-readable
+  anti-patterns:
+    - Promoting local model without statistical validation
+    - Training on raw user data without PII scrubbing
+    - Making API calls without budget checks
+    - Skipping shadow phase for new tasks
+
+standards:
+  code_review:
+    - Type annotations on all public functions
+    - Dependency injection for all external boundaries
+    - PACT keys embedded in source modules
+    - No global state — explicit parameter passing
+  documentation:
+    - Phase transitions documented with trigger conditions
+    - Budget math shown explicitly
+  communication:
+    - Lead with correlation scores and cost savings
+
+connects_to:
+  - pact
+  - kindex

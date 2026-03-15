@@ -1,0 +1,40 @@
+version: "1"
+project: apprentice
+classification_tiers:
+  - name: PUBLIC
+    soak_duration_hours: 0
+    human_gate: false
+  - name: PII
+    soak_duration_hours: 24
+    human_gate: true
+  - name: FINANCIAL
+    soak_duration_hours: 24
+    human_gate: false
+  - name: AUTH
+    soak_duration_hours: 48
+    human_gate: true
+  - name: COMPLIANCE
+    soak_duration_hours: 48
+    human_gate: true
+
+authority_map:
+  router:
+    domain: traffic_routing
+    trust_score: 0.9
+  pii_tokenizer:
+    domain: pii_protection
+    trust_score: 0.95
+  remote_api_client:
+    domain: frontier_api
+    trust_score: 0.7
+  local_model_server:
+    domain: local_inference
+    trust_score: 0.8
+  budget_manager:
+    domain: cost_tracking
+    trust_score: 0.9
+  audit_log:
+    domain: audit_trail
+    trust_score: 0.95
+
+canary_eligible: [remote_api_client, local_model_server]
