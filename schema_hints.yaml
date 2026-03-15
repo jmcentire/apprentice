@@ -1,0 +1,19 @@
+version: "1"
+project: apprentice
+storage_backends:
+  - type: filesystem
+    purpose: runtime_state
+    path: .apprentice/
+    format: json
+    fields:
+      - name: confidence_scores
+        classification: PUBLIC
+      - name: model_registry
+        classification: PUBLIC
+      - name: training_data
+        classification: PII
+        annotation: pii_tokenized
+      - name: audit_log
+        file: audit.jsonl
+        classification: COMPLIANCE
+        annotation: append_only

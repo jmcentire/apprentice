@@ -1,0 +1,72 @@
+version: "1"
+project: apprentice
+constraints:
+  - id: C001
+    name: pii_tokenization
+    description: All training data must be PII-tokenized before storage
+    severity: must
+    classification: PII
+    rationale: Raw PII in training data creates compliance liability
+
+  - id: C002
+    name: phase_validation
+    description: Phase transitions require statistical validation (correlation threshold) — no manual promotion
+    severity: must
+    classification: null
+    rationale: Premature promotion degrades user experience
+
+  - id: C003
+    name: budget_enforcement
+    description: API budget exhaustion must degrade gracefully (fall back to local model, never crash)
+    severity: must
+    classification: FINANCIAL
+    rationale: Budget overruns are unacceptable; service must continue
+
+  - id: C004
+    name: audit_append_only
+    description: Audit log is append-only JSONL with UTC timestamps — no updates or deletes
+    severity: must
+    classification: COMPLIANCE
+    rationale: Audit trail integrity is required for debugging and compliance
+
+  - id: C005
+    name: no_global_state
+    description: No global state — all dependencies passed explicitly
+    severity: must
+    classification: null
+    rationale: Global state prevents testing and makes composition impossible
+
+  - id: C006
+    name: shadow_phase_required
+    description: New tasks must start in shadow phase (100% frontier, local runs in background)
+    severity: must
+    classification: null
+    rationale: Local model quality is unknown until shadow phase proves correlation
+
+  - id: C007
+    name: external_boundary_abstraction
+    description: All external boundaries (APIs, model servers, I/O) must be behind abstract interfaces
+    severity: must
+    classification: null
+    rationale: Enables testing without network/GPU access
+
+  - id: C008
+    name: pact_key_traceability
+    description: Source modules with PACT keys must maintain them through code changes
+    severity: should
+    classification: null
+    rationale: PACT keys enable production attribution via Sentinel
+
+  - id: C009
+    name: config_fail_fast
+    description: Invalid configuration must cause immediate failure with clear error message
+    severity: must
+    classification: null
+    rationale: Silent config errors cause hard-to-diagnose runtime failures
+
+  - id: C010
+    name: test_isolation
+    description: All tests must run without GPU, API keys, or network access
+    severity: must
+    classification: null
+    rationale: CI environments don't have GPUs or API keys
