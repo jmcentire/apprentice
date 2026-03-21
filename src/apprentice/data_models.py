@@ -830,6 +830,8 @@ def deserialize_model(json_data: str, model_type: str) -> Any:
         'LlmJudgeResult': LlmJudgeResult,
         'CustomEvalResult': CustomEvalResult,
         'ModelVersion': ModelVersion,
+        'StoryStep': StoryStep,
+        'Story': Story,
     }
 
     if model_type not in MODEL_MAP:
@@ -869,6 +871,8 @@ def validate_model(data: dict, model_type: str) -> list:
         'LlmJudgeResult': LlmJudgeResult,
         'CustomEvalResult': CustomEvalResult,
         'ModelVersion': ModelVersion,
+        'StoryStep': StoryStep,
+        'Story': Story,
     }
 
     if model_type not in MODEL_MAP:
@@ -926,6 +930,8 @@ def get_model_json_schema(model_type: str) -> dict:
         'LlmJudgeResult': LlmJudgeResult,
         'CustomEvalResult': CustomEvalResult,
         'ModelVersion': ModelVersion,
+        'StoryStep': StoryStep,
+        'Story': Story,
     }
 
     if model_type not in MODEL_MAP:
@@ -933,6 +939,72 @@ def get_model_json_schema(model_type: str) -> dict:
 
     model_class = MODEL_MAP[model_type]
     return model_class.model_json_schema()
+
+
+# ===========================================================================
+# Story-Level Learning Models
+# ===========================================================================
+
+class StoryStep(BaseModel):
+    """A single chronological step in a learning story. Immutable (frozen=True).
+    Represents one task execution with its inputs, outputs, model used, and
+    optional confidence score."""
+    model_config = ConfigDict(frozen=True, strict=True)
+
+    step_id: Annotated[str, Field(min_length=1)]
+    task_type: Annotated[str, Field(min_length=1)]
+    input_data: Any
+    output_data: Any = None
+    model_used: Annotated[str, Field(min_length=1)]
+    confidence_at_step: Optional[Annotated[float, Field(ge=0.0, le=1.0)]] = None
+    metadata: dict = Field(default_factory=dict)
+
+    @field_validator('metadata')
+    @classmethod
+    def validate_metadata_dict(cls, v: Any) -> dict:
+        if not isinstance(v, dict):
+            raise ValueError("metadata must be a dict")
+        return v
+
+
+class Story(BaseModel):
+    """An ordered collection of StorySteps representing a complete learning story.
+    Immutable (frozen=True). List index of steps encodes chronological order.
+    created_at must be UTC; closed_at is None for open stories."""
+    model_config = ConfigDict(frozen=True, strict=True)
+
+    story_id: Annotated[str, Field(min_length=1)]
+    story_type: Annotated[str, Field(min_length=1)]
+    steps: list[StoryStep]
+    created_at: AwareDatetime
+    closed_at: Optional[AwareDatetime] = None
+    context: dict = Field(default_factory=dict)
+
+    @field_validator('created_at')
+    @classmethod
+    def validate_created_at_utc(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("created_at must be timezone-aware")
+        if v.utcoffset().total_seconds() != 0:
+            raise ValueError("created_at must be a UTC-aware datetime")
+        return v
+
+    @field_validator('closed_at')
+    @classmethod
+    def validate_closed_at_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None:
+            if v.tzinfo is None:
+                raise ValueError("closed_at must be timezone-aware")
+            if v.utcoffset().total_seconds() != 0:
+                raise ValueError("closed_at must be None or a UTC-aware datetime")
+        return v
+
+    @field_validator('context')
+    @classmethod
+    def validate_context_dict(cls, v: Any) -> dict:
+        if not isinstance(v, dict):
+            raise ValueError("context must be a dict")
+        return v
 
 
 # ── Auto-injected export aliases (Pact export gate) ──
