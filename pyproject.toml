@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "apprentice-ai"
-version = "0.3.1"
+version = "0.3.2"
 description = "Adaptive model distillation framework — progressively replace expensive API calls with fine-tuned local models through coaching, evaluation, and phased rollout"
 readme = "README.md"
 license = {text = "MIT"}
