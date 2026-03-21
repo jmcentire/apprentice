@@ -17,7 +17,7 @@ from apprentice.data_models import (
 )
 from apprentice.factory import build_from_config
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __all__ = [
     "Apprentice",
     "build_from_config",
