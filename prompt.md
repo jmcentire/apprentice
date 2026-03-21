@@ -1,26 +1,46 @@
-# Apprentice — System Context
+# Apprentice Story Learning Enhancement
 
-## What It Is
-Adaptive model distillation. Routes between frontier API and local fine-tuned model, progressively shifting traffic as correlation proves quality.
+## Overview
+Extend the existing Apprentice system to support multi-step story learning while maintaining backward compatibility with atomic task routing.
 
-## How It Works
-Request -> Router -> [frontier | local] -> Evaluator -> Phase Manager
-Phases: shadow -> canary -> primary -> autonomous
+## Current System
+- Routes requests between frontier API and local model
+- Collects training data as request/response pairs
+- Handles atomic exchanges effectively
+- Has 2628 existing tests that must continue passing
 
-## Key Constraints
-- PII tokenized before storage (C001)
-- Phase transitions require statistical validation (C002)
-- Budget exhaustion degrades gracefully (C003)
-- Audit log is append-only (C004)
-- No global state (C005)
-- New tasks start in shadow phase (C006)
+## Enhancement Goals
+Add journey-level optimization capabilities including:
+- Multi-turn conversation flow handling
+- Per-journey-type phase transition tracking
+- Goal completion detection and measurement
+- Step efficiency analysis
+- Backtracking pattern recognition
+- Multi-step consistency scoring
 
-## Architecture
-28 components (21 leaf + 7 compositions). Core: router, phase_manager, evaluators, budget_manager, pii_tokenizer, audit_log.
+## Key Requirements
+- **Backward Compatibility**: All existing atomic task routing must remain unaffected
+- **Opt-in Configuration**: Story learning enabled via `story_learning_enabled: true`
+- **No New Dependencies**: Work within existing Python 3.12+ and Pydantic v2 constraints
+- **Test Preservation**: All 2628 existing tests must pass
+- **Frozen Models**: Maintain existing model constraints
 
-## Done Checklist
-- [ ] PII tokenization verified before storage
-- [ ] Phase transition requires correlation threshold
-- [ ] Budget exhaustion falls back to local model
-- [ ] Tests pass without GPU/API/network
-- [ ] Audit trail is append-only and complete
+## New Components to Implement
+1. **Story Model**: Represents multi-step narratives with metadata
+2. **StoryStep Model**: Individual steps within a story journey
+3. **StoryCollector**: Aggregates and processes story data from Chronicler
+4. **JourneyEvaluator**: Analyzes journey patterns and efficiency metrics
+5. **Enhanced Phase Manager**: Extended for per-journey-type tracking
+
+## Integration Points
+- Chronicler will emit multi-step event narratives
+- StoryCollector processes these narratives into training data
+- JourneyEvaluator provides optimization insights
+- Phase manager tracks journey-specific transitions
+
+## Success Metrics
+- Journey completion rates by type
+- Multi-turn consistency scores
+- Step efficiency measurements
+- Backtracking frequency analysis
+- Goal achievement tracking

@@ -569,6 +569,271 @@ def get_task_types() -> TaskTypeList:
 
 
 # ============================================================================
+# STORY STORAGE
+# ============================================================================
+
+
+class SplitName(Enum):
+    """Named data split for partitioning stories into train/val/test sets.
+    Split assignment is deterministic via SHA-256 of story_id."""
+    train = "train"
+    val = "val"
+    test = "test"
+
+
+class StoryStep:
+    """A single step within a multi-step story for collector storage."""
+
+    def __init__(self, step_index: int, input_data: dict, output_data: dict, metadata: dict = None):
+        if step_index < 0:
+            raise ValueError("step_index must be >= 0")
+        self.step_index = step_index
+        self.input_data = input_data
+        self.output_data = output_data
+        self.metadata = metadata if metadata is not None else {}
+
+    def to_dict(self) -> dict:
+        return {
+            "step_index": self.step_index,
+            "input_data": self.input_data,
+            "output_data": self.output_data,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'StoryStep':
+        return cls(
+            step_index=data["step_index"],
+            input_data=data["input_data"],
+            output_data=data["output_data"],
+            metadata=data.get("metadata", {}),
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, StoryStep):
+            return NotImplemented
+        return (self.step_index == other.step_index and
+                self.input_data == other.input_data and
+                self.output_data == other.output_data and
+                self.metadata == other.metadata)
+
+
+StoryStepList = List[StoryStep]
+
+
+class CollectorStory:
+    """A multi-step interaction story for the collector subsystem.
+    Supports to_dict()/from_dict() round-trip serialization."""
+
+    def __init__(self, story_id: str, story_type: str, steps: List[StoryStep], metadata: dict = None):
+        if not story_id:
+            raise ValueError("story_id must be non-empty")
+        if not story_type:
+            raise ValueError("story_type must be non-empty")
+        self.story_id = story_id
+        self.story_type = story_type
+        self.steps = steps
+        self.metadata = metadata if metadata is not None else {}
+
+    def to_dict(self) -> dict:
+        return {
+            "story_id": self.story_id,
+            "story_type": self.story_type,
+            "steps": [s.to_dict() for s in self.steps],
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'CollectorStory':
+        steps = [StoryStep.from_dict(s) for s in data["steps"]]
+        return cls(
+            story_id=data["story_id"],
+            story_type=data["story_type"],
+            steps=steps,
+            metadata=data.get("metadata", {}),
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, CollectorStory):
+            return NotImplemented
+        return (self.story_id == other.story_id and
+                self.story_type == other.story_type and
+                self.steps == other.steps and
+                self.metadata == other.metadata)
+
+
+StoryList = List[CollectorStory]
+
+
+class StoryTrainingExample:
+    """A training example derived from two consecutive story steps."""
+
+    def __init__(self, story_id: str, step_index: int, context: dict,
+                 input_data: dict, expected_output: dict):
+        self.story_id = story_id
+        self.step_index = step_index
+        self.context = context
+        self.input_data = input_data
+        self.expected_output = expected_output
+
+    def __eq__(self, other):
+        if not isinstance(other, StoryTrainingExample):
+            return NotImplemented
+        return (self.story_id == other.story_id and
+                self.step_index == other.step_index and
+                self.context == other.context and
+                self.input_data == other.input_data and
+                self.expected_output == other.expected_output)
+
+
+TrainingExampleList_Story = List[StoryTrainingExample]
+
+
+def sanitize_story_type(story_type: str) -> str:
+    """Sanitize story_type for filesystem safety by keeping only
+    alphanumeric, underscore, and hyphen characters."""
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', story_type)
+    if not sanitized:
+        raise ValueError("story_type is empty after sanitization")
+    return sanitized
+
+
+def compute_split(story_id: str) -> SplitName:
+    """Deterministically assign a story_id to a data split using SHA-256.
+    0-79 = train, 80-89 = val, 90-99 = test."""
+    digest = hashlib.sha256(story_id.encode('utf-8')).digest()
+    bucket = int.from_bytes(digest[:8], 'big') % 100
+    if bucket < 80:
+        return SplitName.train
+    elif bucket < 90:
+        return SplitName.val
+    else:
+        return SplitName.test
+
+
+class StoryCollector:
+    """Manages story storage and retrieval in JSONL format."""
+
+    def __init__(self, base_dir: str):
+        self._base_dir = base_dir
+
+    def _stories_dir(self) -> str:
+        return os.path.join(self._base_dir, "stories")
+
+    def _jsonl_path(self, story_type: str) -> str:
+        sanitized = sanitize_story_type(story_type)
+        return os.path.join(self._stories_dir(), f"{sanitized}.jsonl")
+
+    def store_story(self, story: CollectorStory) -> None:
+        """Persist a single Story as one JSONL line."""
+        sanitized = sanitize_story_type(story.story_type)
+        stories_dir = self._stories_dir()
+        os.makedirs(stories_dir, exist_ok=True)
+        jsonl_path = os.path.join(stories_dir, f"{sanitized}.jsonl")
+        try:
+            line = json.dumps(story.to_dict(), sort_keys=True) + "\n"
+        except (TypeError, ValueError) as e:
+            raise TypeError(f"Story contains non-JSON-serializable data: {e}")
+        try:
+            with open(jsonl_path, "a", encoding="utf-8") as f:
+                f.write(line)
+        except OSError as e:
+            raise OSError(f"Failed to write story to JSONL file: {e}")
+
+    def get_story_batch(self, story_type: str, split: str) -> StoryList:
+        """Read all stories of a given story_type filtered by split."""
+        sanitized = sanitize_story_type(story_type)
+
+        # Validate split
+        valid_splits = {s.value for s in SplitName}
+        if split not in valid_splits:
+            raise ValueError(f"split must be one of {sorted(valid_splits)}, got '{split}'")
+
+        split_enum = SplitName(split)
+        jsonl_path = os.path.join(self._stories_dir(), f"{sanitized}.jsonl")
+
+        if not os.path.exists(jsonl_path):
+            return []
+
+        stories = []
+        try:
+            with open(jsonl_path, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        story = CollectorStory.from_dict(data)
+                        if compute_split(story.story_id) == split_enum:
+                            stories.append(story)
+                    except (json.JSONDecodeError, KeyError, TypeError) as e:
+                        _log("warning", f"Corrupt JSONL line {line_num} in {jsonl_path}: {e}")
+                        continue
+        except OSError as e:
+            raise OSError(f"Failed to read story JSONL file: {e}")
+
+        return stories
+
+    def stories_to_training_examples(self, story: CollectorStory) -> TrainingExampleList_Story:
+        """Convert an N-step story into N-1 sequential training examples."""
+        if len(story.steps) < 2:
+            return []
+
+        examples = []
+        for i in range(1, len(story.steps)):
+            prev_step = story.steps[i - 1]
+            curr_step = story.steps[i]
+            examples.append(StoryTrainingExample(
+                story_id=story.story_id,
+                step_index=curr_step.step_index,
+                context=prev_step.output_data,
+                input_data=curr_step.input_data,
+                expected_output=curr_step.output_data,
+            ))
+        return examples
+
+
+# Module-level story collector instance
+_global_collector: StoryCollector | None = None
+
+
+def store_story(story: CollectorStory) -> None:
+    """Module-level store_story using the global collector."""
+    if _global_collector is None:
+        raise RuntimeError("Story collector not initialized, call initialize() first")
+    _global_collector.store_story(story)
+
+
+def get_story_batch(story_type: str, split: str) -> StoryList:
+    """Module-level get_story_batch using the global collector."""
+    if _global_collector is None:
+        raise RuntimeError("Story collector not initialized, call initialize() first")
+    return _global_collector.get_story_batch(story_type, split)
+
+
+def stories_to_training_examples(story: CollectorStory) -> TrainingExampleList_Story:
+    """Module-level stories_to_training_examples."""
+    if _global_collector is None:
+        raise RuntimeError("Story collector not initialized, call initialize() first")
+    return _global_collector.stories_to_training_examples(story)
+
+
+# Patch initialize to also set up the story collector
+_original_initialize = initialize
+
+
+def _patched_initialize(config: TrainingDataStoreConfig) -> None:
+    """Initialize both the training data store and the story collector."""
+    global _global_collector
+    _original_initialize(config)
+    _global_collector = StoryCollector(config.base_dir)
+
+
+initialize = _patched_initialize
+
+
+# ============================================================================
 # EXPORTS
 # ============================================================================
 
@@ -587,4 +852,18 @@ __all__ = [
     "get_task_types",
     "initialize",
     "TrainingDataStore",
+    # Story exports
+    "SplitName",
+    "StoryStep",
+    "StoryStepList",
+    "CollectorStory",
+    "StoryList",
+    "StoryTrainingExample",
+    "TrainingExampleList_Story",
+    "StoryCollector",
+    "store_story",
+    "get_story_batch",
+    "stories_to_training_examples",
+    "sanitize_story_type",
+    "compute_split",
 ]

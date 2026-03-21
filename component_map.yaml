@@ -1,113 +1,60 @@
-version: "1"
-project: apprentice
-components:
-  - id: config_loader
-    role: library
-    authority: configuration
-    data_access:
-      PUBLIC: read
+core_models:
+  Story:
+    module: "apprentice.models.story"
+    dependencies: ["pydantic", "typing", "datetime"]
+    purpose: "Multi-step narrative representation with metadata"
+    
+  StoryStep:
+    module: "apprentice.models.story_step"
+    dependencies: ["pydantic", "TrainingExample"]
+    purpose: "Individual step within story journey"
 
-  - id: task_registry
-    role: library
-    authority: task_definitions
-    data_access:
-      PUBLIC: read_write
+collection_layer:
+  StoryCollector:
+    module: "apprentice.collectors.story_collector"
+    dependencies: ["Story", "StoryStep", "Chronicler"]
+    purpose: "Aggregate and process story data from Chronicler"
+    interfaces:
+      - collect_story_events()
+      - validate_story_consistency()
+      - emit_training_examples()
 
-  - id: router
-    role: library
-    authority: traffic_routing
-    data_access:
-      PUBLIC: read_write
+evaluation_layer:
+  JourneyEvaluator:
+    module: "apprentice.evaluators.journey_evaluator"
+    dependencies: ["Story", "metrics"]
+    purpose: "Analyze journey patterns and efficiency"
+    interfaces:
+      - evaluate_journey_completion()
+      - measure_step_efficiency()
+      - detect_backtracking()
+      - score_consistency()
 
-  - id: remote_api_client
-    role: library
-    authority: frontier_api
-    data_access:
-      PUBLIC: read_write
-      AUTH: read
+orchestration:
+  EnhancedPhaseManager:
+    module: "apprentice.orchestration.phase_manager"
+    dependencies: ["existing PhaseManager", "JourneyEvaluator"]
+    purpose: "Per-journey-type phase transition tracking"
+    extension_points:
+      - journey_type_registration()
+      - phase_transition_callbacks()
+      - journey_specific_metrics()
 
-  - id: local_model_server
-    role: library
-    authority: local_inference
-    data_access:
-      PUBLIC: read_write
+configuration:
+  StoryLearningConfig:
+    module: "apprentice.config.story_learning"
+    dependencies: ["pydantic", "base config"]
+    purpose: "Story learning feature configuration"
+    fields:
+      - story_learning_enabled: bool = False
+      - max_story_length: int = 50
+      - story_retention_days: int = 30
 
-  - id: evaluators
-    role: library
-    authority: quality_scoring
-    data_access:
-      PUBLIC: read
-
-  - id: phase_manager
-    role: library
-    authority: phase_transitions
-    data_access:
-      PUBLIC: read_write
-
-  - id: training_data_store
-    role: library
-    authority: training_data
-    data_access:
-      PUBLIC: read_write
-      PII: write
-
-  - id: pii_tokenizer
-    role: library
-    authority: pii_protection
-    data_access:
-      PII: read_write
-
-  - id: fine_tuning_orchestrator
-    role: library
-    authority: model_training
-    data_access:
-      PUBLIC: read_write
-
-  - id: budget_manager
-    role: library
-    authority: cost_tracking
-    data_access:
-      FINANCIAL: read_write
-
-  - id: audit_log
-    role: library
-    authority: audit_trail
-    data_access:
-      PUBLIC: write
-      COMPLIANCE: write
-
-  - id: cli
-    role: ingress
-    protocol: cli
-    authority: user_commands
-    data_access:
-      PUBLIC: read_write
-
-edges:
-  - from: cli
-    to: router
-    tier: internal
-  - from: router
-    to: remote_api_client
-    tier: cross_boundary
-  - from: router
-    to: local_model_server
-    tier: cross_boundary
-  - from: router
-    to: phase_manager
-    tier: internal
-  - from: router
-    to: budget_manager
-    tier: internal
-  - from: training_data_store
-    to: pii_tokenizer
-    tier: internal
-  - from: fine_tuning_orchestrator
-    to: training_data_store
-    tier: internal
-  - from: phase_manager
-    to: evaluators
-    tier: internal
-  - from: router
-    to: audit_log
-    tier: internal
+integration_points:
+  existing_atomic_router:
+    modification: "none - preserved as-is"
+    integration: "parallel story collection when enabled"
+    
+  training_orchestrator:
+    modification: "extended to handle Story objects"
+    backward_compatibility: "TrainingExample processing unchanged"

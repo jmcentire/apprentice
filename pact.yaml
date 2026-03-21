@@ -1,4 +1,5 @@
-budget: 50.00
+budget: 20.00
+plan_only: true
 
 backend: anthropic
 model: claude-opus-4-6

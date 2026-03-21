@@ -1,40 +1,40 @@
-version: "1"
-project: apprentice
-classification_tiers:
-  - name: PUBLIC
-    soak_duration_hours: 0
-    human_gate: false
-  - name: PII
-    soak_duration_hours: 24
-    human_gate: true
-  - name: FINANCIAL
-    soak_duration_hours: 24
-    human_gate: false
-  - name: AUTH
-    soak_duration_hours: 48
-    human_gate: true
-  - name: COMPLIANCE
-    soak_duration_hours: 48
-    human_gate: true
+chronicler_integration:
+  trust_level: "high"
+  verification_required: true
+  state_reconciliation:
+    - "StoryCollector must validate Chronicler story state"
+    - "Disagreements logged and escalated"
+    - "Fallback to atomic mode on persistent conflicts"
 
-authority_map:
-  router:
-    domain: traffic_routing
-    trust_score: 0.9
-  pii_tokenizer:
-    domain: pii_protection
-    trust_score: 0.95
-  remote_api_client:
-    domain: frontier_api
-    trust_score: 0.7
-  local_model_server:
-    domain: local_inference
-    trust_score: 0.8
-  budget_manager:
-    domain: cost_tracking
-    trust_score: 0.9
-  audit_log:
-    domain: audit_trail
-    trust_score: 0.95
+story_data_integrity:
+  collection_validation:
+    - "Each story step must be validated before processing"
+    - "Incomplete stories handled gracefully"
+    - "Corrupted story data isolated and logged"
+  
+  evaluation_trust:
+    - "JourneyEvaluator metrics validated against ground truth"
+    - "Optimization patterns verified before application"
+    - "Success vs struggle pattern distinction enforced"
 
-canary_eligible: [remote_api_client, local_model_server]
+external_dependencies:
+  frontier_api:
+    trust_level: "medium"
+    retry_policy: "exponential backoff with circuit breaker"
+    fallback: "local model routing on sustained failures"
+  
+  local_model:
+    trust_level: "high"
+    validation: "output consistency checks required"
+    monitoring: "performance degradation detection"
+
+user_privacy:
+  data_retention:
+    - "Story data anonymized where possible"
+    - "User consent verification for extended storage"
+    - "Right to deletion honored within 30 days"
+  
+  story_content:
+    - "Sensitive information detection and redaction"
+    - "Cross-story correlation prevention"
+    - "User journey isolation maintained"
