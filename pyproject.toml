@@ -37,6 +37,9 @@ ml = [
 lint = [
     "ruff>=0.4.0",
 ]
+transmogrifier = [
+    "transmogrifier>=0.2.0",
+]
 
 [project.scripts]
 apprentice = "apprentice.cli:main"

@@ -354,6 +354,18 @@ class RequestRouter:
             if not request.task_type or len(request.task_type) == 0:
                 raise ValidationError("invalid_request: task_type must be non-empty")
 
+            # Optional register normalization via Transmogrifier
+            try:
+                from transmogrifier.core import Transmogrifier
+                _transmog = Transmogrifier()
+                tr = _transmog.translate(request.prompt)
+                if not tr.skipped and tr.output_text:
+                    request = request.model_copy(update={"prompt": tr.output_text})
+            except ImportError:
+                pass
+            except Exception:
+                pass
+
             # Check budget
             try:
                 budget_snapshot = await self.budget_manager.check_budget()
