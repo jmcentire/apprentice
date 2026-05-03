@@ -126,7 +126,7 @@ class TestHandleFeedback:
     def sample_feedback(self):
         return FeedbackRecord(
             request_id="req-1",
-            skill=SkillName.guest_response,
+            skill="guest_response",
             feedback_type=FeedbackType.accept,
         )
 
@@ -141,7 +141,7 @@ class TestHandleFeedback:
     async def test_reject_score_is_0(self, mock_apprentice):
         feedback = FeedbackRecord(
             request_id="req-2",
-            skill=SkillName.refund_handling,
+            skill="refund_handling",
             feedback_type=FeedbackType.reject,
         )
         result = await handle_feedback(mock_apprentice, feedback)
@@ -150,7 +150,7 @@ class TestHandleFeedback:
     async def test_edit_score_is_half(self, mock_apprentice):
         feedback = FeedbackRecord(
             request_id="req-3",
-            skill=SkillName.ticket_triage,
+            skill="ticket_triage",
             feedback_type=FeedbackType.edit,
             edited_output={"text": "revised response"},
         )
@@ -185,7 +185,7 @@ class TestHandleRecommend:
     @pytest.fixture
     def sample_request(self):
         return RecommendRequest(
-            skill=SkillName.guest_response,
+            skill="guest_response",
             context={"conversation_id": "conv-1", "message": "hello"},
             request_id="req-1",
         )
@@ -206,7 +206,7 @@ class TestHandleRecommend:
 
     async def test_recommend_generates_request_id(self, mock_apprentice):
         request = RecommendRequest(
-            skill=SkillName.refund_handling,
+            skill="refund_handling",
             context={},
         )
         result = await handle_recommend(mock_apprentice, request)

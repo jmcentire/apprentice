@@ -82,7 +82,7 @@ async def handle_feedback(apprentice: Any, feedback: FeedbackRecord) -> Feedback
     Converts feedback_type to a numeric score and feeds into the confidence engine.
     """
     score = FEEDBACK_SCORES.get(feedback.feedback_type.value, 0.5)
-    task_id = feedback.skill.value
+    task_id = feedback.skill
 
     # Record via confidence engine if available
     ce = getattr(apprentice, '_confidence_engine', None)
@@ -97,7 +97,7 @@ async def handle_feedback(apprentice: Any, feedback: FeedbackRecord) -> Feedback
         except Exception as e:
             logger.warning(f"Failed to record feedback comparison: {e}")
 
-    logger.info(f"WOS feedback recorded: {feedback.skill.value} = {feedback.feedback_type.value} ({score})")
+    logger.info(f"feedback recorded: {feedback.skill} = {feedback.feedback_type.value} ({score})")
 
     return FeedbackResponse(status="recorded", match_score=score)
 
@@ -107,7 +107,7 @@ async def handle_recommend(apprentice: Any, request: RecommendRequest) -> Recomm
 
     Maps the skill name to a task_name and calls the core run() method.
     """
-    task_name = request.skill.value
+    task_name = request.skill
     request_id = request.request_id or str(uuid.uuid4())
 
     response = await apprentice.run(task_name, request.context)

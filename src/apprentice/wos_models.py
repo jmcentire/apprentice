@@ -35,13 +35,23 @@ class FeedbackType(str, Enum):
     ai_score = "ai_score"
 
 
-class SkillName(str, Enum):
-    """WOS skill names (aliases for Apprentice task_names)."""
-    ticket_triage = "ticket_triage"
-    guest_response = "guest_response"
-    refund_handling = "refund_handling"
-    booking_modification = "booking_modification"
-    escalation_detection = "escalation_detection"
+# Skill names are free-form strings — each consumer's apprentice.yaml
+# defines what skill names mean. Apprentice itself imposes no closed
+# vocabulary; the value just has to match a registered task in the
+# consumer's configuration. Pre-defined Wander-OS skill name constants
+# are exported below as a convenience for WOS callers and the WOS test
+# fixtures, but new integrations (Reeve, third-party agents) supply
+# their own strings.
+SkillName = str
+
+# Convenience constants for the original Wander-OS integration. New
+# integrations should not rely on this list — register skills in your
+# own apprentice.yaml instead.
+WOS_SKILL_TICKET_TRIAGE: SkillName = "ticket_triage"
+WOS_SKILL_GUEST_RESPONSE: SkillName = "guest_response"
+WOS_SKILL_REFUND_HANDLING: SkillName = "refund_handling"
+WOS_SKILL_BOOKING_MODIFICATION: SkillName = "booking_modification"
+WOS_SKILL_ESCALATION_DETECTION: SkillName = "escalation_detection"
 
 
 # ---------------------------------------------------------------------------
