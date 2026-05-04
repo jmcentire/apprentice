@@ -214,15 +214,25 @@ class ConfidenceEngine:
         if not input_data:
             raise ValueError("input_data must be a non-empty string")
 
-        # Check that task_id is in config
-        if task_id not in self._config.task_evaluator_configs:
+        # Resolve the evaluator config. Exact match first; then the
+        # multi-tenant ``${prefix}:${task}`` fallback that mirrors
+        # TaskRegistry.get_task. Per-tenant state is still tracked by
+        # the full task_id (so ``tnt_abc:skill`` and ``tnt_xyz:skill``
+        # accumulate independently) — only the config lookup tolerates
+        # the prefix.
+        config_key = task_id
+        if config_key not in self._config.task_evaluator_configs and ":" in config_key:
+            suffix = config_key.split(":", 1)[1]
+            if suffix in self._config.task_evaluator_configs:
+                config_key = suffix
+        if config_key not in self._config.task_evaluator_configs:
             raise ValueError(
                 f"No evaluator config found for task_id '{task_id}'. "
                 f"All task types must be declared in task_evaluator_configs at startup."
             )
 
         # Get evaluator for this task
-        task_config = self._config.task_evaluator_configs[task_id]
+        task_config = self._config.task_evaluator_configs[config_key]
         eval_type = task_config.get("evaluator_type")
 
         if eval_type not in self._evaluator_registry:

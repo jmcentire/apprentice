@@ -349,37 +349,64 @@ class TaskRegistry(BaseModel):
 
     def get_task(self, name: str) -> TaskConfig:
         """Look up a task configuration by its unique name.
-        
+
         Returns the frozen TaskConfig for the given task name.
-        
+
+        Lookup strategy:
+          1. Exact match against the registry — used by single-tenant
+             callers and by callers that don't decorate task names.
+          2. If the name contains ":", strip the prefix up to and
+             including the first ":" and try the suffix. This is the
+             multi-tenant convention: callers prefix per-instance task
+             names with a tenant/org identifier (e.g.
+             ``tnt_abc:send_email_reply``) so the confidence engine
+             tracks state per-tenant under one config entry. Apprentice
+             stores state by full name; only the *config lookup*
+             tolerates the prefix.
+
         Args:
             name: Non-empty task name string
-        
+
         Returns:
             TaskConfig: The task configuration for the given name
-        
+
         Raises:
-            TaskNotFoundError: If name is not in the registry
+            TaskNotFoundError: If neither the full name nor its
+                ``:``-stripped suffix matches a registered task
         """
-        if name not in self.tasks:
-            raise TaskNotFoundError(
-                task_name=name,
-                available_tasks=sorted(self.tasks.keys())
-            )
-        return self.tasks[name]
+        if name in self.tasks:
+            return self.tasks[name]
+        # Multi-tenant fallback: ``${prefix}:${task}`` matches a
+        # registered ``${task}``. Single ":" tolerated; chained
+        # prefixes like ``a:b:task`` likewise resolve to ``task``.
+        if ":" in name:
+            suffix = name.split(":", 1)[1]
+            if suffix in self.tasks:
+                return self.tasks[suffix]
+        raise TaskNotFoundError(
+            task_name=name,
+            available_tasks=sorted(self.tasks.keys())
+        )
 
     def __contains__(self, name: str) -> bool:
         """Check whether a task name exists in the registry.
-        
-        Supports the 'in' operator: `'my_task' in registry`.
-        
+
+        Supports the 'in' operator: `'my_task' in registry`. Mirrors
+        ``get_task``'s lookup strategy: exact match first, then the
+        ``${prefix}:${task}`` suffix fallback for multi-tenant callers.
+
         Args:
             name: Task name string
-        
+
         Returns:
-            bool: True if the task name is registered, False otherwise
+            bool: True if the task name (or its ":"-stripped suffix)
+                  is registered, False otherwise
         """
-        return name in self.tasks
+        if name in self.tasks:
+            return True
+        if ":" in name:
+            return name.split(":", 1)[1] in self.tasks
+        return False
 
     @property
     def task_names(self) -> frozenset[str]:

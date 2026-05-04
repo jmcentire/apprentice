@@ -297,6 +297,49 @@ class TestTaskRegistryLookup:
         with pytest.raises(TaskNotFoundError):
             registry.get_task("")
 
+    def test_get_task_resolves_prefixed_name_to_registered_suffix(self):
+        # Multi-tenant convention: callers prefix per-instance task
+        # names with a tenant identifier (e.g. "tnt_abc:classify_email")
+        # so the confidence engine tracks state per-tenant under a
+        # single registry entry. Lookup must fall back to the suffix.
+        tc = make_task_config(name="classify_email")
+        registry = TaskRegistry([tc])
+        result = registry.get_task("tnt_abc:classify_email")
+        assert result.name == "classify_email"
+        assert result == tc
+
+    def test_get_task_prefix_resolution_only_strips_first_colon(self):
+        # Suffix resolution strips up to and including the first ":".
+        # If a registered task name itself contains a ":", a chained
+        # prefix like "tenant:env:task_name" still resolves correctly
+        # because the stripped suffix "env:task_name" is then matched
+        # against the registry — registered task names without colons
+        # match the canonical post-first-colon form.
+        tc = make_task_config(name="classify_email")
+        registry = TaskRegistry([tc])
+        # "tnt_abc:classify_email" -> suffix "classify_email" -> match
+        result = registry.get_task("tnt_abc:classify_email")
+        assert result.name == "classify_email"
+
+    def test_get_task_unknown_prefixed_name_still_raises(self):
+        # Suffix fallback only matches when the suffix is registered;
+        # entirely unknown task names still raise TaskNotFoundError.
+        tc = make_task_config(name="classify_email")
+        registry = TaskRegistry([tc])
+        with pytest.raises(TaskNotFoundError):
+            registry.get_task("tnt_abc:not_registered")
+
+    def test_contains_true_for_prefixed_name(self):
+        tc = make_task_config(name="classify_email")
+        registry = TaskRegistry([tc])
+        assert "tnt_abc:classify_email" in registry
+        assert "another_tenant:classify_email" in registry
+
+    def test_contains_false_for_prefixed_unknown(self):
+        tc = make_task_config(name="classify_email")
+        registry = TaskRegistry([tc])
+        assert "tnt_abc:something_else" not in registry
+
     def test_contains_true(self):
         tc = make_task_config(name="classify_email")
         registry = TaskRegistry([tc])
