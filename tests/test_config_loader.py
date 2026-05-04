@@ -262,6 +262,38 @@ class TestHappyPath:
         assert "summarize" in task_names
         assert "classify" in task_names
 
+    def test_skill_package_path_is_registered_without_loading_private_file(self, tmp_path):
+        """Config can point at an external skill package path."""
+        cfg_dict = make_valid_config_dict()
+        cfg_dict["skill_package"] = {
+            "path": "~/MyProject/apprentice.conf.d/skill-package.yaml",
+            "overlays": ["~/MyProject/apprentice.conf.d/prod.yaml"],
+            "environment": "prod",
+        }
+        path = write_config(tmp_path, cfg_dict)
+
+        config = load_config(path, {})
+
+        assert config.skill_package is not None
+        assert config.skill_package.path == "~/MyProject/apprentice.conf.d/skill-package.yaml"
+        assert config.skill_package.overlays == ["~/MyProject/apprentice.conf.d/prod.yaml"]
+        assert config.skill_package.environment == "prod"
+
+    def test_multiple_skill_packages_are_registered_without_loading_private_files(self, tmp_path):
+        """Config can register multiple package refs for composition at launch."""
+        cfg_dict = make_valid_config_dict()
+        cfg_dict["skill_packages"] = [
+            {"path": "~/ProjectA/apprentice.yaml", "required": False},
+            {"path": "~/ProjectB/apprentice.yaml"},
+        ]
+        path = write_config(tmp_path, cfg_dict)
+
+        config = load_config(path, {})
+
+        assert config.skill_packages is not None
+        assert len(config.skill_packages) == 2
+        assert config.skill_packages[0].required is False
+
     def test_fully_specified_config_loads_all_fields(self, tmp_path):
         """All explicitly specified fields are preserved in the returned config."""
         cfg_dict = make_valid_config_dict()

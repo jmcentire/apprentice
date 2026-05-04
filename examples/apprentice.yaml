@@ -91,6 +91,15 @@ training_data:
   storage_dir: .apprentice/training_data/
   max_examples_per_task: 50000
 
+# ── Skill package ──
+# Optional external package that describes the host application's own
+# skill/action/outcome/tool vocabulary. Keep private domain packages in
+# the host repo or deploy config directory, not in Apprentice's source repo.
+skill_package:
+  path: ./skill-package.yaml
+  overlays: []
+  # environment: prod
+
 # ── PII Protection ──
 # Scrubs sensitive data before it reaches models, training stores, or audit logs.
 # detection_mode: regex_only (default, no extra deps) | hybrid | ner_only

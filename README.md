@@ -90,6 +90,10 @@ Router ────────────────────────�
 
 Apprentice includes a built-in PII detection and tokenization middleware that scrubs sensitive data before it reaches models, training stores, or audit logs. The system uses a hybrid multi-modal approach that combines fast regex patterns with optional NER model inference.
 
+Factory-built Apprentice instances fail closed for frontier egress: if the PII
+middleware does not certify a request, remote model calls are blocked rather than
+sent raw.
+
 ### Detection Modes
 
 | Mode | Strategies | Latency | Dependencies |
@@ -181,8 +185,15 @@ When running `apprentice serve`, the following endpoints are available:
 | `/v1/report` | GET | Generate metrics report |
 | `/v1/events` | POST | Ingest external events (fire-and-forget) |
 | `/v1/feedback` | POST | Submit feedback on recommendations |
+| `/v1/labeled-examples` | POST | Submit externally generated draft/final pairs |
+| `/v1/constraints/check` | POST | Preflight package constraints |
 | `/v1/recommendations` | POST | Request a recommendation for a skill |
 | `/v1/skills` | GET | List configured skills with phase info |
+| `/v1/skill-package` | GET | Inspect the loaded external skill package |
+| `/v1/package-registry` | GET | Compact package/runtime registry metadata |
+| `/v1/tools` | GET | Runtime-resolved package tools |
+| `/v1/tools/call` | POST | Invoke supported package tools |
+| `/v1/evaluators/run` | POST | Run supported package evaluators |
 
 ## Configuration
 
@@ -222,6 +233,76 @@ server:
   host: 0.0.0.0
   port: 8787
 ```
+
+### External Skill Packages
+
+Apprentice's repo should not contain your product-specific ontology. Keep that
+in the host application's repo or deploy-time config directory, then point
+Apprentice at it from the launch config:
+
+```yaml
+skill_package:
+  path: ~/MyProject/apprentice.conf.d/skill-package.yaml
+  overlays:
+    - ~/MyProject/apprentice.conf.d/prod.yaml
+  environment: prod
+```
+
+Multiple independent packages can be composed at launch:
+
+```yaml
+skill_packages:
+  - path: ~/ProjectA/apprentice.skill.yaml
+  - path: ~/ProjectB/apprentice.skill.yaml
+    overlays:
+      - ~/ProjectB/apprentice.prod.yaml
+```
+
+Run it the same way from a shell, systemd unit, or launchd plist:
+
+```bash
+apprentice --config ~/MyProject/apprentice.yaml serve --host 127.0.0.1 --port 8710
+```
+
+The package declares skills, methods of evocation, actions, outcomes,
+parameters, constraints, tools, evaluator bindings, multimodal artifacts,
+feedback signals, compatibility metadata, runtime/environment bindings, and
+event mappings. See
+[`examples/skill-package.yaml`](examples/skill-package.yaml) for the public
+shape. Private packages should live outside this repository.
+
+Package-aware clients can inspect the loaded package with `GET
+/v1/skill-package`, preflight constraints with `POST /v1/constraints/check`,
+pass `method` and `action` to `POST /v1/run`, and submit externally generated
+draft/final training pairs with `POST /v1/labeled-examples`. Tenant-qualified
+task names such as `tenant-1:classify_ticket` resolve against the package skill
+`classify_ticket`, so tenant identifiers do not belong in the package file.
+`GET /v1/package-registry` and `GET /v1/tools` expose a compact runtime view for
+hosts that want discovery without parsing YAML directly.
+
+Package files can be checked before deployment:
+
+```bash
+apprentice package validate ~/MyProject/apprentice.skill.yaml \
+  --overlay ~/MyProject/apprentice.prod.yaml \
+  --environment prod
+
+apprentice package inspect ~/MyProject/apprentice.skill.yaml --json
+apprentice package diff ~/MyProject/apprentice.v2.yaml --compare-to ~/MyProject/apprentice.v1.yaml
+```
+
+The built-in runtime resolves credentials from environment variables referenced
+by `auth_ref` and redacts them in diagnostics. Direct tool execution is
+fail-closed: inert `builtin` tools may run through the built-in preflight client,
+but HTTP, `cli`, `python`, and `mcp` tools require an explicit host preflight
+client before execution. Unsupported tool kinds remain discoverable but are not
+executed by Apprentice's built-in runtime.
+
+When a package is loaded by the factory, Apprentice persists active registry
+metadata to `.apprentice/package_registry.json`, including package ID, version,
+schema version, fingerprint, environment, overlays, and validation diagnostics.
+`apprentice package diff` classifies package changes as breaking, warning, or
+safe to support migration review before deployment.
 
 ### Multi-Task Configuration
 

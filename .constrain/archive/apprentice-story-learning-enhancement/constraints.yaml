@@ -1,0 +1,26 @@
+backward_compatibility:
+  atomic_routing: "must remain completely unaffected"
+  existing_tests: "all 2628 tests must pass without modification"
+  api_contracts: "no breaking changes to existing interfaces"
+
+configuration:
+  story_learning:
+    enabled_flag: "story_learning_enabled: true"
+    default_state: false
+    opt_in_required: true
+
+technical_constraints:
+  python_version: "3.12+"
+  pydantic_version: "v2"
+  new_dependencies: "strictly prohibited"
+  frozen_models: "constraint must be maintained"
+
+data_handling:
+  privacy: "story data retention must respect user privacy rights"
+  storage: "efficient storage patterns for multi-step narratives required"
+  consistency: "Chronicler and StoryCollector must maintain state agreement"
+
+performance:
+  existing_performance: "atomic task performance must not degrade"
+  story_overhead: "story learning overhead must be minimal when disabled"
+  memory_usage: "efficient memory management for long stories required"

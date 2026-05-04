@@ -1,0 +1,60 @@
+core_models:
+  Story:
+    module: "apprentice.models.story"
+    dependencies: ["pydantic", "typing", "datetime"]
+    purpose: "Multi-step narrative representation with metadata"
+    
+  StoryStep:
+    module: "apprentice.models.story_step"
+    dependencies: ["pydantic", "TrainingExample"]
+    purpose: "Individual step within story journey"
+
+collection_layer:
+  StoryCollector:
+    module: "apprentice.collectors.story_collector"
+    dependencies: ["Story", "StoryStep", "Chronicler"]
+    purpose: "Aggregate and process story data from Chronicler"
+    interfaces:
+      - collect_story_events()
+      - validate_story_consistency()
+      - emit_training_examples()
+
+evaluation_layer:
+  JourneyEvaluator:
+    module: "apprentice.evaluators.journey_evaluator"
+    dependencies: ["Story", "metrics"]
+    purpose: "Analyze journey patterns and efficiency"
+    interfaces:
+      - evaluate_journey_completion()
+      - measure_step_efficiency()
+      - detect_backtracking()
+      - score_consistency()
+
+orchestration:
+  EnhancedPhaseManager:
+    module: "apprentice.orchestration.phase_manager"
+    dependencies: ["existing PhaseManager", "JourneyEvaluator"]
+    purpose: "Per-journey-type phase transition tracking"
+    extension_points:
+      - journey_type_registration()
+      - phase_transition_callbacks()
+      - journey_specific_metrics()
+
+configuration:
+  StoryLearningConfig:
+    module: "apprentice.config.story_learning"
+    dependencies: ["pydantic", "base config"]
+    purpose: "Story learning feature configuration"
+    fields:
+      - story_learning_enabled: bool = False
+      - max_story_length: int = 50
+      - story_retention_days: int = 30
+
+integration_points:
+  existing_atomic_router:
+    modification: "none - preserved as-is"
+    integration: "parallel story collection when enabled"
+    
+  training_orchestrator:
+    modification: "extended to handle Story objects"
+    backward_compatibility: "TrainingExample processing unchanged"

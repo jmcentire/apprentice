@@ -25,14 +25,21 @@ class RouterBudgetAdapter:
     def __init__(self, budget_manager: Any, cost_per_request: Decimal):
         self._bm = budget_manager
         self._cost_per_request = cost_per_request
+        self._reserved_estimates: list[Decimal] = []
 
     async def check_budget(self) -> Any:
         from apprentice.router import BudgetSnapshot
-        from apprentice.budget_manager import SpendMetadata
 
-        remaining = self._bm.remaining_budget()
-        is_exhausted = remaining <= Decimal("0")
         report = self._bm.get_report()
+        try:
+            authorization = self._bm.authorize(self._cost_per_request)
+            if authorization.allowed:
+                self._reserved_estimates.append(self._cost_per_request)
+            remaining = authorization.remaining
+            is_exhausted = not authorization.allowed
+        except Exception:
+            remaining = Decimal("0")
+            is_exhausted = True
         total = float(remaining + report.total_all_time_spend)
         return BudgetSnapshot(
             total_budget_usd=total,
@@ -44,7 +51,10 @@ class RouterBudgetAdapter:
     async def record_spend(self, cost: float) -> None:
         from apprentice.budget_manager import SpendMetadata
 
+        estimated = self._reserved_estimates.pop(0) if self._reserved_estimates else self._cost_per_request
         if cost <= 0:
+            if hasattr(self._bm, "release_reservation"):
+                self._bm.release_reservation(estimated)
             return
         metadata = SpendMetadata(
             request_id=str(uuid.uuid4()),
@@ -56,9 +66,16 @@ class RouterBudgetAdapter:
         )
         self._bm.record_spend(
             actual_cost=Decimal(str(cost)),
-            estimated_cost=self._cost_per_request,
+            estimated_cost=estimated,
             metadata=metadata,
         )
+
+    async def release_reservation(self) -> None:
+        if not self._reserved_estimates:
+            return
+        estimated = self._reserved_estimates.pop(0)
+        if hasattr(self._bm, "release_reservation"):
+            self._bm.release_reservation(estimated)
 
 
 class RouterConfidenceAdapter:
@@ -182,12 +199,17 @@ class RouterLocalAdapter:
 class RouterRemoteAdapter:
     """Adapts BaseRemoteClient to the Router's RemoteModelBackend protocol."""
 
-    def __init__(self, client: Any):
+    def __init__(self, client: Any, *, require_pii_guard: bool = False):
         self._client = client
+        self._require_pii_guard = require_pii_guard
 
     async def call(self, request: Any) -> Any:
         from apprentice.remote_api_client import PromptMessage, MessageRole, GenerationParams
         from apprentice.router import ModelResponse
+
+        guard = getattr(request, "metadata", {}).get("_apprentice_pii_guard", {})
+        if self._require_pii_guard and not guard.get("frontier_egress_allowed"):
+            raise RuntimeError("frontier egress blocked: PII middleware did not certify request")
 
         messages = [PromptMessage(role=MessageRole.user, content=request.prompt)]
         response = await self._client.send_request(messages, GenerationParams())
@@ -306,6 +328,39 @@ async def build_from_config(config_path: str) -> Any:
 
     # 1. Load validated config
     cfg = config_loader.load_config(Path(config_path))
+    config_dir = Path(config_path).expanduser().resolve().parent
+    skill_package = None
+    package_refs = []
+    if cfg.skill_package:
+        package_refs.append(cfg.skill_package)
+    if cfg.skill_packages:
+        package_refs.extend(cfg.skill_packages)
+    if package_refs:
+        from apprentice.skill_package import compose_skill_packages, load_skill_package
+
+        loaded_packages = []
+        for package_ref in package_refs:
+            package_path = Path(package_ref.path).expanduser()
+            if not package_path.is_absolute():
+                package_path = config_dir / package_path
+            overlay_paths = []
+            for overlay in package_ref.overlays:
+                overlay_path = Path(overlay).expanduser()
+                if not overlay_path.is_absolute():
+                    overlay_path = config_dir / overlay_path
+                overlay_paths.append(overlay_path)
+            try:
+                loaded_packages.append(
+                    load_skill_package(
+                        package_path,
+                        overlay_paths,
+                        environment=package_ref.environment,
+                    )
+                )
+            except FileNotFoundError:
+                if package_ref.required:
+                    raise
+        skill_package = compose_skill_packages(loaded_packages) if loaded_packages else None
 
     # 1.5. Construct Plugin Registry
     plugin_registry_set = PluginRegistrySet.with_defaults()
@@ -528,7 +583,7 @@ async def build_from_config(config_path: str) -> Any:
         confidence_engine=confidence_adapter,
         sampling_scheduler=sampling_adapter,
         local_model_backend=RouterLocalAdapter(ollama_client, cfg.local_model.model_name),
-        remote_model_backend=RouterRemoteAdapter(remote_client),
+        remote_model_backend=RouterRemoteAdapter(remote_client, require_pii_guard=True),
         training_data_collector=RouterTrainingAdapter(tds),
         audit_logger=RouterAuditAdapter(audit_logger),
     )
@@ -592,6 +647,27 @@ async def build_from_config(config_path: str) -> Any:
     apprentice._model_validator = model_validator
     apprentice._real_config = cfg
     apprentice._plugin_registry_set = plugin_registry_set
+    apprentice._skill_package = skill_package
+    apprentice._require_pii_guard_for_remote = True
+    if skill_package is not None:
+        from apprentice.package_runtime import PackageRegistryStore, PackageRuntimeState
+        apprentice._package_runtime_state = PackageRuntimeState()
+        registry_store = PackageRegistryStore(base_dir / "package_registry.json")
+        apprentice._package_registry_store = registry_store
+        package_overlays = []
+        package_environment = None
+        for ref in package_refs:
+            package_overlays.extend(ref.overlays)
+            package_environment = package_environment or ref.environment
+        registry_store.publish(
+            skill_package,
+            environment=package_environment,
+            overlays=package_overlays,
+        )
+    else:
+        apprentice._package_runtime_state = None
+        apprentice._package_registry_store = None
+    apprentice._tool_preflight_client = None
 
     # Construct PII tokenizer (secure by default — enabled even without explicit config)
     from apprentice.pii_tokenizer import PIITokenizer, PIITokenizerConfig, LearnedPatternStore

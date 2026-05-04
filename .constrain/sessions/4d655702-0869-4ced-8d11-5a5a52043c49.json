@@ -1,0 +1,60 @@
+{
+  "id": "4d655702-0869-4ced-8d11-5a5a52043c49",
+  "schema_version": 1,
+  "posture": "critic",
+  "phase": "understand",
+  "round": 0,
+  "understand_rounds": 0,
+  "challenge_rounds": 0,
+  "conversation": [],
+  "problem_model": {
+    "system_description": "Apprentice is an adaptive model distillation framework that routes requests to frontier APIs, collects outputs as training data, fine-tunes a local model, and progressively shifts traffic to it, verifying quality to replace expensive APIs with local models.",
+    "stakeholders": [
+      "apprentice consumers",
+      "third-party app developers"
+    ],
+    "failure_modes": [
+      {
+        "description": "High-risk tool execution without permission/preflight adapter.",
+        "severity": "high"
+      },
+      {
+        "description": "High-risk tool execution without permission/preflight adapter.",
+        "severity": "High"
+      }
+    ],
+    "dependencies": [
+      "TalentSync",
+      "Rust rewrite evaluation",
+      "Exemplar components",
+      "Frontier APIs like Claude and GPT"
+    ],
+    "assumptions": [
+      "Models are commodities, and data is the asset.",
+      "Model trust is earned through comparison scores."
+    ],
+    "boundaries": [
+      "Scope not limited to WOS-specific applications",
+      "Don't use when requests are unique and creative."
+    ],
+    "history": [
+      "Current package schema is treated as v1, indicating previous iterations.",
+      "19 tests were skipped in the current verification suite."
+    ],
+    "success_shape": [
+      "Runtime behavior is inspectable, auditable, and testable without live vendor credentials.",
+      "Private host package content is kept outside the Apprentice repository."
+    ],
+    "acceptance_criteria": [
+      "Meet TalentSync v2 constraints, particularly 5 matches/week cap",
+      "Preserve backward compatibility for existing Apprentice and WOS endpoints."
+    ]
+  },
+  "prompt_md": "",
+  "constraints_yaml": "",
+  "trust_policy_yaml": "",
+  "component_map_yaml": "",
+  "schema_hints_yaml": "",
+  "created_at": "2026-05-03T23:57:41.907520+00:00",
+  "updated_at": "2026-05-03T23:58:03.482607+00:00"
+}

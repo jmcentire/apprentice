@@ -236,6 +236,23 @@ class TestParseArgs:
         assert "report" in cmd_str.lower(), f"Expected 'report' command, got {cmd_str}"
         assert result.report_args.output_path == "/tmp/report.json"
 
+    def test_parse_args_package_validate_happy(self):
+        """parse_args correctly parses package validation options."""
+        result = parse_args([
+            "package",
+            "validate",
+            "skill-package.yaml",
+            "--overlay",
+            "prod.yaml",
+            "--environment",
+            "prod",
+        ])
+
+        assert result.package_args.action == "validate"
+        assert result.package_args.path == "skill-package.yaml"
+        assert result.package_args.overlays == ["prod.yaml"]
+        assert result.package_args.environment == "prod"
+
     def test_parse_args_global_flags(self):
         """parse_args correctly parses global flags --config, --json, --verbose."""
         result = parse_args(["--config", "custom.yaml", "--json", "-vv", "status"])

@@ -32,6 +32,7 @@ try:
         PhaseInfo,
         PIIEvaluateArgs,
         PIIIngestArgs,
+        PackageArgs,
         ReportArgs,
         ReportResult,
         RunArgs,
@@ -55,6 +56,7 @@ except ImportError:
         PhaseInfo,
         PIIEvaluateArgs,
         PIIIngestArgs,
+        PackageArgs,
         ReportArgs,
         ReportResult,
         RunArgs,
@@ -204,6 +206,17 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     ingest_parser.add_argument("--task", dest="ingest_task", default=None,
                                help="Override task_type for all rows (required for CSV without task_type column)")
 
+    # package subcommand
+    package_parser = subparsers.add_parser("package", help="Validate, inspect, or diff skill packages")
+    package_parser.add_argument("action", choices=["validate", "inspect", "diff"], help="Package operation")
+    package_parser.add_argument("path", help="Path to skill package YAML")
+    package_parser.add_argument("--overlay", dest="package_overlays", action="append", default=[],
+                                help="Overlay YAML path; may be repeated")
+    package_parser.add_argument("--environment", dest="package_environment", default=None,
+                                help="Runtime environment to validate")
+    package_parser.add_argument("--compare-to", dest="package_compare_to", default=None,
+                                help="Old package path for 'diff'")
+
     # Parse
     args = parser.parse_args(argv)
 
@@ -226,6 +239,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
     init_args = None
     serve_args = None
     ingest_args = None
+    package_args = None
     pii_ingest_args = None
     pii_evaluate_args = None
 
@@ -259,6 +273,14 @@ def parse_args(argv: list[str]) -> ParsedArgs:
             format=args.ingest_format,
             task=args.ingest_task,
         )
+    elif command == SubcommandName.package:
+        package_args = PackageArgs(
+            action=args.action,
+            path=args.path,
+            overlays=args.package_overlays,
+            environment=args.package_environment,
+            compare_to=args.package_compare_to,
+        )
     elif command == SubcommandName.pii_ingest:
         pii_ingest_args = PIIIngestArgs(
             dataset=args.dataset,
@@ -280,6 +302,7 @@ def parse_args(argv: list[str]) -> ParsedArgs:
         init_args=init_args,
         serve_args=serve_args,
         ingest_args=ingest_args,
+        package_args=package_args,
         pii_ingest_args=pii_ingest_args,
         pii_evaluate_args=pii_evaluate_args,
     )
@@ -797,6 +820,70 @@ def execute_ingest(ingest_args: IngestArgs, config_path: str) -> dict:
     }
 
 
+def execute_package(package_args: PackageArgs) -> dict:
+    """Execute package validate/inspect/diff without constructing Apprentice."""
+    from apprentice.package_runtime import diff_packages, validate_package_runtime
+    from apprentice.skill_package import load_skill_package
+
+    package_path = Path(package_args.path).expanduser()
+    overlays = [Path(path).expanduser() for path in package_args.overlays]
+    package = load_skill_package(package_path, overlays, environment=package_args.environment)
+
+    if package_args.action == "validate":
+        return validate_package_runtime(package, environment=package_args.environment).model_dump()
+    if package_args.action == "inspect":
+        report = validate_package_runtime(package, environment=package_args.environment)
+        return {"package": package.model_dump(), "validation": report.model_dump()}
+    if package_args.action == "diff":
+        if not package_args.compare_to:
+            raise ValueError("--compare-to is required for package diff")
+        old = load_skill_package(Path(package_args.compare_to).expanduser())
+        return diff_packages(old, package)
+    raise ValueError(f"unknown package action: {package_args.action}")
+
+
+def format_package_output(result: dict, json_mode: bool) -> str:
+    """Format package command output."""
+    if json_mode:
+        return json.dumps(result, sort_keys=True)
+    if "diagnostics" in result and "ok" in result:
+        lines = [
+            f"Package: {result['package_id']} v{result['version']}",
+            f"Fingerprint: {result['fingerprint']}",
+            f"Valid: {result['ok']}",
+        ]
+        for diagnostic in result.get("diagnostics", []):
+            lines.append(f"{diagnostic['level'].upper()}: {diagnostic['path']}: {diagnostic['message']}")
+        return "\n".join(lines)
+    if "skills_added" in result:
+        return "\n".join(
+            [
+                f"From: {result['from']['package_id']} v{result['from']['version']}",
+                f"To: {result['to']['package_id']} v{result['to']['version']}",
+                f"Breaking: {result['breaking']}",
+                f"Skills added: {', '.join(result['skills_added']) or '-'}",
+                f"Skills removed: {', '.join(result['skills_removed']) or '-'}",
+                f"Skills changed: {', '.join(result['skills_changed']) or '-'}",
+                f"Breaking changes: {', '.join(result.get('breaking_changes', [])) or '-'}",
+                f"Warning changes: {', '.join(result.get('warning_changes', [])) or '-'}",
+                f"Safe changes: {', '.join(result.get('safe_changes', [])) or '-'}",
+            ]
+        )
+    if "package" in result and "validation" in result:
+        package = result["package"]
+        validation = result["validation"]
+        return "\n".join(
+            [
+                f"Package: {package['package_id']} v{package['version']}",
+                f"Schema: {package.get('schema_version', 1)}",
+                f"Skills: {', '.join(skill['name'] for skill in package.get('skills', []))}",
+                f"Valid: {validation['ok']}",
+                f"Fingerprint: {validation['fingerprint']}",
+            ]
+        )
+    return json.dumps(result, sort_keys=True, indent=2)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """
     Main CLI entry point.
@@ -867,6 +954,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         # Handle pii-evaluate subcommand (no config needed)
         if args.command == SubcommandName.pii_evaluate:
             return execute_pii_evaluate(args.pii_evaluate_args)
+
+        if args.command == SubcommandName.package:
+            try:
+                result = execute_package(args.package_args)
+                print(format_package_output(result, args.global_flags.json_mode), file=sys.stdout)
+                return 0 if result.get("ok", True) else 1
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logging.error(f"Package error: {e}")
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
 
         # Check for unresolved env vars and warn on stderr
         try:

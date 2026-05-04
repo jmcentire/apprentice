@@ -1,40 +1,96 @@
-chronicler_integration:
-  trust_level: "high"
-  verification_required: true
-  state_reconciliation:
-    - "StoryCollector must validate Chronicler story state"
-    - "Disagreements logged and escalated"
-    - "Fallback to atomic mode on persistent conflicts"
+version: "1.0"
+generated_by: constrain
+session_id: apprentice_distillation_001
+system: "Apprentice"
 
-story_data_integrity:
-  collection_validation:
-    - "Each story step must be validated before processing"
-    - "Incomplete stories handled gracefully"
-    - "Corrupted story data isolated and logged"
-  
-  evaluation_trust:
-    - "JourneyEvaluator metrics validated against ground truth"
-    - "Optimization patterns verified before application"
-    - "Success vs struggle pattern distinction enforced"
+trust:
+  floor: 0.10
+  authority_override_floor: 0.40
+  decay_lambda: 0.05
+  taint_lock_tiers: [PII, FINANCIAL, AUTH, COMPLIANCE]
+  conflict_trust_delta_threshold: 0.20
 
-external_dependencies:
-  frontier_api:
-    trust_level: "medium"
-    retry_policy: "exponential backoff with circuit breaker"
-    fallback: "local model routing on sustained failures"
-  
-  local_model:
-    trust_level: "high"
-    validation: "output consistency checks required"
-    monitoring: "performance degradation detection"
+classifications:
+  - field_pattern: "*_api_key"
+    tier: AUTH
+    authoritative_component: "auth_manager"
+    canary_eligible: false
+    canary_pattern: null
+    rationale: "API credentials require strict access control"
 
-user_privacy:
-  data_retention:
-    - "Story data anonymized where possible"
-    - "User consent verification for extended storage"
-    - "Right to deletion honored within 30 days"
-  
-  story_content:
-    - "Sensitive information detection and redaction"
-    - "Cross-story correlation prevention"
-    - "User journey isolation maintained"
+  - field_pattern: "budget_*"
+    tier: FINANCIAL
+    authoritative_component: "budget_tracker"
+    canary_eligible: true
+    canary_pattern: "budget_test_*"
+    rationale: "financial data affects billing and cost controls"
+
+  - field_pattern: "*_pii_*"
+    tier: PII
+    authoritative_component: "pii_detector"
+    canary_eligible: true
+    canary_pattern: "*_synthetic_pii_*"
+    rationale: "personally identifiable information requires privacy protection"
+
+  - field_pattern: "compliance_*"
+    tier: COMPLIANCE
+    authoritative_component: "compliance_monitor"
+    canary_eligible: true
+    canary_pattern: "compliance_test_*"
+    rationale: "regulatory compliance data affects legal obligations"
+
+  - field_pattern: "training_data_*"
+    tier: PUBLIC
+    authoritative_component: "training_data_collector"
+    canary_eligible: true
+    canary_pattern: "training_sample_*"
+    rationale: "model training data is derived from public API responses"
+
+  - field_pattern: "quality_score_*"
+    tier: PUBLIC
+    authoritative_component: "quality_evaluator"
+    canary_eligible: true
+    canary_pattern: "quality_test_*"
+    rationale: "quality metrics are operational data without sensitivity"
+
+soak:
+  base_durations:
+    PUBLIC: "1h"
+    PII: "6h"
+    FINANCIAL: "24h"
+    AUTH: "48h"
+    COMPLIANCE: "72h"
+  target_requests: 1000
+
+authority_map:
+  - component: "auth_manager"
+    domains: ["*.api_key", "auth.*", "credentials.*"]
+    rationale: "manages all authentication and authorization data"
+
+  - component: "budget_tracker"
+    domains: ["budget.*", "cost.*", "billing.*"]
+    rationale: "authoritative for all financial tracking and limits"
+
+  - component: "pii_detector"
+    domains: ["*.pii.*", "personal.*", "sensitive.*"]
+    rationale: "responsible for identifying and protecting personal data"
+
+  - component: "compliance_monitor"
+    domains: ["compliance.*", "regulatory.*", "audit.*"]
+    rationale: "ensures adherence to regulatory requirements"
+
+  - component: "training_data_collector"
+    domains: ["training.*", "model_data.*", "dataset.*"]
+    rationale: "manages collection and curation of model training data"
+
+  - component: "quality_evaluator"
+    domains: ["quality.*", "correlation.*", "metrics.*"]
+    rationale: "authoritative for quality assessment and phase transitions"
+
+human_gates:
+  always:
+    - tier: FINANCIAL
+    - tier: AUTH
+    - tier: COMPLIANCE
+  on_low_trust_authoritative: true
+  on_unresolvable_conflict: true

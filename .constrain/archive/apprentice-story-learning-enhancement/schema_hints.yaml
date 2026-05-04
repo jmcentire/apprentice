@@ -1,0 +1,87 @@
+Story:
+  type: "pydantic model"
+  fields:
+    story_id: "str - unique identifier"
+    journey_type: "str - classification of journey"
+    steps: "List[StoryStep] - ordered sequence of steps"
+    metadata: "Dict[str, Any] - journey-specific data"
+    created_at: "datetime"
+    completed_at: "Optional[datetime]"
+    status: "Literal['in_progress', 'completed', 'abandoned']"
+  
+  validation:
+    - "steps must be non-empty list"
+    - "story_id must be UUID format"
+    - "journey_type must be registered type"
+
+StoryStep:
+  type: "pydantic model"
+  fields:
+    step_id: "str - unique step identifier"
+    sequence_number: "int - order within story"
+    training_example: "TrainingExample - atomic training data"
+    phase: "str - journey phase at this step"
+    efficiency_score: "Optional[float] - step performance"
+    backtrack_indicator: "bool - whether step represents backtracking"
+    timestamp: "datetime"
+  
+  validation:
+    - "sequence_number must be positive"
+    - "efficiency_score between 0.0 and 1.0 if present"
+    - "training_example must be valid TrainingExample"
+
+StoryCollector:
+  methods:
+    collect_story_events:
+      parameters:
+        - "chronicler_events: List[Event]"
+      returns: "List[Story]"
+      validation: "events must be chronologically ordered"
+    
+    validate_story_consistency:
+      parameters:
+        - "story: Story"
+        - "chronicler_state: Dict[str, Any]"
+      returns: "ValidationResult"
+      checks:
+        - "step sequence integrity"
+        - "phase transition validity"
+        - "chronicler state alignment"
+
+JourneyEvaluator:
+  methods:
+    evaluate_journey_completion:
+      parameters:
+        - "story: Story"
+      returns: "CompletionMetrics"
+      metrics:
+        - "completion_rate: float"
+        - "goal_achievement: bool"
+        - "journey_duration: timedelta"
+    
+    measure_step_efficiency:
+      parameters:
+        - "story: Story"
+      returns: "EfficiencyMetrics"
+      calculations:
+        - "average_step_time"
+        - "success_rate_per_phase"
+        - "optimization_opportunities"
+
+configuration_schema:
+  story_learning_enabled:
+    type: "bool"
+    default: false
+    description: "Enable multi-step story learning"
+  
+  max_story_length:
+    type: "int"
+    default: 50
+    minimum: 1
+    maximum: 1000
+    description: "Maximum steps per story"
+  
+  journey_types:
+    type: "List[str]"
+    default: ["general", "troubleshooting", "learning"]
+    description: "Supported journey classifications"

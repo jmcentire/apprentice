@@ -502,6 +502,11 @@ class Apprentice:
             )
             middleware_ctx = pipeline.execute_pre(middleware_ctx)
             input_data = middleware_ctx.input_data  # Now tokenized
+        pii_frontier_egress_allowed = (
+            pipeline is not None
+            and middleware_ctx is not None
+            and "pii_token_registry" in middleware_ctx.middleware_state
+        )
 
         # Initialize RunContext
         run_ctx = RunContext(
@@ -606,6 +611,8 @@ class Apprentice:
                 model_id = task_config.local_model_id or "local"
                 cost = 0.0
             else:
+                if getattr(self, "_require_pii_guard_for_remote", False) and not pii_frontier_egress_allowed:
+                    raise RuntimeError("frontier egress blocked: PII middleware did not certify request")
                 output = await self._remote_client.predict(task_name, input_data)
                 model_id = task_config.remote_model_id
                 cost_result = self._remote_client.get_cost(task_name)
@@ -715,6 +722,11 @@ class Apprentice:
             )
             middleware_ctx = pipeline.execute_pre(middleware_ctx)
             input_data = middleware_ctx.input_data  # Now tokenized
+        pii_frontier_egress_allowed = (
+            pipeline is not None
+            and middleware_ctx is not None
+            and "pii_token_registry" in middleware_ctx.middleware_state
+        )
 
         # Render prompt template from task registry if available
         prompt = str(input_data)
@@ -724,11 +736,15 @@ class Apprentice:
         except (AttributeError, KeyError):
             pass
 
+        metadata = dict(input_data)
+        metadata["_apprentice_pii_guard"] = {
+            "frontier_egress_allowed": pii_frontier_egress_allowed,
+        }
         router_request = RouterTaskRequest(
             request_id=request_id,
             task_type=task_name,
             prompt=prompt,
-            metadata=input_data,
+            metadata=metadata,
             timestamp_utc=datetime.now(timezone.utc).isoformat(),
         )
 

@@ -54,9 +54,9 @@ class TrainingExample(BaseModel):
     @classmethod
     def validate_task_type(cls, v: str) -> str:
         """Validate task_type matches required pattern."""
-        if not re.match(r"^[a-zA-Z0-9_\-]+$", v):
+        if not re.match(r"^[a-zA-Z0-9_:\-]+$", v):
             raise ValueError(
-                f"task_type must match ^[a-zA-Z0-9_\-]+$, got '{v}'"
+                f"task_type must match ^[a-zA-Z0-9_:\\-]+$, got '{v}'"
             )
         return v
 
@@ -512,9 +512,9 @@ class TrainingDataStore:
 
     def _validate_task_type_format(self, task_type: str) -> None:
         """Validate that task_type matches required format."""
-        if not re.match(r"^[a-zA-Z0-9_\-]+$", task_type):
+        if not re.match(r"^[a-zA-Z0-9_:\-]+$", task_type):
             raise ValueError(
-                f"invalid_task_type: task_type must match ^[a-zA-Z0-9_\-]+$, got '{task_type}'"
+                f"invalid_task_type: task_type must match ^[a-zA-Z0-9_:\\-]+$, got '{task_type}'"
             )
 
 

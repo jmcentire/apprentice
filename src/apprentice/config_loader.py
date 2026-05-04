@@ -410,6 +410,20 @@ class ObserverConfig(BaseModel):
     min_context_before_recommending: int = Field(default=10, ge=1)
 
 
+class SkillPackageRefConfig(BaseModel):
+    """External skill package registration.
+
+    The package file normally lives in the host application's repo or
+    deploy-time config directory, not in Apprentice's source tree.
+    """
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    path: str = Field(min_length=1)
+    overlays: List[str] = Field(default_factory=list)
+    environment: Optional[str] = None
+    required: bool = True
+
+
 class ApprenticeConfig(BaseModel):
     """Root configuration model. Frozen and immutable after construction."""
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
@@ -429,6 +443,8 @@ class ApprenticeConfig(BaseModel):
     feedback: Optional[FeedbackConfig] = None
     observer: Optional[ObserverConfig] = None
     pii: Optional[PIIConfig] = None
+    skill_package: Optional[SkillPackageRefConfig] = None
+    skill_packages: Optional[List[SkillPackageRefConfig]] = None
 
     @model_validator(mode="after")
     def validate_cross_field_constraints(self) -> "ApprenticeConfig":

@@ -1,0 +1,120 @@
+# Example external skill package.
+#
+# In production this file should live with the host application, e.g.
+# ~/MyProject/apprentice.conf.d/skill-package.yaml, and be referenced from
+# apprentice.yaml:
+#
+#   skill_package:
+#     path: ~/MyProject/apprentice.conf.d/skill-package.yaml
+
+package_id: example.support
+schema_version: 1
+version: 1
+description: Domain vocabulary for a generic support assistant.
+
+compatibility:
+  package_api_version: 1
+  min_apprentice_version: 0.1.0
+
+runtime:
+  name: default
+  tool_endpoint_overrides: {}
+  auth_refs: {}
+  disabled_tools: []
+  feature_flags:
+    collect_labeled_examples: true
+
+environments:
+  prod:
+    name: prod
+    tool_endpoint_overrides:
+      ticket_lookup: https://support.example.internal/tickets/{ticket_id}
+    auth_refs:
+      ticket_lookup: SUPPORT_TICKET_API_KEY
+    feature_flags:
+      collect_labeled_examples: true
+
+skills:
+  - name: classify_ticket
+    description: Classify inbound support requests by category and priority.
+    methods:
+      - name: run
+        kind: http
+        target: /v1/run
+        method: POST
+        constraints: [has_ticket_text]
+    inputs:
+      - name: text
+        type: string
+        required: true
+        modality: text
+      - name: metadata
+        type: object
+        required: false
+    outputs:
+      - name: category
+        type: string
+        required: true
+      - name: priority
+        type: integer
+        required: true
+    outcomes:
+      - name: correctly_classified
+        description: Human or downstream system confirms category and priority.
+        score: 1.0
+        success_when: feedback.name in ['accept', 'ai_score']
+      - name: corrected_by_human
+        description: Human edited one or more output fields.
+        score: 0.5
+        success_when: feedback.name == 'edit'
+    constraints:
+      - name: no_customer_pii_in_training
+        kind: hard
+        applies_to: [training_data]
+        expression: pii.enabled == true
+      - name: has_ticket_text
+        kind: hard
+        applies_to: [run, training_data]
+        expression: not_empty(input.text)
+    actions:
+      - name: propose_classification
+        description: Suggest category and priority for a support ticket.
+        parameters:
+          - name: category
+            type: string
+            required: true
+          - name: priority
+            type: integer
+            required: true
+        outcomes: [correctly_classified, corrected_by_human]
+        constraints: [no_customer_pii_in_training, has_ticket_text]
+        reversible: true
+    tools:
+      - name: ticket_lookup
+        kind: http
+        target: https://support.example.internal/tickets/{ticket_id}
+        auth_ref: SUPPORT_TICKET_API_KEY
+        timeout_seconds: 5
+        rate_limit_per_minute: 120
+        description: Optional host-owned lookup tool for ticket metadata.
+    evaluators:
+      - name: category_priority_match
+        kind: json_schema
+        applies_to: [correctly_classified, corrected_by_human]
+        config:
+          required_fields: [category, priority]
+    artifacts:
+      - name: ticket_text
+        modality: text
+        path: input.text
+        required: true
+
+event_mappings:
+  - event_type: ticket.classified
+    skill: classify_ticket
+    action: propose_classification
+    input_path: payload.input
+    output_path: payload.output
+    feedback_path: payload.feedback
+    outcome_path: payload.outcome
+    subject_path: payload.ticket_id

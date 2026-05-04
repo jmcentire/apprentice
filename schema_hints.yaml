@@ -1,87 +1,85 @@
-Story:
-  type: "pydantic model"
-  fields:
-    story_id: "str - unique identifier"
-    journey_type: "str - classification of journey"
-    steps: "List[StoryStep] - ordered sequence of steps"
-    metadata: "Dict[str, Any] - journey-specific data"
-    created_at: "datetime"
-    completed_at: "Optional[datetime]"
-    status: "Literal['in_progress', 'completed', 'abandoned']"
-  
-  validation:
-    - "steps must be non-empty list"
-    - "story_id must be UUID format"
-    - "journey_type must be registered type"
+version: "1.0"
+generated_by: constrain
+session_id: apprentice_distillation_001
 
-StoryStep:
-  type: "pydantic model"
-  fields:
-    step_id: "str - unique step identifier"
-    sequence_number: "int - order within story"
-    training_example: "TrainingExample - atomic training data"
-    phase: "str - journey phase at this step"
-    efficiency_score: "Optional[float] - step performance"
-    backtrack_indicator: "bool - whether step represents backtracking"
-    timestamp: "datetime"
-  
-  validation:
-    - "sequence_number must be positive"
-    - "efficiency_score between 0.0 and 1.0 if present"
-    - "training_example must be valid TrainingExample"
+storage_backends:
+  - owner_component: "budget_tracker"
+    type: sqlite
+    description: "stores budget limits, spending history, and cost tracking data"
 
-StoryCollector:
-  methods:
-    collect_story_events:
-      parameters:
-        - "chronicler_events: List[Event]"
-      returns: "List[Story]"
-      validation: "events must be chronologically ordered"
-    
-    validate_story_consistency:
-      parameters:
-        - "story: Story"
-        - "chronicler_state: Dict[str, Any]"
-      returns: "ValidationResult"
-      checks:
-        - "step sequence integrity"
-        - "phase transition validity"
-        - "chronicler state alignment"
+  - owner_component: "quality_evaluator"
+    type: sqlite
+    description: "stores correlation scores, quality metrics, and phase transition history"
 
-JourneyEvaluator:
-  methods:
-    evaluate_journey_completion:
-      parameters:
-        - "story: Story"
-      returns: "CompletionMetrics"
-      metrics:
-        - "completion_rate: float"
-        - "goal_achievement: bool"
-        - "journey_duration: timedelta"
-    
-    measure_step_efficiency:
-      parameters:
-        - "story: Story"
-      returns: "EfficiencyMetrics"
-      calculations:
-        - "average_step_time"
-        - "success_rate_per_phase"
-        - "optimization_opportunities"
+  - owner_component: "training_data_collector"
+    type: sqlite
+    description: "stores collected API responses and curated training datasets"
 
-configuration_schema:
-  story_learning_enabled:
-    type: "bool"
-    default: false
-    description: "Enable multi-step story learning"
-  
-  max_story_length:
-    type: "int"
-    default: 50
-    minimum: 1
-    maximum: 1000
-    description: "Maximum steps per story"
-  
-  journey_types:
-    type: "List[str]"
-    default: ["general", "troubleshooting", "learning"]
-    description: "Supported journey classifications"
+  - owner_component: "package_registry"
+    type: sqlite
+    description: "stores skill package definitions, metadata, and validation results"
+
+  - owner_component: "auth_manager"
+    type: sqlite
+    description: "stores encrypted API keys and authentication tokens"
+
+  - owner_component: "pii_detector"
+    type: sqlite
+    description: "stores PII detection patterns, results, and confidence scores"
+
+  - owner_component: "compliance_monitor"
+    type: sqlite
+    description: "stores audit trails, compliance status, and regulatory data"
+
+  - owner_component: "snapshot_store"
+    type: sqlite
+    description: "stores system snapshots with bounded cleanup policies"
+
+field_hints:
+  - backend_owner: "budget_tracker"
+    field_description: "API spending amounts and budget limits"
+    likely_classification: FINANCIAL
+    likely_annotations: [audit_field, immutable]
+    rationale: "financial data requires audit trails and immutability for billing integrity"
+
+  - backend_owner: "auth_manager"
+    field_description: "API keys and authentication tokens"
+    likely_classification: AUTH
+    likely_annotations: [encrypted_at_rest, audit_field]
+    rationale: "credentials must be encrypted and access must be audited"
+
+  - backend_owner: "pii_detector"
+    field_description: "personally identifiable information in requests"
+    likely_classification: PII
+    likely_annotations: [gdpr_erasable, encrypted_at_rest, audit_field]
+    rationale: "PII must support GDPR erasure, be encrypted, and access audited"
+
+  - backend_owner: "compliance_monitor"
+    field_description: "audit trails and regulatory compliance status"
+    likely_classification: COMPLIANCE
+    likely_annotations: [immutable, audit_field]
+    rationale: "compliance data must be immutable for regulatory integrity and audited"
+
+  - backend_owner: "quality_evaluator"
+    field_description: "correlation scores and quality metrics"
+    likely_classification: PUBLIC
+    likely_annotations: []
+    rationale: "quality metrics are operational data without sensitivity requirements"
+
+  - backend_owner: "training_data_collector"
+    field_description: "API responses collected for model training"
+    likely_classification: PUBLIC
+    likely_annotations: []
+    rationale: "training data derived from public API responses without special requirements"
+
+  - backend_owner: "package_registry"
+    field_description: "skill package definitions and metadata"
+    likely_classification: PUBLIC
+    likely_annotations: []
+    rationale: "skill packages are functional definitions without sensitive content"
+
+  - backend_owner: "snapshot_store"
+    field_description: "system state snapshots for autosave functionality"
+    likely_classification: PUBLIC
+    likely_annotations: []
+    rationale: "snapshots contain operational state without sensitive data"

@@ -7,10 +7,10 @@ dev:
 	pip install -e ".[dev,lint]"
 
 test:
-	python3 -m pytest tests/ -v
+	PYTHONPATH=src python3 -m pytest tests/ -v
 
 test-quick:
-	python3 -m pytest tests/ -x -q
+	PYTHONPATH=src python3 -m pytest tests/ -x -q
 
 lint:
 	python3 -m ruff check src/ tests/

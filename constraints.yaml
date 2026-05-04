@@ -1,26 +1,94 @@
-backward_compatibility:
-  atomic_routing: "must remain completely unaffected"
-  existing_tests: "all 2628 tests must pass without modification"
-  api_contracts: "no breaking changes to existing interfaces"
+version: "1.0"
+generated_by: constrain
+session_id: apprentice_distillation_001
 
-configuration:
-  story_learning:
-    enabled_flag: "story_learning_enabled: true"
-    default_state: false
-    opt_in_required: true
+constraints:
+  - id: C001
+    boundary: "budget tracking"
+    condition: "total API spend must not exceed configured budget limits"
+    violation: "service interruption due to budget exhaustion"
+    severity: must
+    rationale: "prevents uncontrolled costs that could shut down service"
+    classification_tier: FINANCIAL
+    affected_components: ["budget_tracker", "api_router", "frontier_client"]
 
-technical_constraints:
-  python_version: "3.12+"
-  pydantic_version: "v2"
-  new_dependencies: "strictly prohibited"
-  frozen_models: "constraint must be maintained"
+  - id: C002
+    boundary: "PII detection"
+    condition: "PII data must be detected before frontier API transmission"
+    violation: "sensitive data exposed to external services"
+    severity: must
+    rationale: "regulatory compliance and privacy protection"
+    classification_tier: PII
+    affected_components: ["pii_detector", "request_preprocessor", "frontier_client"]
 
-data_handling:
-  privacy: "story data retention must respect user privacy rights"
-  storage: "efficient storage patterns for multi-step narratives required"
-  consistency: "Chronicler and StoryCollector must maintain state agreement"
+  - id: C003
+    boundary: "quality correlation"
+    condition: "phase transitions require correlation score >= configured threshold"
+    violation: "automatic regression from Phase 3 to Phase 2"
+    severity: must
+    rationale: "maintains service quality during model deployment"
+    classification_tier: null
+    affected_components: ["quality_evaluator", "phase_manager", "router"]
 
-performance:
-  existing_performance: "atomic task performance must not degrade"
-  story_overhead: "story learning overhead must be minimal when disabled"
-  memory_usage: "efficient memory management for long stories required"
+  - id: C004
+    boundary: "tool execution"
+    condition: "cli/python/mcp tools require explicit host-specific executor permission"
+    violation: "security breach through unauthorized tool execution"
+    severity: must
+    rationale: "prevents arbitrary code execution in production"
+    classification_tier: AUTH
+    affected_components: ["tool_executor", "skill_processor", "preflight_adapter"]
+
+  - id: C005
+    boundary: "component dependencies"
+    condition: "leaf components must maintain zero cross-dependencies"
+    violation: "cascading failures across component boundaries"
+    severity: must
+    rationale: "architectural integrity and fault isolation"
+    classification_tier: null
+    affected_components: ["all leaf components"]
+
+  - id: C006
+    boundary: "package validation"
+    condition: "skill packages must pass validation before deployment"
+    violation: "runtime errors from malformed packages"
+    severity: must
+    rationale: "prevents deployment of broken skill definitions"
+    classification_tier: null
+    affected_components: ["package_validator", "package_registry", "skill_loader"]
+
+  - id: C007
+    boundary: "autosave storage"
+    condition: "snapshot index growth must be bounded with cleanup policies"
+    violation: "unbounded storage growth causing system failure"
+    severity: should
+    rationale: "prevents storage exhaustion over time"
+    classification_tier: null
+    affected_components: ["autosave_manager", "snapshot_store"]
+
+  - id: C008
+    boundary: "source watermarking"
+    condition: "training data must be filtered for source watermarks"
+    violation: "contaminated model training from watermarked responses"
+    severity: should
+    rationale: "maintains training data quality and avoids source leakage"
+    classification_tier: null
+    affected_components: ["training_data_collector", "response_processor"]
+
+  - id: C009
+    boundary: "canary deployment"
+    condition: "classified data changes require extended soak periods"
+    violation: "insufficient testing before production deployment"
+    severity: must
+    rationale: "risk mitigation for sensitive data handling changes"
+    classification_tier: COMPLIANCE
+    affected_components: ["deployment_manager", "canary_controller"]
+
+  - id: C010
+    boundary: "robots.txt compliance"
+    condition: "exactly 10 specific AI crawlers must be validated"
+    violation: "non-compliant web crawling behavior"
+    severity: must
+    rationale: "maintains ethical AI practices and web standards compliance"
+    classification_tier: COMPLIANCE
+    affected_components: ["crawler_validator", "web_scraper"]

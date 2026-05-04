@@ -419,6 +419,11 @@ class RequestRouter:
             return result
 
         except (ValidationError, RoutingError) as e:
+            if budget_snapshot is not None and hasattr(self.budget_manager, "release_reservation"):
+                try:
+                    await self.budget_manager.release_reservation()
+                except Exception:
+                    pass
             # Log audit entry before re-raising
             if self.config.enable_audit_logging:
                 try:

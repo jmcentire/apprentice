@@ -6,6 +6,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from apprentice.cli.serve import ApprenticeServer, SecurityConfig
+from apprentice.package_runtime import PackageRuntimeState
+from apprentice.skill_package import SkillPackage
 
 
 def _build_mock_apprentice():
@@ -13,6 +15,10 @@ def _build_mock_apprentice():
     a = MagicMock()
     a._running = True
     a._start_time_utc = None
+    a._skill_package = None
+    a._package_runtime_state = None
+    a._package_registry_store = None
+    a._tool_preflight_client = None
 
     # Training data store
     a._training_data_store = MagicMock()
@@ -271,6 +277,282 @@ class TestSkillsEndpoint:
         assert len(body["skills"]) == 2
         names = {s["name"] for s in body["skills"]}
         assert names == {"guest_response", "refund_handling"}
+
+    async def test_list_skills_uses_registered_skill_package(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "description": "Classify tickets.",
+                    "methods": [{"name": "run", "kind": "http", "target": "/v1/run"}],
+                    "actions": [{"name": "propose_classification"}],
+                    "outcomes": [{"name": "accepted"}],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "GET", "/v1/skills")
+
+        assert status == 200
+        assert body["skills"][0]["name"] == "classify_ticket"
+        assert body["skills"][0]["methods"][0]["target"] == "/v1/run"
+
+
+class TestSkillPackageEndpoint:
+    async def test_skill_package_endpoint_returns_registered_package(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[{"name": "classify_ticket"}],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "GET", "/v1/skill-package")
+
+        assert status == 200
+        assert body["package_id"] == "example.support"
+
+    async def test_packaged_event_maps_to_training_example(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[{"name": "classify_ticket"}],
+            event_mappings=[
+                {
+                    "event_type": "ticket.classified",
+                    "skill": "classify_ticket",
+                    "input_path": "payload.input",
+                    "output_path": "payload.output",
+                    "subject_path": "payload.ticket_id",
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/events", {
+            "event_type": "ticket.classified",
+            "timestamp": "2026-05-03T22:00:00Z",
+            "payload": {
+                "ticket_id": "ticket-1",
+                "input": {"text": "card declined"},
+                "output": {"category": "billing"},
+            },
+        })
+
+        assert status == 200
+        assert body["mapped"] is True
+        assert body["skill"] == "classify_ticket"
+        apprentice._training_data_store.add_example.assert_called_once()
+
+    async def test_constraint_check_uses_registered_package(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "constraints": [
+                        {
+                            "name": "has_text",
+                            "kind": "hard",
+                            "expression": "not_empty(input.text)",
+                        }
+                    ],
+                    "actions": [
+                        {
+                            "name": "propose_classification",
+                            "constraints": ["has_text"],
+                        }
+                    ],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/constraints/check", {
+            "skill": "tenant-1:classify_ticket",
+            "action": "propose_classification",
+            "input": {"text": ""},
+        })
+
+        assert status == 200
+        assert body["allowed"] is False
+        assert body["violations"][0]["name"] == "has_text"
+
+    async def test_run_blocks_on_hard_package_constraint(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "methods": [{"name": "run", "kind": "http", "target": "/v1/run"}],
+                    "constraints": [
+                        {
+                            "name": "has_text",
+                            "kind": "hard",
+                            "expression": "not_empty(input.text)",
+                        }
+                    ],
+                    "actions": [
+                        {
+                            "name": "propose_classification",
+                            "constraints": ["has_text"],
+                        }
+                    ],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/run", {
+            "skill": "tenant-1:classify_ticket",
+            "method": "run",
+            "action": "propose_classification",
+            "input": {"text": ""},
+        })
+
+        assert status == 422
+        assert body["status"] == "blocked"
+        assert body["violations"][0]["name"] == "has_text"
+        apprentice.run.assert_not_called()
+
+    async def test_labeled_example_accepts_tenant_qualified_skill(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[{"name": "classify_ticket"}],
+        )
+        apprentice._package_runtime_state = PackageRuntimeState()
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/labeled-examples", {
+            "skill": "tenant-1:classify_ticket",
+            "request_id": "action-1",
+            "input": {"text": "card declined"},
+            "draft_output": {"category": "technical"},
+            "final_output": {"category": "billing"},
+            "feedback_type": "edit",
+        })
+
+        assert status == 200
+        assert body["status"] == "recorded"
+        assert body["match_score"] == 0.5
+        apprentice._training_data_store.add_example.assert_called_once()
+
+        status, status_body = await _send_request(server, "GET", "/v1/status")
+        package_tasks = [task for task in status_body["tasks"] if task.get("task_name") == "tenant-1:classify_ticket"]
+        assert status == 200
+        assert package_tasks[0]["confidence"] == 0.5
+
+    async def test_package_registry_endpoint_returns_compact_metadata(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "methods": [{"name": "run", "kind": "http", "target": "/v1/run"}],
+                    "tools": [{"name": "ticket_lookup", "kind": "http", "target": "https://example.local"}],
+                    "evaluators": [{"name": "json_match", "kind": "json_schema"}],
+                    "artifacts": [{"name": "ticket_text", "modality": "text", "path": "input.text"}],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "GET", "/v1/package-registry")
+
+        assert status == 200
+        assert body["package_id"] == "example.support"
+        assert body["schema_version"] == 1
+        assert body["skills"][0]["tools"] == ["ticket_lookup"]
+        assert body["skills"][0]["evaluators"] == ["json_match"]
+
+    async def test_tools_endpoint_returns_runtime_resolved_tools(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            runtime={
+                "tool_endpoint_overrides": {
+                    "ticket_lookup": "https://prod.example/tickets/{ticket_id}",
+                }
+            },
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "tools": [
+                        {
+                            "name": "ticket_lookup",
+                            "kind": "http",
+                            "target": "https://dev.example/tickets/{ticket_id}",
+                        }
+                    ],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "GET", "/v1/tools")
+
+        assert status == 200
+        assert body["tools"][0]["skill"] == "classify_ticket"
+        assert body["tools"][0]["target"] == "https://prod.example/tickets/{ticket_id}"
+
+    async def test_tool_call_is_blocked_without_preflight(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "tools": [
+                        {
+                            "name": "custom_lookup",
+                            "kind": "mcp",
+                            "target": "tools/custom_lookup",
+                        }
+                    ],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/tools/call", {
+            "skill": "classify_ticket",
+            "tool": "custom_lookup",
+            "input": {"ticket_id": "ticket-1"},
+        })
+
+        assert status == 200
+        assert body["status"] == "blocked"
+
+    async def test_evaluator_run_scores_builtin_match(self):
+        apprentice = _build_mock_apprentice()
+        apprentice._skill_package = SkillPackage(
+            package_id="example.support",
+            skills=[
+                {
+                    "name": "classify_ticket",
+                    "evaluators": [{"name": "json_match", "kind": "json_schema"}],
+                }
+            ],
+        )
+        server = ApprenticeServer(apprentice, pipeline_interval=9999)
+
+        status, body = await _send_request(server, "POST", "/v1/evaluators/run", {
+            "skill": "classify_ticket",
+            "evaluator": "json_match",
+            "candidate": {"category": "billing"},
+            "reference": {"category": "billing"},
+        })
+
+        assert status == 200
+        assert body["status"] == "ok"
+        assert body["score"] == 1.0
 
 
 # ---------------------------------------------------------------------------

@@ -135,7 +135,7 @@ class ApprenticeStoryLearner:
         for method in required_tracker_methods:
             if not hasattr(phase_tracker, method):
                 raise TypeError(
-                    f"phase_tracker must satisfy PhaseTrackerProtocol (missing required methods)"
+                    "phase_tracker must satisfy PhaseTrackerProtocol (missing required methods)"
                 )
 
         # Validate collector protocol
@@ -145,7 +145,7 @@ class ApprenticeStoryLearner:
         for method in required_collector_methods:
             if not hasattr(collector, method):
                 raise TypeError(
-                    f"collector must satisfy StoryCollectorProtocol (missing required methods)"
+                    "collector must satisfy StoryCollectorProtocol (missing required methods)"
                 )
 
         if config is not None and not isinstance(config, RootConfig):

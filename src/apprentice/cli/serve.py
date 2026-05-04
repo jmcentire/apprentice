@@ -277,10 +277,24 @@ class ApprenticeServer:
                 await self._handle_events(writer, body)
             elif path == "/v1/feedback" and method == "POST":
                 await self._handle_feedback(writer, body)
+            elif path == "/v1/labeled-examples" and method == "POST":
+                await self._handle_labeled_example(writer, body)
+            elif path == "/v1/constraints/check" and method == "POST":
+                await self._handle_constraint_check(writer, body)
             elif path == "/v1/recommendations" and method == "POST":
                 await self._handle_recommendations(writer, body)
             elif path == "/v1/skills" and method == "GET":
                 await self._handle_skills(writer)
+            elif path == "/v1/skill-package" and method == "GET":
+                await self._handle_skill_package(writer)
+            elif path == "/v1/package-registry" and method == "GET":
+                await self._handle_package_registry(writer)
+            elif path == "/v1/tools" and method == "GET":
+                await self._handle_tools(writer)
+            elif path == "/v1/tools/call" and method == "POST":
+                await self._handle_tool_call(writer, body)
+            elif path == "/v1/evaluators/run" and method == "POST":
+                await self._handle_evaluator_run(writer, body)
             else:
                 await self._send_response(writer, 404, {"error": "Not found"})
 
@@ -305,12 +319,24 @@ class ApprenticeServer:
             await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
             return
 
-        task_name = data.get("task_name", "")
+        task_name = data.get("task_name") or data.get("skill") or ""
         input_data = data.get("input", {})
 
         if not task_name:
             await self._send_response(writer, 400, {"error": "task_name is required"})
             return
+
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is not None:
+            check = self._package_constraint_check(data, package, scope="run")
+            if not check["allowed"]:
+                await self._send_response(writer, 422, {
+                    "status": "blocked",
+                    "package_id": package.package_id,
+                    "skill": task_name,
+                    "violations": check["violations"],
+                })
+                return
 
         try:
             response = await self._apprentice.run(task_name, input_data)
@@ -325,6 +351,7 @@ class ApprenticeServer:
                     "model_id": response.metadata.model_id,
                     "cost_usd": response.metadata.cost_usd,
                     "fallback_used": response.metadata.fallback_used,
+                    **self._package_run_metadata(data, package),
                 },
             }
             await self._send_response(writer, 200, result)
@@ -348,6 +375,14 @@ class ApprenticeServer:
                     except Exception:
                         tasks.append({"task_name": name, "error": "unavailable"})
 
+            package_state = getattr(self._apprentice, "_package_runtime_state", None)
+            if package_state is not None and hasattr(package_state, "all_statuses"):
+                known = {task.get("task_name") for task in tasks}
+                for status in package_state.all_statuses():
+                    if status.task_name in known:
+                        continue
+                    tasks.append(status.model_dump())
+
             await self._send_response(writer, 200, {"tasks": tasks, "timestamp": datetime.now(timezone.utc).isoformat()})
         except Exception as e:
             await self._send_response(writer, 500, {"error": str(e)})
@@ -361,14 +396,19 @@ class ApprenticeServer:
             return
 
         try:
-            from apprentice.wos_models import WOSEvent
-            from apprentice.wos_handler import handle_event
-            event = WOSEvent(**data)
-            result = await handle_event(self._apprentice, event)
-            await self._send_response(writer, 200, result.model_dump())
+            package = getattr(self._apprentice, "_skill_package", None)
+            if package is not None:
+                result = await self._handle_packaged_event(data, package)
+                await self._send_response(writer, 200, result)
+            else:
+                from apprentice.wos_models import WOSEvent
+                from apprentice.wos_handler import handle_event
+                event = WOSEvent(**data)
+                result = await handle_event(self._apprentice, event)
+                await self._send_response(writer, 200, result.model_dump())
         except Exception as e:
             # Fire-and-forget: always 200 even on internal errors
-            print(f"[wos] Event handler error (non-fatal): {e}", file=sys.stderr)
+            print(f"[events] Event handler error (non-fatal): {e}", file=sys.stderr)
             await self._send_response(writer, 200, {"status": "accepted"})
 
     async def _handle_feedback(self, writer: asyncio.StreamWriter, body: str) -> None:
@@ -384,9 +424,113 @@ class ApprenticeServer:
             from apprentice.wos_handler import handle_feedback
             feedback = FeedbackRecord(**data)
             result = await handle_feedback(self._apprentice, feedback)
+            self._record_package_feedback(
+                data.get("skill", ""),
+                self._feedback_score(str(data.get("feedback_type", "edit"))),
+            )
             await self._send_response(writer, 200, result.model_dump())
         except Exception as e:
             await self._send_response(writer, 500, {"error": str(e)})
+
+    async def _handle_labeled_example(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/labeled-examples — Store externally generated draft/final pairs."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        task_name = data.get("task_name") or data.get("skill") or ""
+        if not task_name:
+            await self._send_response(writer, 400, {"error": "skill is required"})
+            return
+
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is not None:
+            check = self._package_constraint_check(data, package, scope="training_data")
+            if not check["allowed"]:
+                await self._send_response(writer, 422, {
+                    "status": "blocked",
+                    "package_id": package.package_id,
+                    "skill": task_name,
+                    "violations": check["violations"],
+                })
+                return
+
+        input_data = data.get("input", {})
+        draft_output = data.get("draft_output", data.get("agent_draft", {}))
+        final_output = data.get("final_output", data.get("operator_final", data.get("edited_output", {})))
+        if final_output in (None, {}):
+            await self._send_response(writer, 400, {"error": "final_output is required"})
+            return
+
+        try:
+            from apprentice.training_data_store import TrainingExample
+
+            timestamp = data.get("timestamp") or datetime.now(timezone.utc).isoformat()
+            metadata = {
+                "source": "external_labeled_example",
+                "request_id": data.get("request_id", ""),
+                "feedback_type": data.get("feedback_type", "edit"),
+                "action": data.get("action", ""),
+                "method": data.get("method", ""),
+                "draft_output": draft_output,
+                **(data.get("metadata") if isinstance(data.get("metadata"), dict) else {}),
+            }
+
+            tds = getattr(self._apprentice, "_training_data_store", None)
+            if tds is not None and hasattr(tds, "add_example"):
+                example = TrainingExample(
+                    input=json.dumps(input_data, sort_keys=True),
+                    output=json.dumps(final_output, sort_keys=True),
+                    task_type=task_name,
+                    timestamp=timestamp,
+                    metadata=metadata,
+                )
+                tds.add_example(example)
+
+            ce = getattr(self._apprentice, "_confidence_engine", None)
+            match_score = self._feedback_score(str(data.get("feedback_type", "edit")))
+            self._record_package_feedback(task_name, match_score)
+            if ce is not None and hasattr(ce, "record_comparison"):
+                try:
+                    ce.record_comparison(
+                        task_id=task_name,
+                        input_data=json.dumps(input_data, sort_keys=True),
+                        local_output=json.dumps(draft_output, sort_keys=True),
+                        remote_output=json.dumps(final_output, sort_keys=True),
+                    )
+                except Exception as e:
+                    print(f"[labeled-examples] confidence update failed: {e}", file=sys.stderr)
+
+            await self._send_response(writer, 200, {
+                "status": "recorded",
+                "skill": task_name,
+                "match_score": match_score,
+                "package_id": package.package_id if package is not None else None,
+            })
+        except Exception as e:
+            await self._send_response(writer, 500, {"error": str(e)})
+
+    async def _handle_constraint_check(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/constraints/check — Preflight package constraints without running a model."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+
+        check = self._package_constraint_check(data, package)
+        await self._send_response(writer, 200, {
+            "package_id": package.package_id,
+            "skill": data.get("task_name") or data.get("skill") or "",
+            **check,
+        })
 
     async def _handle_recommendations(self, writer: asyncio.StreamWriter, body: str) -> None:
         """POST /v1/recommendations — Get a recommendation from Apprentice."""
@@ -408,6 +552,27 @@ class ApprenticeServer:
     async def _handle_skills(self, writer: asyncio.StreamWriter) -> None:
         """GET /v1/skills — List configured skills with phase/confidence."""
         try:
+            package = getattr(self._apprentice, "_skill_package", None)
+            if package is not None:
+                await self._send_response(writer, 200, {
+                    "skills": [
+                        {
+                            "name": skill.name,
+                            "description": skill.description,
+                            "methods": [method.model_dump() for method in skill.methods],
+                            "actions": [action.model_dump() for action in skill.actions],
+                            "outcomes": [outcome.model_dump() for outcome in skill.outcomes],
+                            "constraints": [constraint.model_dump() for constraint in skill.constraints],
+                            "tools": [tool.model_dump() for tool in skill.tools],
+                            "evaluators": [evaluator.model_dump() for evaluator in skill.evaluators],
+                            "artifacts": [artifact.model_dump() for artifact in skill.artifacts],
+                        }
+                        for skill in package.skills
+                    ],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                return
+
             from apprentice.wos_handler import list_skills
             skills = await list_skills(self._apprentice)
             await self._send_response(writer, 200, {
@@ -416,6 +581,249 @@ class ApprenticeServer:
             })
         except Exception as e:
             await self._send_response(writer, 500, {"error": str(e)})
+
+    async def _handle_skill_package(self, writer: asyncio.StreamWriter) -> None:
+        """GET /v1/skill-package — Return registered external package metadata."""
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+        await self._send_response(writer, 200, package.model_dump())
+
+    async def _handle_package_registry(self, writer: asyncio.StreamWriter) -> None:
+        """GET /v1/package-registry — Return compact runtime registry metadata."""
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+        from apprentice.package_runtime import package_fingerprint, validate_package_runtime
+
+        diagnostics = validate_package_runtime(package)
+        registry_store = getattr(self._apprentice, "_package_registry_store", None)
+        persisted = registry_store.load() if registry_store is not None else None
+        await self._send_response(writer, 200, {
+            "package_id": package.package_id,
+            "schema_version": package.schema_version,
+            "version": package.version,
+            "fingerprint": package_fingerprint(package),
+            "valid": diagnostics.ok,
+            "diagnostics": [d.model_dump() for d in diagnostics.diagnostics],
+            "persisted": persisted,
+            "compatibility": package.compatibility.model_dump(),
+            "runtime": package.runtime.model_dump(),
+            "skills": [
+                {
+                    "name": skill.name,
+                    "methods": [method.name for method in skill.methods],
+                    "actions": [action.name for action in skill.actions],
+                    "tools": [tool.name for tool in skill.tools if tool.enabled],
+                    "evaluators": [evaluator.name for evaluator in skill.evaluators],
+                    "artifacts": [artifact.name for artifact in skill.artifacts],
+                }
+                for skill in package.skills
+            ],
+            "event_mappings": [mapping.event_type for mapping in package.event_mappings],
+        })
+
+    async def _handle_tools(self, writer: asyncio.StreamWriter) -> None:
+        """GET /v1/tools — List resolved tools from the loaded package."""
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+        await self._send_response(writer, 200, {
+            "tools": [
+                {
+                    "skill": skill.name,
+                    **tool.model_dump(),
+                }
+                for skill in package.skills
+                for tool in package.resolved_tools(skill.name)
+            ]
+        })
+
+    async def _handle_tool_call(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/tools/call — Invoke a supported package tool."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+
+        skill_name = data.get("skill") or data.get("task_name") or ""
+        tool_name = data.get("tool") or ""
+        input_data = data.get("input", {})
+        if not skill_name or not tool_name:
+            await self._send_response(writer, 400, {"error": "skill and tool are required"})
+            return
+
+        check_data = {
+            "skill": skill_name,
+            "input": input_data,
+            "metadata": data.get("metadata", {}),
+            "action": data.get("action", ""),
+            "method": data.get("method", ""),
+        }
+        check = self._package_constraint_check(check_data, package, scope="tool_call")
+        hard_tool_violations = [
+            violation for violation in check["violations"]
+            if violation["kind"] == "hard"
+        ]
+        if hard_tool_violations:
+            await self._send_response(writer, 422, {"status": "blocked", "violations": hard_tool_violations})
+            return
+
+        tool = next((t for t in package.resolved_tools(skill_name) if t.name == tool_name), None)
+        if tool is None:
+            await self._send_response(writer, 404, {"error": f"Tool not found: {tool_name}"})
+            return
+
+        from apprentice.package_runtime import invoke_tool
+
+        result = await invoke_tool(
+            tool,
+            input_data,
+            preflight_client=getattr(self._apprentice, "_tool_preflight_client", None),
+        )
+        await self._send_response(writer, 200, result.model_dump())
+
+    async def _handle_evaluator_run(self, writer: asyncio.StreamWriter, body: str) -> None:
+        """POST /v1/evaluators/run — Run a supported package evaluator."""
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError as e:
+            await self._send_response(writer, 400, {"error": f"Invalid JSON: {e}"})
+            return
+
+        package = getattr(self._apprentice, "_skill_package", None)
+        if package is None:
+            await self._send_response(writer, 404, {"error": "No skill package registered"})
+            return
+
+        skill_name = data.get("skill") or data.get("task_name") or ""
+        evaluator_name = data.get("evaluator") or ""
+        if not skill_name or not evaluator_name:
+            await self._send_response(writer, 400, {"error": "skill and evaluator are required"})
+            return
+        skill = package.skill_for(skill_name)
+        if skill is None:
+            await self._send_response(writer, 404, {"error": f"Skill not found: {skill_name}"})
+            return
+        evaluator = next((e for e in skill.evaluators if e.name == evaluator_name), None)
+        if evaluator is None:
+            await self._send_response(writer, 404, {"error": f"Evaluator not found: {evaluator_name}"})
+            return
+
+        from apprentice.package_runtime import run_evaluator
+
+        result = run_evaluator(evaluator, data.get("candidate"), data.get("reference"))
+        await self._send_response(writer, 200, result.model_dump())
+
+    def _package_constraint_check(self, data: dict[str, Any], package: Any, *, scope: str = "") -> dict[str, Any]:
+        """Validate package method/action references and evaluate safe constraints."""
+        task_name = data.get("task_name") or data.get("skill") or ""
+        method_name = data.get("method")
+        action_name = data.get("action")
+        skill = package.skill_for(task_name)
+        if skill is None:
+            result = package.check_constraints(task_name, action_name=action_name, context={})
+            return result.model_dump()
+
+        if method_name and skill.method_for(method_name) is None:
+            return {
+                "allowed": False,
+                "violations": [{
+                    "name": "unknown_method",
+                    "kind": "hard",
+                    "expression": str(method_name),
+                    "reason": f"method '{method_name}' is not defined for skill '{skill.name}'",
+                }],
+            }
+
+        context = {
+            "input": data.get("input", {}),
+            "metadata": data.get("metadata", {}),
+            "method": method_name or "",
+            "action": action_name or "",
+            "scope": scope,
+            "package": {"id": package.package_id, "version": package.version},
+            "pii": {"enabled": bool(getattr(self._apprentice, "_middleware_pipeline", None))},
+        }
+        result = package.check_constraints(task_name, action_name=action_name, context=context)
+        return result.model_dump()
+
+    def _package_run_metadata(self, data: dict[str, Any], package: Any) -> dict[str, Any]:
+        if package is None:
+            return {}
+        return {
+            "package_id": package.package_id,
+            "method": data.get("method", ""),
+            "action": data.get("action", ""),
+        }
+
+    def _feedback_score(self, feedback_type: str) -> float:
+        scores = {
+            "accept": 1.0,
+            "edit": 0.5,
+            "ai_score": 0.75,
+            "ignore": 0.25,
+            "reject": 0.0,
+        }
+        return scores.get(feedback_type, 0.5)
+
+    def _record_package_feedback(self, task_name: str, score: float) -> None:
+        package = getattr(self._apprentice, "_skill_package", None)
+        state = getattr(self._apprentice, "_package_runtime_state", None)
+        if package is None or state is None or not task_name:
+            return
+        if package.skill_for(task_name) is None:
+            return
+        if hasattr(state, "record_feedback"):
+            state.record_feedback(task_name, score)
+
+    async def _handle_packaged_event(self, data: dict[str, Any], package: Any) -> dict[str, Any]:
+        """Map a host event through the registered skill package."""
+        from apprentice.skill_package import read_path
+        from apprentice.training_data_store import TrainingExample
+
+        event_type = str(data.get("event_type", ""))
+        mapping = package.mapping_for_event(event_type)
+        if mapping is None:
+            return {"status": "accepted", "mapped": False}
+
+        payload = data.get("payload", data)
+        input_data = read_path(data, mapping.input_path)
+        output_data = read_path(data, mapping.output_path) if mapping.output_path else None
+        feedback_data = read_path(data, mapping.feedback_path) if mapping.feedback_path else None
+        subject_id = read_path(data, mapping.subject_path) if mapping.subject_path else data.get("subject_id", "")
+
+        tds = getattr(self._apprentice, "_training_data_store", None)
+        if tds is not None and hasattr(tds, "add_example"):
+            example = TrainingExample(
+                input=json.dumps(input_data if input_data is not None else payload, sort_keys=True),
+                output=json.dumps(output_data if output_data is not None else feedback_data or {}, sort_keys=True),
+                task_type=mapping.skill,
+                timestamp=data.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+                metadata={
+                    "source": "skill_package_event",
+                    "package_id": package.package_id,
+                    "event_type": event_type,
+                    "subject_id": str(subject_id or ""),
+                },
+            )
+            tds.add_example(example)
+
+        return {
+            "status": "accepted",
+            "mapped": True,
+            "package_id": package.package_id,
+            "skill": mapping.skill,
+        }
 
     async def _handle_report(self, writer: asyncio.StreamWriter) -> None:
         try:
@@ -438,7 +846,8 @@ class ApprenticeServer:
         status_text = {
             200: "OK", 400: "Bad Request", 401: "Unauthorized",
             403: "Forbidden", 404: "Not Found", 408: "Timeout",
-            500: "Internal Server Error", 503: "Service Unavailable",
+            422: "Unprocessable Entity", 500: "Internal Server Error",
+            503: "Service Unavailable",
         }
         body_bytes = json.dumps(body).encode("utf-8")
         response = (
@@ -597,10 +1006,11 @@ async def serve_main(
         print(f"  Run:             POST {scheme}://{host}:{port}/v1/run")
         print(f"  Status:          {scheme}://{host}:{port}/v1/status")
         print(f"  Report:          {scheme}://{host}:{port}/v1/report")
-        print(f"  Events (WOS):    POST {scheme}://{host}:{port}/v1/events")
-        print(f"  Feedback (WOS):  POST {scheme}://{host}:{port}/v1/feedback")
-        print(f"  Recommend (WOS): POST {scheme}://{host}:{port}/v1/recommendations")
-        print(f"  Skills (WOS):    GET  {scheme}://{host}:{port}/v1/skills")
+        print(f"  Events:          POST {scheme}://{host}:{port}/v1/events")
+        print(f"  Feedback:        POST {scheme}://{host}:{port}/v1/feedback")
+        print(f"  Recommend:       POST {scheme}://{host}:{port}/v1/recommendations")
+        print(f"  Skills:          GET  {scheme}://{host}:{port}/v1/skills")
+        print(f"  Skill package:   GET  {scheme}://{host}:{port}/v1/skill-package")
         print(f"  Pipeline interval: {pipeline_interval}s")
         print(f"  Security: auth={auth_mode}", end="")
         if tls_cert:

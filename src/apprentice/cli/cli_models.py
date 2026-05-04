@@ -38,6 +38,7 @@ class SubcommandName(Enum):
     init = "init"
     serve = "serve"
     ingest = "ingest"
+    package = "package"
     pii_ingest = "pii-ingest"
     pii_evaluate = "pii-evaluate"
 
@@ -105,6 +106,17 @@ class IngestArgs(BaseModel):
     model_config = ConfigDict(strict=True)
 
 
+class PackageArgs(BaseModel):
+    """Parsed arguments specific to the 'package' subcommand."""
+    action: str
+    path: str
+    overlays: list[str] = Field(default_factory=list)
+    environment: Optional[str] = None
+    compare_to: Optional[str] = None
+
+    model_config = ConfigDict(strict=True)
+
+
 class PIIIngestArgs(BaseModel):
     """Parsed arguments specific to the 'pii-ingest' subcommand."""
     dataset: str = "ai4privacy/pii-masking-200k"
@@ -132,6 +144,7 @@ class ParsedArgs(BaseModel):
     init_args: Optional[InitArgs] = None
     serve_args: Optional[ServeArgs] = None
     ingest_args: Optional['IngestArgs'] = None
+    package_args: Optional[PackageArgs] = None
     pii_ingest_args: Optional[PIIIngestArgs] = None
     pii_evaluate_args: Optional[PIIEvaluateArgs] = None
 

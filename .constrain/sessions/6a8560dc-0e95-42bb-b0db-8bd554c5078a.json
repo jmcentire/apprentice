@@ -1,0 +1,139 @@
+{
+  "id": "6a8560dc-0e95-42bb-b0db-8bd554c5078a",
+  "schema_version": 1,
+  "posture": "contrarian",
+  "phase": "understand",
+  "round": 0,
+  "understand_rounds": 0,
+  "challenge_rounds": 0,
+  "conversation": [],
+  "problem_model": {
+    "system_description": "Apprentice is an adaptive model distillation framework that trains cheap local models on expensive frontier APIs automatically, starting by routing requests to frontier APIs (Claude, GPT), collecting outputs as training data, fine-tuning local models, then progressively shifting traffic while continuously verifying quality to replace $15/M-token APIs with $0 local models",
+    "stakeholders": [
+      "jmcentire (user/developer)",
+      "candidates (TalentSync users)",
+      "hiring managers",
+      "third-party apps",
+      "AI crawlers",
+      "developers making recurring domain-specific API calls",
+      "organizations with high-volume API costs",
+      "users needing quality guarantees and phased rollout"
+    ],
+    "failure_modes": [
+      {
+        "description": "Source-watermark risk in v5 with room_count + amenity_count combinations",
+        "severity": "warning"
+      },
+      {
+        "description": "Kindex rust support is poor",
+        "severity": "warning"
+      },
+      {
+        "description": "Backup index grows unbounded without prune policy",
+        "severity": "warning"
+      },
+      "Quality correlation drops requiring automatic regression to Phase 2",
+      "Budget limits exceeded triggering spend enforcement",
+      "PII detection false positives/negatives affecting data quality",
+      "Local model validation failures blocking promotion to Phase 3"
+    ],
+    "dependencies": [
+      "frontier API",
+      "local fine-tuned model",
+      "SQLite database",
+      "Python runtime",
+      "Reeve system",
+      "WOS (Wander Operating System)",
+      "Exemplar components",
+      "asyncio event loop",
+      "restic backup system",
+      "skill packages (YAML-based)",
+      "package overlays",
+      "ConfidenceEngine",
+      "training data store",
+      "evaluator registry",
+      "anthropic API (Claude)",
+      "OpenAI API",
+      "Ollama backend",
+      "vLLM",
+      "llama.cpp",
+      "HuggingFace",
+      "transformers library",
+      "torch",
+      "datasets",
+      "pydantic",
+      "pyyaml",
+      "httpx",
+      "ai4privacy/pii-masking-200k dataset",
+      "dslim/bert-base-NER model"
+    ],
+    "assumptions": [
+      "Current broad package/runtime work can be stabilized as v1 baseline",
+      "builtin and http tools are safe for direct execution",
+      "Package registry metadata persistence improves startup diagnostics",
+      "Models are commodities, data is the asset",
+      "API calls serve as both results and labeled training examples",
+      "Local models can absorb teacher behavior for specific domains",
+      "Quality correlation can be measured mechanically",
+      "builtin and HTTP tools are safe for direct execution in package runtime"
+    ],
+    "boundaries": [
+      "5 matches/week cap for both candidates and jobs in TalentSync",
+      "Must validate exactly 10 specific AI crawlers",
+      "PII protection requirements",
+      "Do not hard-code Reeve or Wander concepts into generic Apprentice modules",
+      "Do not execute high-risk tool kinds (cli, python, mcp) without permission/preflight adapter",
+      "Keep private host package content outside the Apprentice repo",
+      "Treat current package schema as v1 with migration handling for future changes",
+      "For recurring, domain-specific tasks where frontier models are overkill",
+      "Not for unique creative requests or open-ended brainstorming",
+      "Not for low-volume usage where API costs don't matter",
+      "External skill packages should live outside Apprentice repo",
+      "cli, python, and mcp tool declarations exposed for host-specific executors only"
+    ],
+    "history": [
+      "Reeve v0.5 apprentice integration landed 2026-05-03",
+      "Base 42.9% vs Tense 4% diagnostic from 2026-04-03",
+      "Current SkillPackage support validates and maps events but doesn't invoke methods/tools"
+    ],
+    "success_shape": [
+      "Production-grade and general-purpose without host application dependencies",
+      "Preserve backward compatibility for existing Apprentice and WOS endpoints",
+      "Runtime behavior must be inspectable, auditable, and testable without live vendor credentials",
+      "28-component modular architecture with 21 zero-dependency leaf components",
+      "Three-phase data-driven progression (Cold Start → Reinforcement → Steady State)",
+      "Automatic phase transitions based on correlation thresholds",
+      "Built-in PII detection and tokenization middleware",
+      "External skill package contract system for domain-neutral deployment",
+      "Quality guarantees through measurable correlation scores",
+      "Phased rollout with automatic regression capabilities"
+    ],
+    "acceptance_criteria": [
+      "Robots.txt AI user-agent validation for exactly 10 specific crawlers",
+      "Schema.org structured data extraction from rendered DOM with validation",
+      "Safe Pact in-process parallelism via single asyncio event loop",
+      "Verified quick suite: 2815 passed, 19 skipped",
+      "Base+overlay config launch integration tests",
+      "Package CLI validate/inspect/diff coverage",
+      "Tool preflight blocked/allowed testing",
+      "Evaluator -> confidence update verification",
+      "Three-phase automatic progression with configurable thresholds",
+      "Multi-provider API support (Anthropic, OpenAI, etc.)",
+      "Local model backends (Ollama, vLLM, llama.cpp)",
+      "PII detection modes: regex_only, hybrid, ner_only with ~0.1ms to ~50ms latency",
+      "HTTP server with 14 REST endpoints including /health, /v1/run, /v1/status",
+      "CLI commands: run, serve, status, report, ingest, pii-ingest, pii-evaluate",
+      "Package validation commands: validate, inspect, diff",
+      "2,628 total tests (2,486 unit/integration + 142 smoke tests)",
+      "Budget tracking with monthly limits and alert thresholds",
+      "Multi-task support with independent phase progression per task"
+    ]
+  },
+  "prompt_md": "",
+  "constraints_yaml": "",
+  "trust_policy_yaml": "",
+  "component_map_yaml": "",
+  "schema_hints_yaml": "",
+  "created_at": "2026-05-03T23:58:13.905694+00:00",
+  "updated_at": "2026-05-03T23:59:09.412845+00:00"
+}

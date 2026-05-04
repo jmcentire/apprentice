@@ -1,60 +1,445 @@
-core_models:
-  Story:
-    module: "apprentice.models.story"
-    dependencies: ["pydantic", "typing", "datetime"]
-    purpose: "Multi-step narrative representation with metadata"
-    
-  StoryStep:
-    module: "apprentice.models.story_step"
-    dependencies: ["pydantic", "TrainingExample"]
-    purpose: "Individual step within story journey"
+version: "1.0"
+generated_by: constrain
+session_id: apprentice_distillation_001
 
-collection_layer:
-  StoryCollector:
-    module: "apprentice.collectors.story_collector"
-    dependencies: ["Story", "StoryStep", "Chronicler"]
-    purpose: "Aggregate and process story data from Chronicler"
-    interfaces:
-      - collect_story_events()
-      - validate_story_consistency()
-      - emit_training_examples()
+components:
+  - name: "api_router"
+    description: "orchestrates request routing across phases and models"
+    type: service
+    port: 8080
+    protocol: http
+    data_access:
+      reads: [PUBLIC, PII, FINANCIAL]
+      writes: [PUBLIC]
+      rationale: "routes requests and logs routing decisions"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["frontier_client", "local_model_server", "quality_evaluator"]
+    constraints: ["C001", "C003"]
 
-evaluation_layer:
-  JourneyEvaluator:
-    module: "apprentice.evaluators.journey_evaluator"
-    dependencies: ["Story", "metrics"]
-    purpose: "Analyze journey patterns and efficiency"
-    interfaces:
-      - evaluate_journey_completion()
-      - measure_step_efficiency()
-      - detect_backtracking()
-      - score_consistency()
+  - name: "frontier_client"
+    description: "manages communication with external frontier APIs"
+    type: egress
+    port: null
+    protocol: http
+    data_access:
+      reads: [AUTH, PUBLIC]
+      writes: [PUBLIC]
+      rationale: "accesses API keys and sends requests to external services"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["auth_manager"]
+    constraints: ["C001", "C002"]
 
-orchestration:
-  EnhancedPhaseManager:
-    module: "apprentice.orchestration.phase_manager"
-    dependencies: ["existing PhaseManager", "JourneyEvaluator"]
-    purpose: "Per-journey-type phase transition tracking"
-    extension_points:
-      - journey_type_registration()
-      - phase_transition_callbacks()
-      - journey_specific_metrics()
+  - name: "local_model_server"
+    description: "serves fine-tuned local models"
+    type: service
+    port: 8081
+    protocol: http
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "processes inference requests with local models"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["model_loader"]
+    constraints: []
 
-configuration:
-  StoryLearningConfig:
-    module: "apprentice.config.story_learning"
-    dependencies: ["pydantic", "base config"]
-    purpose: "Story learning feature configuration"
-    fields:
-      - story_learning_enabled: bool = False
-      - max_story_length: int = 50
-      - story_retention_days: int = 30
+  - name: "pii_detector"
+    description: "identifies and protects personally identifiable information"
+    type: service
+    port: 8082
+    protocol: grpc
+    data_access:
+      reads: [PII, PUBLIC]
+      writes: [PII]
+      rationale: "scans content for PII and maintains detection results"
+    authority:
+      domains: ["*.pii.*", "personal.*", "sensitive.*"]
+      rationale: "responsible for identifying and protecting personal data"
+    dependencies: []
+    constraints: ["C002"]
 
-integration_points:
-  existing_atomic_router:
-    modification: "none - preserved as-is"
-    integration: "parallel story collection when enabled"
-    
-  training_orchestrator:
-    modification: "extended to handle Story objects"
-    backward_compatibility: "TrainingExample processing unchanged"
+  - name: "budget_tracker"
+    description: "monitors and enforces API spending limits"
+    type: service
+    port: 8083
+    protocol: grpc
+    data_access:
+      reads: [FINANCIAL, PUBLIC]
+      writes: [FINANCIAL]
+      rationale: "tracks costs and maintains budget state"
+    authority:
+      domains: ["budget.*", "cost.*", "billing.*"]
+      rationale: "authoritative for all financial tracking and limits"
+    dependencies: []
+    constraints: ["C001"]
+
+  - name: "quality_evaluator"
+    description: "computes correlation scores and manages phase transitions"
+    type: service
+    port: 8084
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "analyzes quality metrics and maintains correlation data"
+    authority:
+      domains: ["quality.*", "correlation.*", "metrics.*"]
+      rationale: "authoritative for quality assessment and phase transitions"
+    dependencies: []
+    constraints: ["C003"]
+
+  - name: "training_data_collector"
+    description: "gathers and curates data for model fine-tuning"
+    type: worker
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "collects API responses for training dataset creation"
+    authority:
+      domains: ["training.*", "model_data.*", "dataset.*"]
+      rationale: "manages collection and curation of model training data"
+    dependencies: ["response_processor"]
+    constraints: ["C008"]
+
+  - name: "skill_processor"
+    description: "executes skill packages with tool constraints"
+    type: service
+    port: 8085
+    protocol: grpc
+    data_access:
+      reads: [AUTH, PUBLIC]
+      writes: [PUBLIC]
+      rationale: "executes skills and logs execution results"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["tool_executor", "package_registry"]
+    constraints: ["C004", "C006"]
+
+  - name: "package_registry"
+    description: "stores and validates skill package definitions"
+    type: service
+    port: 8086
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "manages skill package storage and metadata"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["package_validator"]
+    constraints: ["C006"]
+
+  - name: "auth_manager"
+    description: "handles authentication and credential management"
+    type: service
+    port: 8087
+    protocol: grpc
+    data_access:
+      reads: [AUTH]
+      writes: [AUTH]
+      rationale: "manages API keys and authentication tokens"
+    authority:
+      domains: ["*.api_key", "auth.*", "credentials.*"]
+      rationale: "manages all authentication and authorization data"
+    dependencies: []
+    constraints: ["C004"]
+
+  - name: "compliance_monitor"
+    description: "ensures regulatory compliance and audit trails"
+    type: service
+    port: 8088
+    protocol: grpc
+    data_access:
+      reads: [COMPLIANCE, PUBLIC]
+      writes: [COMPLIANCE]
+      rationale: "monitors compliance status and maintains audit logs"
+    authority:
+      domains: ["compliance.*", "regulatory.*", "audit.*"]
+      rationale: "ensures adherence to regulatory requirements"
+    dependencies: ["crawler_validator"]
+    constraints: ["C009", "C010"]
+
+  - name: "phase_manager"
+    description: "coordinates transitions between Cold Start, Reinforcement, and Steady State"
+    type: service
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "manages phase state and transition logic"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["quality_evaluator"]
+    constraints: ["C003"]
+
+  - name: "model_loader"
+    description: "loads and manages fine-tuned model instances"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: []
+      rationale: "accesses trained models for serving"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: []
+
+  - name: "tool_executor"
+    description: "executes tools with security constraints"
+    type: service
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [AUTH, PUBLIC]
+      writes: [PUBLIC]
+      rationale: "executes tools and logs execution attempts"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["preflight_adapter"]
+    constraints: ["C004"]
+
+  - name: "preflight_adapter"
+    description: "validates tool execution permissions before execution"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [AUTH]
+      writes: []
+      rationale: "checks execution permissions for security"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C004"]
+
+  - name: "package_validator"
+    description: "validates skill package syntax and semantics"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: []
+      rationale: "analyzes package structure for validation"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C006"]
+
+  - name: "response_processor"
+    description: "processes and filters API responses for training data"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "filters responses and prepares training samples"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C008"]
+
+  - name: "autosave_manager"
+    description: "manages snapshot storage with cleanup policies"
+    type: worker
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "manages snapshot data and cleanup operations"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["snapshot_store"]
+    constraints: ["C007"]
+
+  - name: "snapshot_store"
+    description: "provides bounded storage for system snapshots"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PUBLIC]
+      writes: [PUBLIC]
+      rationale: "stores and retrieves snapshot data"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C007"]
+
+  - name: "request_preprocessor"
+    description: "preprocesses requests before routing"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [PII, PUBLIC]
+      writes: []
+      rationale: "analyzes requests for PII and other preprocessing"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["pii_detector"]
+    constraints: ["C002"]
+
+  - name: "crawler_validator"
+    description: "validates AI crawler compliance with robots.txt"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [COMPLIANCE]
+      writes: [COMPLIANCE]
+      rationale: "validates crawler behavior for compliance"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C010"]
+
+  - name: "web_scraper"
+    description: "extracts structured data from web pages with compliance"
+    type: service
+    port: 8089
+    protocol: http
+    data_access:
+      reads: [COMPLIANCE, PUBLIC]
+      writes: [PUBLIC]
+      rationale: "scrapes web content while maintaining compliance"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["crawler_validator"]
+    constraints: ["C010"]
+
+  - name: "deployment_manager"
+    description: "manages model deployment with canary controls"
+    type: service
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [COMPLIANCE, PUBLIC]
+      writes: [PUBLIC]
+      rationale: "manages deployment state and canary progression"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: ["canary_controller"]
+    constraints: ["C009"]
+
+  - name: "canary_controller"
+    description: "controls canary deployment soak periods"
+    type: library
+    port: null
+    protocol: grpc
+    data_access:
+      reads: [COMPLIANCE]
+      writes: []
+      rationale: "reads soak configuration for deployment control"
+    authority:
+      domains: []
+      rationale: null
+    dependencies: []
+    constraints: ["C009"]
+
+edges:
+  - from: "api_router"
+    to: "frontier_client"
+    protocol: http
+    description: "routes requests to frontier APIs during Cold Start and Reinforcement phases"
+
+  - from: "api_router"
+    to: "local_model_server"
+    protocol: http
+    description: "routes requests to local models during Reinforcement and Steady State phases"
+
+  - from: "api_router"
+    to: "quality_evaluator"
+    protocol: grpc
+    description: "sends response pairs for correlation scoring"
+
+  - from: "frontier_client"
+    to: "auth_manager"
+    protocol: grpc
+    description: "retrieves API credentials for external service authentication"
+
+  - from: "local_model_server"
+    to: "model_loader"
+    protocol: grpc
+    description: "loads fine-tuned models for inference serving"
+
+  - from: "training_data_collector"
+    to: "response_processor"
+    protocol: grpc
+    description: "processes API responses into training samples"
+
+  - from: "skill_processor"
+    to: "tool_executor"
+    protocol: grpc
+    description: "executes tools defined in skill packages"
+
+  - from: "skill_processor"
+    to: "package_registry"
+    protocol: grpc
+    description: "retrieves validated skill package definitions"
+
+  - from: "package_registry"
+    to: "package_validator"
+    protocol: grpc
+    description: "validates packages before storage"
+
+  - from: "tool_executor"
+    to: "preflight_adapter"
+    protocol: grpc
+    description: "checks execution permissions before tool invocation"
+
+  - from: "phase_manager"
+    to: "quality_evaluator"
+    protocol: grpc
+    description: "retrieves correlation scores for phase transition decisions"
+
+  - from: "autosave_manager"
+    to: "snapshot_store"
+    protocol: grpc
+    description: "stores and manages system snapshots with cleanup"
+
+  - from: "request_preprocessor"
+    to: "pii_detector"
+    protocol: grpc
+    description: "scans requests for PII before processing"
+
+  - from: "compliance_monitor"
+    to: "crawler_validator"
+    protocol: grpc
+    description: "validates crawler compliance for audit trails"
+
+  - from: "web_scraper"
+    to: "crawler_validator"
+    protocol: grpc
+    description: "ensures compliant crawling behavior"
+
+  - from: "deployment_manager"
+    to: "canary_controller"
+    protocol: grpc
+    description: "controls canary deployment soak periods"
