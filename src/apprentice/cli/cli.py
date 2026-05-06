@@ -21,6 +21,14 @@ from typing import Any, Optional
 import yaml
 
 try:
+    from ..apprentice_class import RunStatus
+except ImportError:
+    try:
+        from apprentice.apprentice_class import RunStatus
+    except ImportError:
+        RunStatus = None  # type: ignore[assignment,misc]
+
+try:
     from .cli_models import (
         ApprenticeConfig,
         BudgetInfo,
@@ -465,11 +473,16 @@ async def execute_run(apprentice: Any, run_args: RunArgs) -> RunResult:
         response = await apprentice.run(run_args.task_name, input_data.data)
 
         # Wrap in RunResult
+        is_ok = (
+            response.status == RunStatus.success
+            if RunStatus is not None
+            else response.status.value == "success"
+        )
         return RunResult(
             task_name=run_args.task_name,
             output=response.output,
-            success=response.success,
-            error_message="",
+            success=is_ok,
+            error_message="" if is_ok else str(response.status.value),
         )
     except Exception as e:
         # Return error result
@@ -533,19 +546,23 @@ async def execute_report(
     if inspect.isawaitable(raw_report):
         raw_report = await raw_report
 
-    # Convert tasks
+    # Convert tasks (raw_report is SystemReport; entries are ConfidenceSnapshot)
     tasks = []
-    for entry in raw_report.tasks:
+    for entry in raw_report.task_snapshots:
+        phase_value = entry.phase.value if hasattr(entry.phase, "value") else str(entry.phase)
+        is_local = phase_value in ("supervised", "autonomous")
         phase = PhaseInfo(
-            phase_name=entry.phase.phase_name,
-            confidence_score=entry.phase.confidence_score,
-            is_local_primary=entry.phase.is_local_primary,
+            phase_name=phase_value,
+            confidence_score=entry.confidence_score,
+            is_local_primary=is_local,
         )
+        budget_used = entry.budget_used_usd
+        budget_remaining = entry.budget_remaining_usd
         budget = BudgetInfo(
-            budget_limit=entry.budget.budget_limit,
-            budget_spent=entry.budget.budget_spent,
-            budget_remaining=entry.budget.budget_remaining,
-            is_exhausted=entry.budget.is_exhausted,
+            budget_limit=budget_used + budget_remaining,
+            budget_spent=budget_used,
+            budget_remaining=budget_remaining,
+            is_exhausted=entry.budget_exhausted,
         )
         task_entry = TaskStatusEntry(
             task_name=entry.task_name,
@@ -556,9 +573,9 @@ async def execute_report(
 
     result = ReportResult(
         tasks=tasks,
-        total_budget_limit=raw_report.total_budget_limit,
-        total_budget_spent=raw_report.total_budget_spent,
-        system_uptime_seconds=raw_report.system_uptime_seconds,
+        total_budget_limit=raw_report.global_budget_used_usd + raw_report.global_budget_remaining_usd,
+        total_budget_spent=raw_report.global_budget_used_usd,
+        system_uptime_seconds=raw_report.uptime_seconds,
         timestamp=datetime.now(timezone.utc).isoformat(),
         config_path=config_path,
         written_to_file="",
