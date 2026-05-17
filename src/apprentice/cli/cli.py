@@ -473,16 +473,23 @@ async def execute_run(apprentice: Any, run_args: RunArgs) -> RunResult:
         response = await apprentice.run(run_args.task_name, input_data.data)
 
         # Wrap in RunResult
-        is_ok = (
-            response.status == RunStatus.success
-            if RunStatus is not None
-            else response.status.value == "success"
-        )
+        legacy_success = getattr(response, "success", None)
+        if isinstance(legacy_success, bool):
+            is_ok = legacy_success
+            status_value = "success" if is_ok else "error"
+        else:
+            status = getattr(response, "status", None)
+            status_value = getattr(status, "value", str(status))
+            is_ok = (
+                status == RunStatus.success
+                if RunStatus is not None
+                else status_value == "success"
+            )
         return RunResult(
             task_name=run_args.task_name,
             output=response.output,
             success=is_ok,
-            error_message="" if is_ok else str(response.status.value),
+            error_message="" if is_ok else str(status_value),
         )
     except Exception as e:
         # Return error result
@@ -546,23 +553,42 @@ async def execute_report(
     if inspect.isawaitable(raw_report):
         raw_report = await raw_report
 
-    # Convert tasks (raw_report is SystemReport; entries are ConfidenceSnapshot)
+    # Convert tasks. Current SystemReport exposes task_snapshots; older tests
+    # and integrations may still provide tasks with nested phase/budget objects.
+    entries = getattr(raw_report, "task_snapshots", None)
+    if not isinstance(entries, list) or not entries:
+        entries = getattr(raw_report, "tasks", [])
+
     tasks = []
-    for entry in raw_report.task_snapshots:
-        phase_value = entry.phase.value if hasattr(entry.phase, "value") else str(entry.phase)
+    for entry in entries:
+        if hasattr(entry.phase, "phase_name"):
+            phase_value = entry.phase.phase_name
+        else:
+            phase_value = entry.phase.value if hasattr(entry.phase, "value") else str(entry.phase)
         is_local = phase_value in ("supervised", "autonomous")
         phase = PhaseInfo(
             phase_name=phase_value,
-            confidence_score=entry.confidence_score,
-            is_local_primary=is_local,
+            confidence_score=getattr(entry, "confidence_score", getattr(entry.phase, "confidence_score", 0.0)),
+            is_local_primary=getattr(entry.phase, "is_local_primary", is_local),
         )
-        budget_used = entry.budget_used_usd
-        budget_remaining = entry.budget_remaining_usd
+        budget_obj = getattr(entry, "budget", None)
+        if budget_obj is not None:
+            budget_used = getattr(budget_obj, "budget_spent", 0.0)
+            budget_remaining = getattr(budget_obj, "budget_remaining", 0.0)
+            budget_limit = getattr(budget_obj, "budget_limit", budget_used + budget_remaining)
+            budget_exhausted = getattr(budget_obj, "is_exhausted", False)
+        else:
+            budget_used = getattr(entry, "budget_used_usd", 0.0)
+            budget_remaining = getattr(entry, "budget_remaining_usd", 0.0)
+            budget_limit = budget_used + budget_remaining
+            budget_exhausted = getattr(entry, "budget_exhausted", False)
+        if not isinstance(budget_exhausted, bool):
+            budget_exhausted = False
         budget = BudgetInfo(
-            budget_limit=budget_used + budget_remaining,
+            budget_limit=budget_limit,
             budget_spent=budget_used,
             budget_remaining=budget_remaining,
-            is_exhausted=entry.budget_exhausted,
+            is_exhausted=budget_exhausted,
         )
         task_entry = TaskStatusEntry(
             task_name=entry.task_name,
@@ -571,11 +597,18 @@ async def execute_report(
         )
         tasks.append(task_entry)
 
+    if hasattr(raw_report, "total_budget_limit"):
+        total_budget_limit = raw_report.total_budget_limit
+    else:
+        total_budget_limit = raw_report.global_budget_used_usd + raw_report.global_budget_remaining_usd
+    total_budget_spent = getattr(raw_report, "total_budget_spent", getattr(raw_report, "global_budget_used_usd", 0.0))
+    system_uptime_seconds = getattr(raw_report, "system_uptime_seconds", getattr(raw_report, "uptime_seconds", 0.0))
+
     result = ReportResult(
         tasks=tasks,
-        total_budget_limit=raw_report.global_budget_used_usd + raw_report.global_budget_remaining_usd,
-        total_budget_spent=raw_report.global_budget_used_usd,
-        system_uptime_seconds=raw_report.uptime_seconds,
+        total_budget_limit=total_budget_limit,
+        total_budget_spent=total_budget_spent,
+        system_uptime_seconds=system_uptime_seconds,
         timestamp=datetime.now(timezone.utc).isoformat(),
         config_path=config_path,
         written_to_file="",
