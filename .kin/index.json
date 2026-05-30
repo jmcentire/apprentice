@@ -1,0 +1,5941 @@
+{
+  "domains": [
+    "code",
+    "python"
+  ],
+  "node_count": 539,
+  "nodes": [
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-0a44add2cd47",
+      "title": "src/apprentice/local_model_server.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-0e7125609223",
+      "title": "src/apprentice/config_and_registry.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-1698980bbd1a",
+      "title": "src/apprentice/kubernetes_lora_backend.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-1f9cceef3863",
+      "title": "src/apprentice/phase_manager.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-2818110a5e2c",
+      "title": "docker/trainer/train.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-2b60fdaaa17c",
+      "title": "src/apprentice/apprentice_class.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-2bf9d68f63ad",
+      "title": "src/apprentice/fine_tuning_orchestrator.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-2ddb51ce83da",
+      "title": "src/apprentice/model_validator.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-302d93954718",
+      "title": "src/apprentice/data_models.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-33517cccbba1",
+      "title": "examples/wos_client.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-4174c65f149a",
+      "title": "src/apprentice/phase_tracking.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-47cb5b732738",
+      "title": "src/apprentice/report_generator/core.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-49890ffd0587",
+      "title": "src/apprentice/training_data_store.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-594207c53b32",
+      "title": "src/apprentice/wos_models.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-5aeba9d79e32",
+      "title": "src/apprentice/remote_api_client.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-679f57c4c4db",
+      "title": "src/apprentice/task_registry.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-687320155f0f",
+      "title": "src/apprentice/budget_manager.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-72afa61c9f97",
+      "title": "src/apprentice/root/__init__.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-778f4e5a0cd4",
+      "title": "src/apprentice/report_generator/exceptions.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-7906e1efa075",
+      "title": "src/apprentice/audit_log.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-7d6467b32525",
+      "title": "src/apprentice/cli/cli.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-7fa8b703f13e",
+      "title": "src/apprentice/plugin_registry.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-8cb1418b8ce0",
+      "title": "src/apprentice/skill_package.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-9020541c2233",
+      "title": "src/apprentice/cli/init_wizard.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-90f3611e37ae",
+      "title": "src/apprentice/report_generator/report_generator.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-91d05597a213",
+      "title": "src/apprentice/config_loader.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-921fa79fbb5d",
+      "title": "src/apprentice/cli/serve.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-99af4df423f2",
+      "title": "src/apprentice/feedback_collector.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-9f54b8fd07aa",
+      "title": "src/apprentice/unified_interface.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-a2fa0f4c007f",
+      "title": "src/apprentice/cli/cli_models.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-a3d269d5aae8",
+      "title": "src/apprentice/audit_log_adapter.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-a900b12b40af",
+      "title": "src/apprentice/confidence_engine.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-ad0541b8a96a",
+      "title": "src/apprentice/sampling_scheduler.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-af535fde5695",
+      "title": "src/apprentice/__init__.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-b5da1f71cb29",
+      "title": "src/apprentice/middleware.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-b5f70562b149",
+      "title": "src/apprentice/pii_detection.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-b627511984c7",
+      "title": "src/apprentice/pii_tokenizer.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-bbfebc12095e",
+      "title": "src/apprentice/report_generator/models.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-bce9535eb9ab",
+      "title": "src/apprentice/root/composition.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-c0e74683670f",
+      "title": "src/apprentice/package_runtime.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-c977facfc7be",
+      "title": "src/apprentice/journey_evaluator.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-cf878b8f317c",
+      "title": "src/apprentice/evaluators.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-d129ec7b3fe6",
+      "title": "src/apprentice/router.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-d1f56cbb4596",
+      "title": "src/apprentice/reporting.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-d9632c802373",
+      "title": "src/apprentice/external_interfaces.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-db3d0c1a6fce",
+      "title": "src/apprentice/training_pipeline.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-dd5d89009dab",
+      "title": "src/apprentice/rolling_window.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-e250f0d85893",
+      "title": "src/apprentice/factory.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-e8d0a78f189b",
+      "title": "src/apprentice/story_learner.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-ec2a8da1caa1",
+      "title": "src/apprentice/event_handler.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-ef80e4db7287",
+      "title": "src/apprentice/wos_handler.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-f56c09bf9856",
+      "title": "src/apprentice/pii_evaluation.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-mod-apprentice-ffd91da06870",
+      "title": "src/apprentice/observer.py",
+      "type": "artifact",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0052752c7470",
+      "title": "ConfigParseError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-00955f35f232",
+      "title": "BaseClientConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-017716b1bd09",
+      "title": "ConfidenceEngine",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-01820b96b54c",
+      "title": "ExactMatchResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-029aea655dc7",
+      "title": "RecommendResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-02b8cda2b167",
+      "title": "BudgetEnforcementConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-02ffd4562192",
+      "title": "Observer",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-03d1c2bf4c9a",
+      "title": "TrainingDataStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-054f45358d09",
+      "title": "TrainingExampleType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-06a5682b61b8",
+      "title": "AlertType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-07e2b98f82e5",
+      "title": "EvaluatorRunResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0990e83f6fa3",
+      "title": "AnthropicClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-09abc8002a4e",
+      "title": "SubcommandName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0a2b0b09c17b",
+      "title": "JsonLinesAuditLogger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0a5a43caafb7",
+      "title": "AuditEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0b2afe61b3c6",
+      "title": "ConfidenceEngine",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0b7adcddcfd0",
+      "title": "ArtifactSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0c7d6dff15ca",
+      "title": "KubernetesLoRAOrchestratorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0ccd87e116b8",
+      "title": "BudgetState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0ce3b2ff65f0",
+      "title": "SplitName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0f592853d09e",
+      "title": "WOSEvent",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0f8fce43fc85",
+      "title": "PluginEntryConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-0ff066a3771e",
+      "title": "PackageRegistryStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1037e30b4324",
+      "title": "BudgetSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-109ed9bbd35d",
+      "title": "MessageRole",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1146d58607f4",
+      "title": "TaskConfidenceReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-116fae85271c",
+      "title": "PIIConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-118093fca7d0",
+      "title": "TrainingExample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-12bb73991f48",
+      "title": "TaskRegistry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-12da83323923",
+      "title": "WindowAggregate",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-12dac1a0e790",
+      "title": "EventType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-137554362c9f",
+      "title": "ExportedState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1399284bfac1",
+      "title": "RoutingResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-13d3cef376c6",
+      "title": "ReportConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1685f5d08e13",
+      "title": "BudgetConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1738fd71da32",
+      "title": "Message",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-176db411e310",
+      "title": "CustomEvalResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1791ab5c6629",
+      "title": "BudgetConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-17ba7228b91f",
+      "title": "Step",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-17fb3330f13d",
+      "title": "ThresholdComparison",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-18e54562cb38",
+      "title": "ReportGenerator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-192ed3d8bd55",
+      "title": "AllowBuiltinToolPreflightClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1a2fafff20a3",
+      "title": "PipelineStepName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1a7b73d603ee",
+      "title": "Phase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1b5c3962a21b",
+      "title": "ConstraintCheckResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1bb6e75c2c8f",
+      "title": "RecommendRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1bb7790bf47f",
+      "title": "ApprenticeConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1bbf74ee8835",
+      "title": "DriftShiftStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1bc977dc54c4",
+      "title": "MiddlewareContext",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1e08368cbe7a",
+      "title": "BudgetError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1eba5b2c0c22",
+      "title": "EventType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1f1c402b864e",
+      "title": "WebhookDelivery",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1f280475e2a1",
+      "title": "StoryMetricsStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1f5afd7b10f5",
+      "title": "TrendDirection",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-1fe81f0471af",
+      "title": "SavingsTracker",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-205de453a6ab",
+      "title": "CompatibilitySpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-21013ff39348",
+      "title": "ApprenticeStoryLearner",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-216210e00d9d",
+      "title": "PipelineSuccess",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-21aaadb6b4e1",
+      "title": "CommandRunner",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2250fa629391",
+      "title": "RemoteClientConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-238079747864",
+      "title": "PhaseTransition",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2388cd096cd3",
+      "title": "BudgetInfo",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-252dbbaa4788",
+      "title": "RoutingAction",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-25867fd21bea",
+      "title": "UnavailableReason",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-25b9ce015483",
+      "title": "Story",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-25d9d556203c",
+      "title": "RequestCorrelation",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-25fe10311538",
+      "title": "RemoteAdapterConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-281f697001fc",
+      "title": "TaskFieldSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-282fa07acc28",
+      "title": "RemoteUnavailableError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-28e317b3bef5",
+      "title": "EvaluatorTypeName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-29169cd6501c",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-29d005e51098",
+      "title": "PackageArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2b56c0e1a8b1",
+      "title": "RunResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2baf16d0ed1b",
+      "title": "PackageValidationReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2bffa89e7961",
+      "title": "ValidationError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2d4b84405910",
+      "title": "RoutingDecision",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2d6251043c69",
+      "title": "CorrelationHistory",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2da52d120ca7",
+      "title": "MiddlewareEntryConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2dca87d1880a",
+      "title": "OutputFormat",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2dfa6cdd354f",
+      "title": "TrainingExample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2dffb4b84955",
+      "title": "RequestRouter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2edae8522463",
+      "title": "GlobalFlags",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2f3c451f27da",
+      "title": "TokenPricing",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-2f904b46c6d2",
+      "title": "QuantizationType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-30f13d064cc3",
+      "title": "TaskPhaseState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-30f691eb5f9e",
+      "title": "OllamaRegistration",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-31238733194f",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3152f3f3068c",
+      "title": "FeedbackSignalSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-31609e1f28be",
+      "title": "ConfidenceThresholds",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3228a47ce933",
+      "title": "EvaluatorType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3252dd4c3e6c",
+      "title": "LogLevel",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3287f35dc25d",
+      "title": "BudgetManager",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-32b9259abbbe",
+      "title": "ExitCode",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-32c1a3269918",
+      "title": "DeliveryResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-33939f79dc0f",
+      "title": "ActionSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-33a41f115b3f",
+      "title": "ConfigFileNotFoundError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3473fb60bdc0",
+      "title": "ComparisonPair",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-35da23c435b7",
+      "title": "ComponentStatusEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3619a577f48a",
+      "title": "PhaseInfo",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3660e16f3d4c",
+      "title": "TaskConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-36637edc4245",
+      "title": "RemoteClientError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-36d0788b3256",
+      "title": "JSONFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-370f778d5b34",
+      "title": "ConfidenceThresholds",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3744945d97ec",
+      "title": "TaskPhaseStateMap",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3754794d8a6a",
+      "title": "PeriodType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-37a1eb566f1e",
+      "title": "DeliveryStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-39bf8ac3f2c5",
+      "title": "TaskRegistryProtocol",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-39c3086e4000",
+      "title": "ReportFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3a21c5da5d82",
+      "title": "LocalModelUnavailable",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3a7787fcfec1",
+      "title": "FeedbackType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3b54c74322ba",
+      "title": "PhaseManager",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3b691d01dec7",
+      "title": "RouterTrainingAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3bac50e4ae72",
+      "title": "TestSample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3bb3a00b8546",
+      "title": "TrainingDataStoreConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3c1a44c9510b",
+      "title": "WOSEventType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3c4cd175f7ce",
+      "title": "LocalModelAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3c6f10e1efdb",
+      "title": "InputData",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3cf284e686d8",
+      "title": "PipelineFailure",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3d45a761f68e",
+      "title": "ApprenticeServer",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3e22697d494a",
+      "title": "JsonFileWindowStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3e4db604c1ca",
+      "title": "SourceInfo",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-3eda52a0a4e6",
+      "title": "LearnedPatternStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-403f24c961e2",
+      "title": "DenialReason",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-40f21272e4f8",
+      "title": "ConfidenceEngineConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-41bd38128171",
+      "title": "RemoteModelBackend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-41de3b187a11",
+      "title": "SkillInfo",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-42230c0357ac",
+      "title": "ConfigValidationError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4287dac130f6",
+      "title": "TrainingPipeline",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-435caae2fed3",
+      "title": "TokenUsage",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-43a24fc5a7ce",
+      "title": "ConfidenceSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4440ba039f76",
+      "title": "LogLevel",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-451391f1ce68",
+      "title": "ProviderName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-469d95b4c761",
+      "title": "ProcessingResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-46fc2a3ba228",
+      "title": "PhaseLabel",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-475f20b819b7",
+      "title": "OllamaClientConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-47e640b1e2dc",
+      "title": "InferenceSuccess",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4873042120ee",
+      "title": "InvocationSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4907659c592a",
+      "title": "InitArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-49b6368a2950",
+      "title": "ComparisonPairInput",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-49ca55ec0d1e",
+      "title": "TrendDirection",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4a7fcc5b33cd",
+      "title": "ResponseMetadata",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4ae2d5ceee67",
+      "title": "TaskResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4ba2c0bdf563",
+      "title": "RouterConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4bbb5b609cf7",
+      "title": "PromptMessage",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4bd096f2f039",
+      "title": "ConfigValidationError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4d62e8b44290",
+      "title": "ResponseMetadata",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4e0b8ee0ac6f",
+      "title": "FeedbackRecord",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4e4bcdd435e4",
+      "title": "PhaseComputationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4e775377d379",
+      "title": "RoutingDecision",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-4f900fb9a6c9",
+      "title": "PhaseComputationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-505f6790b4ab",
+      "title": "SamplingSchedulerConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-50668ace6850",
+      "title": "DuplicatePluginError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5117d87bea5e",
+      "title": "_get_global_manager.SystemClock",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-511dc840eddb",
+      "title": "PromotionResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-515c25946f55",
+      "title": "ToolPreflightResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5160652faa5d",
+      "title": "StatusResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-51d30639b8ca",
+      "title": "HealthReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-522cf079a72b",
+      "title": "BudgetState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-52826499577a",
+      "title": "EvaluatorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-52f9571b95d5",
+      "title": "EventResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-53d498396397",
+      "title": "PluginConfigError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-53f89a74212e",
+      "title": "SourceUnavailableError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-53fcb8c4a476",
+      "title": "InvalidRequestError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-548e78fbb0f3",
+      "title": "ConfidenceEngine",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-54a48f4345e7",
+      "title": "TrainingExample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-54c1688565f5",
+      "title": "CompletionRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-559f89ea592e",
+      "title": "CredentialResolution",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-583a9b73e482",
+      "title": "ErrorInfo",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-588d249a6949",
+      "title": "SystemReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-592fd9973445",
+      "title": "ConfidenceSnapshotEnrichedMap",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5951023f634e",
+      "title": "AlertSeverity",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5987c09cf27e",
+      "title": "RuntimeBindingSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-59cc03a1a6d6",
+      "title": "SkillPackageRefConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5a821ca27360",
+      "title": "FineTuneError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5a8caff7c6b8",
+      "title": "PersistenceError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5a90ec2f6722",
+      "title": "ModelVersion",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5a90f557eac7",
+      "title": "BudgetExhaustedError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5ade6e1df813",
+      "title": "SamplingPhase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5b9199492bae",
+      "title": "StoryStep",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5d6180056bca",
+      "title": "ApprenticeConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5db84766697d",
+      "title": "RateLimitError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5dff024d186c",
+      "title": "FieldEvaluation",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5e43f8c09308",
+      "title": "KubernetesLoRABackend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5e9826a02974",
+      "title": "ModelSource",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5ea6e90a3f1d",
+      "title": "CorrelationWindow",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-5eaaf4cfa4b8",
+      "title": "DataSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-60c376ec4e9d",
+      "title": "RouterConfidenceAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-611ffd19ff36",
+      "title": "BudgetPeriodUnit",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6147c6a85b96",
+      "title": "SemanticSimilarityResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-61c44acb7e99",
+      "title": "PeriodSpend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-61ed476d61c0",
+      "title": "ApprenticeError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-62a4f5006de6",
+      "title": "AuditLogger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-62b5bf21de9c",
+      "title": "EvaluatorType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-62b67f726b00",
+      "title": "CompletionResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-62ffddb9ac91",
+      "title": "BudgetAuthorizationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-631432820380",
+      "title": "FeedbackEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-632156bc17c6",
+      "title": "PipelineConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-636bea536eea",
+      "title": "PackageDiagnostic",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-636c0a4eada3",
+      "title": "JsonFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-644b846ee404",
+      "title": "PeriodSummary",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-64d483b85e3a",
+      "title": "ModelValidator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6693abf88ba3",
+      "title": "PeriodLimit",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-66cbfc07aba2",
+      "title": "AuditEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-687107ce0745",
+      "title": "TimeoutConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6879432b5ee0",
+      "title": "FinetuningBackendName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6a1834a340cc",
+      "title": "PhaseThresholds",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6b512dd031b1",
+      "title": "Clock",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6b7667254f0f",
+      "title": "ComponentId",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6b925b0f121a",
+      "title": "PipelineStepRecord",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6bc30670b9f2",
+      "title": "UnavailableReason",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6c87a91539f5",
+      "title": "ConfigError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6d1ee7b52a58",
+      "title": "TaskRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6d41b578aa45",
+      "title": "EventType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6d4714d3414c",
+      "title": "ApprenticeConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6dedc69e8195",
+      "title": "OrchestratorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6e18c5fe3d67",
+      "title": "ComparisonPair",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6f291420055a",
+      "title": "OpenAIBackendConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-6fd13b388efb",
+      "title": "ConstraintSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7050655a9637",
+      "title": "PhaseMetrics",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-706b587e1d66",
+      "title": "PipelineStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-710af128df4c",
+      "title": "LocalBackendType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7132a0c9a123",
+      "title": "ObserverConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-71594400434a",
+      "title": "RunStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-725e8ea3677d",
+      "title": "TestSet",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-728182efed48",
+      "title": "LearningStateError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-728f72d01213",
+      "title": "PIIDetectionEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-73a222c32f29",
+      "title": "ValidationErrorDetail",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-73f20d6525f9",
+      "title": "PhaseMetrics",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-741c2130507b",
+      "title": "AuditConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7444f5e506e8",
+      "title": "LlamaCppClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-747c136cc464",
+      "title": "AddExampleOutput",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-757e883f9d64",
+      "title": "AdaptiveSamplingScheduler",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-764b1358c4e4",
+      "title": "SamplingDecision",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-778f2a43df0c",
+      "title": "FuzzyMatchResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-78b8c8a02fc8",
+      "title": "ExactMatchEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-78e342bad5e0",
+      "title": "DiversityResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-79112d4c05c1",
+      "title": "PIIEvaluationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7bf230b234eb",
+      "title": "LocalModelConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7c002f4ba77f",
+      "title": "AuditLogger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7d32d338e6eb",
+      "title": "DequeRollingWindow",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7d9f7e248228",
+      "title": "SubcommandName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7da358622aaa",
+      "title": "FormattedReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7e1cb5d6a139",
+      "title": "TaskResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7e766569c924",
+      "title": "AuditDataSource",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7ec1c4233e12",
+      "title": "DataSourceError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7ecc71f31ff3",
+      "title": "BudgetStateCorruptedError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-7f0c4096ad31",
+      "title": "EnvVarNotFoundError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8008c8d921ae",
+      "title": "PhaseLabel",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8031f32be9e2",
+      "title": "DualSendOutcome",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-81cc5b2105da",
+      "title": "FeedbackSummary",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-81db573e5d1a",
+      "title": "ObservationEvent",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-82a273309016",
+      "title": "UnslothBackendConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-82f232151680",
+      "title": "FeedbackCollector",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-839d71ca4653",
+      "title": "TaskRegistry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-83d0ec9b127e",
+      "title": "TaskResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-84df39a1c8c4",
+      "title": "SecurityConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-854586bac930",
+      "title": "StoryCollector",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-85bf5cf3d577",
+      "title": "SamplingScheduler",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-86a8cdb85c59",
+      "title": "MiddlewareResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-87095b604092",
+      "title": "TaskRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-87288dc308fd",
+      "title": "Weights",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-875af9ecac9f",
+      "title": "EvaluationOutcome",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8782ce1b0e09",
+      "title": "CompositeDetectionPipeline",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-88ca8a5da63c",
+      "title": "RouterLocalAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-88e7b6d6a4d3",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-892f600a6388",
+      "title": "PricingTable",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-89e94aedfa10",
+      "title": "FineTuneRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8a4e88b682d9",
+      "title": "FeedbackType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8a5d4de5295c",
+      "title": "StoryStep",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8a7a4d0675a8",
+      "title": "GGUFArtifact",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8b197ad2790b",
+      "title": "JourneyEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8b40c753a8fa",
+      "title": "AuditConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8b41c11f7496",
+      "title": "JsonLinesAuditLogger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8bf6e17d9c23",
+      "title": "PhaseContext",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8c4965f3382d",
+      "title": "FunctionEvaluatorAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8caa4631ab89",
+      "title": "CostBreakdown",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8d387f6a412f",
+      "title": "DecayFunctionParams",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8d6189681c62",
+      "title": "ModelVersion",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8ea685645235",
+      "title": "Phase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8ed426b2d6e0",
+      "title": "HealthStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8ff0332174af",
+      "title": "UnifiedTokenUsage",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8ff35e1c27d0",
+      "title": "VLLMClientConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-8ffbb99f9d53",
+      "title": "EvaluationScore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-90d68cf5ca50",
+      "title": "TaskConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-90e5dfd17392",
+      "title": "HyperparameterOverrides",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-90f1d655925f",
+      "title": "FinetuningConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-911078fb2a31",
+      "title": "TerminalError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-928023b0c9de",
+      "title": "TrainArtifact",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-93665802ae17",
+      "title": "SystemReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-93ecd5210ccc",
+      "title": "EntityMetrics",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-94060390f38f",
+      "title": "ComponentStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-94d0ca18d31c",
+      "title": "DualSendResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-95dce4eccce8",
+      "title": "BudgetManager",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-95deecb4c2fc",
+      "title": "MiddlewarePipeline",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-962e6c58f3aa",
+      "title": "Middleware",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-96ebf4a7443c",
+      "title": "TaskStatusEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-970d0cc4d9bf",
+      "title": "TaskNotFoundError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9759e48c47c5",
+      "title": "TaskResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-97c3f293355c",
+      "title": "FinetuningBackendName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-97d6d5170c76",
+      "title": "PromotionReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-98930e20788c",
+      "title": "ConstraintViolation",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-98c63ca32a6b",
+      "title": "PipelineTriggerPolicy",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-99adebe04b73",
+      "title": "LocalNoOpOrchestratorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9ab08d72e5ef",
+      "title": "PluginRegistrySet",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9b0bdd747c57",
+      "title": "PipelineStepStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9bc8254f40c1",
+      "title": "RunArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9c3a893bfd00",
+      "title": "EvaluationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9cdf1864bcd3",
+      "title": "MetricEvent",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9d031e321a28",
+      "title": "PIITokenizerConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9d608fdf05b0",
+      "title": "Apprentice",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9ddf26c9c2ec",
+      "title": "CostTrajectoryPoint",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9dee6fa10312",
+      "title": "MiddlewareError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9e4b767dd156",
+      "title": "ObserverConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9ea61c5c45e1",
+      "title": "RetriableError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9ebe06fb2e38",
+      "title": "LocalNoOpBackend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9ed747ed9d2e",
+      "title": "ConfidenceDataSource",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9edc9921a451",
+      "title": "EvaluatorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9f03cb5fe5ef",
+      "title": "LearningSummary",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-9feda4a0872c",
+      "title": "WindowStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a038a04b6626",
+      "title": "TrainingMetrics",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a1066cbd8043",
+      "title": "ParameterSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a1345a5a251d",
+      "title": "BackendRegistry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a1c22781f5c1",
+      "title": "TrainingExample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a2f09cdca4e6",
+      "title": "EventDispatcher",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a302728cf893",
+      "title": "SkillPackage",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a34d2d0e39ed",
+      "title": "LLMJudgeEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a4a4fb554963",
+      "title": "TransitionTrigger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a5255184f43a",
+      "title": "ConfidenceThresholds",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a7c0e2961c86",
+      "title": "ErrorKind",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a8203f5dbf19",
+      "title": "PromotionRecord",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a8a9a15dce84",
+      "title": "UnknownPluginError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a8d2e0b1841b",
+      "title": "NERDetectionStrategy",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a8eae2ebdcb9",
+      "title": "TaskConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-a9bca4d3aaf8",
+      "title": "FineTuneBackend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-aab00d9d5301",
+      "title": "ProviderConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-aad946f77a7c",
+      "title": "ExampleCount",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ab67aa43f52e",
+      "title": "PIIDetection",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ab843d6844ca",
+      "title": "LocalAdapterConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ad0effd1d6de",
+      "title": "Phase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ad3fbc2a8140",
+      "title": "FineTuneErrorCategory",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-adbf3c348485",
+      "title": "TrainingDataCollector",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b0f5893be3fe",
+      "title": "ReportResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b1bef74ff18d",
+      "title": "ServeArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b24d9f7a9af4",
+      "title": "AllSourcesUnavailableError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b2c94b0e8294",
+      "title": "ValidationConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b39a87004f47",
+      "title": "PromotionDecision",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b3e29291aa9d",
+      "title": "ValidationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b422a8210014",
+      "title": "CommandResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b43b2ae2777e",
+      "title": "EventHandlerConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b4469870a778",
+      "title": "StoryTrainingExample",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b4c4a061f3df",
+      "title": "Phase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b647e4598918",
+      "title": "LocalModelUnavailableError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b7b853da0cd6",
+      "title": "RegexDetectionStrategy",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b7cdb59274ad",
+      "title": "PhaseTracker",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b7d3c197f611",
+      "title": "Story",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b80d96588eea",
+      "title": "LifecycleEvent",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-b92524d7ef57",
+      "title": "PIIEvaluateArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ba09138e9ebc",
+      "title": "BudgetExhaustedError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ba5560be1dba",
+      "title": "BackendRegistryEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ba81bc975c18",
+      "title": "KubernetesLoRABackendConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bb118750eaef",
+      "title": "TrainingDataStoreConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bcae2e3ed0cf",
+      "title": "EventMappingSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bd613f7dcbef",
+      "title": "RouterAuditAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bd6737af8b65",
+      "title": "ShutdownError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bdf6b2dba77a",
+      "title": "BudgetReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-be55dd5f5676",
+      "title": "AddExampleResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-be67fca5c732",
+      "title": "RoutingError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-be71e7d1dcb4",
+      "title": "RouterSamplingAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bfad146df017",
+      "title": "FormattingError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-bfda6dbc4759",
+      "title": "PIIIngestArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c0778853b440",
+      "title": "FeedbackConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c07d98abbdc9",
+      "title": "MatchFieldSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c13a7c1d3558",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c1eca63623fa",
+      "title": "JsonLinesAuditLogger",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c328d5ff87db",
+      "title": "OutcomeSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c45a5a2d03c8",
+      "title": "ModelClientError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c55deadf6133",
+      "title": "BudgetConstraint",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c611719d605f",
+      "title": "AuditEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c632239515b1",
+      "title": "OllamaClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c6d9928165b7",
+      "title": "ModelVersionStore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c7320e4121ee",
+      "title": "SpendMetadata",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c7f9d18376e6",
+      "title": "ExitCode",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c842611b6140",
+      "title": "ModelResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-c890afedab4c",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ca1c1c6e3e90",
+      "title": "ModelServerStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ca61d298adf3",
+      "title": "TaskNotFoundError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ca8ac279c69a",
+      "title": "RunContext",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-caa6afa0bc0f",
+      "title": "PluginRegistry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cac3b741cb3a",
+      "title": "ConfidenceSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cb046538b4a7",
+      "title": "RetryConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cb14eee6d598",
+      "title": "ParsedArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cb30731509fd",
+      "title": "ParsedArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cb64540662c0",
+      "title": "AddExampleInput",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cdfd4d9fc822",
+      "title": "CollectorStory",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-cfd01bb7cba8",
+      "title": "PipelineRunHistory",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d238b4ce07a4",
+      "title": "SourceType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d2c833993228",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d30d23b34252",
+      "title": "BudgetManager",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d36748a99a9f",
+      "title": "LogLevel",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d40b48d429ba",
+      "title": "OutputFormat",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d43087c634ac",
+      "title": "PackageSkillStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d431b536422e",
+      "title": "GenerationConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d45a1b562911",
+      "title": "FeedbackConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d533f8ea7f35",
+      "title": "TrendDirection",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d5773f8ae5dc",
+      "title": "JourneyScore",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d5de0a2a72f0",
+      "title": "HuggingFaceBackendConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d6d62e018e90",
+      "title": "ToolInvocationResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d6f1460f0624",
+      "title": "Apprentice",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d78b9615213a",
+      "title": "LlmJudgeResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d7b699fb8c6f",
+      "title": "Alert",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d7c232925557",
+      "title": "GenerationParams",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d8cc2b65cacb",
+      "title": "ConfidenceSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d9a3160e0089",
+      "title": "PipelineState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d9c6360da895",
+      "title": "EmptyReportError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-d9e053a33e38",
+      "title": "TaskConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-da71582fad25",
+      "title": "StatusArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-daf474aebab5",
+      "title": "RouterBudgetAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-db7bbded7d74",
+      "title": "ConfidenceThresholds",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-db889184d1d6",
+      "title": "InitializationPhase",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-dcab078378e4",
+      "title": "ApprenticeConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-dcbb1698157d",
+      "title": "RoutingAuditEntry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-dcedf53f2d6a",
+      "title": "PackageRuntimeState",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-dceed7ed31ac",
+      "title": "ReportArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-dd9d69af110f",
+      "title": "SystemReport",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-deb81069b9d1",
+      "title": "ErrorKind",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-decc9a19bad9",
+      "title": "EvaluationResultType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-df153a561c9c",
+      "title": "FieldPIIStats",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e0b8f40d7893",
+      "title": "BackendType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e1e4bb4d841c",
+      "title": "ReportFormat",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e24576be3b1b",
+      "title": "AuditConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e2daa50de8fa",
+      "title": "PromotionStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e2f1aaecdc7a",
+      "title": "ConfidenceSnapshotEnriched",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e454bbeaeb40",
+      "title": "InitializationError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e55359ca8e87",
+      "title": "StructuredMatchEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e59c0fd9f07c",
+      "title": "LocalModelBackend",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e5bf304b7389",
+      "title": "ModelSource",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e600dc2dafbb",
+      "title": "FieldHeuristicStrategy",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e64910957d85",
+      "title": "ToolSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e6795e6ba453",
+      "title": "Router",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e70f423f4c56",
+      "title": "RouterRemoteAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e738cdc00161",
+      "title": "HyperparameterOverrides",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e77c66697f35",
+      "title": "CredentialResolver",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e88b6535591a",
+      "title": "SwapResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e91b76ea4a2d",
+      "title": "SplitKind",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e96a8e6cd9c9",
+      "title": "SemanticSimilarityEvaluator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-e9a0987115ed",
+      "title": "EvaluatorProtocol",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ea6ff8b3dd58",
+      "title": "ShadowRecommendation",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-eab43a81c60e",
+      "title": "TriggerEvaluation",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-eaebc816d5c0",
+      "title": "FineTuningOrchestrator",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-eb7b092ffabc",
+      "title": "EvaluatorSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ebb56c805e06",
+      "title": "DetectionStrategy",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ebddf85b55c4",
+      "title": "FeedbackResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ec48bc0862bb",
+      "title": "OpenAIClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ec63e5bb5f90",
+      "title": "ValidationError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ed282445f7e2",
+      "title": "TokenRegistry",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-edd360947820",
+      "title": "ValidationErrorDetail",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-eecb4874144d",
+      "title": "AuthError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f137e82a9ecf",
+      "title": "EvaluateResult",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f15e0dbbc79b",
+      "title": "BaseRemoteClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f20bb1e90ccb",
+      "title": "LlamaCppClientConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f2b35f69af41",
+      "title": "ConfidenceSnapshot",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f32104e62ac6",
+      "title": "Role",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f374aa34e81f",
+      "title": "SkillSpec",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f387336f9785",
+      "title": "WindowConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f3e06b5c9729",
+      "title": "RootConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f3f1a69a2aed",
+      "title": "BudgetDataSource",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f460efb3da1f",
+      "title": "PipelineRun",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f605871cbe7b",
+      "title": "BudgetPeriod",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f6eb83301ce8",
+      "title": "StoryProcessingError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f70272e3ccae",
+      "title": "StoreConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f730d7e5cd0d",
+      "title": "IngestArgs",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f88bc6a42b6c",
+      "title": "InferenceRequest",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f8c886701c47",
+      "title": "PluginError",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-f915168812d5",
+      "title": "RunStatus",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fa42470c44a1",
+      "title": "VLLMClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fab197e06f5f",
+      "title": "PerMetricThreshold",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fb13d3e6da7c",
+      "title": "PactFormatter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fb1ebaf433bc",
+      "title": "TaskEvaluatorConfig",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fc480003b913",
+      "title": "SamplingDecision",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fd924eb0d748",
+      "title": "DecayFunctionName",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fe1f80238d8e",
+      "title": "TestSetReference",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fe84e8be6c95",
+      "title": "TaskResponse",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fec79c74b17b",
+      "title": "EvaluatorType",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-fecb991faa3a",
+      "title": "ToolPreflightClient",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ff1dde397ead",
+      "title": "RemoteModelAdapter",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:00",
+      "weight": 0.5
+    },
+    {
+      "domains": [
+        "code",
+        "python"
+      ],
+      "id": "code-sym-apprentice-ff31ede95377",
+      "title": "PIITokenizer",
+      "type": "concept",
+      "updated_at": "2026-05-30T14:47:01",
+      "weight": 0.5
+    }
+  ],
+  "repo": "apprentice",
+  "source_updated_at": "2026-05-30T14:47:01",
+  "version": 1
+}
